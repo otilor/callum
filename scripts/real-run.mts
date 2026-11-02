@@ -193,8 +193,10 @@ async function boot(dataDir: string, timing: Timing, who: { address: string; nam
   delete env.ANTHROPIC_API_KEY;
   const server = await startServer({
     dataDir, host: '127.0.0.1', port: 0, password: null, webDir: null, env, clock,
-    // The run does the passes itself, and looks in the mailbox on every one.
-    tickEveryMs: 3_600_000, runnerOptions: { pollEveryMs: { email: 0 } }, log: () => undefined,
+    // The run does the passes itself, and looks in the mailbox on every one. Send spacing (one automatic send per channel
+    // per pass, then a random 45 to 150 s) has its own tests; this run is about what reaches the mailboxes and when, and
+    // 20 sends a day would otherwise need over half an hour of sending hours, so here everything due goes in the pass.
+    tickEveryMs: 3_600_000, runnerOptions: { pollEveryMs: { email: 0 }, spacing: false }, log: () => undefined,
   });
   const callum = new Callum(server, clock, dataDir);
   if (server.ctx.demo) throw new Error('This run must not be in demo mode.');

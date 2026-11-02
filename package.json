@@ -16,6 +16,7 @@
     "build": "vite build",
     "build:server": "tsc -p tsconfig.server.json",
     "e2e": "playwright test",
+    "e2e:desktop": "playwright test -c playwright.desktop.config.ts",
     "dev:web": "vite",
     "test:mail": "bash scripts/mail-it.sh",
     "test:real": "node --disable-warning=ExperimentalWarning --import tsx scripts/real-run.mts",

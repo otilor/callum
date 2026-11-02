@@ -30,7 +30,8 @@ test('river, send a reply and undo it, ask, and you, with no sideways scroll', a
 
   // Send the draft. It is queued with a ten second Undo, and Femi's card is next.
   await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.getByText('Sent to Zainab')).toBeVisible();
+  // While the ten seconds run the toast says what is happening; "Sent to Zainab" comes after they close.
+  await expect(page.getByText('Sending your reply to Zainab')).toBeVisible();
   s = await app.state();
   const sent = s.outbox.find((o) => o.personId === zainab.id && o.kind === 'reply');
   expect(sent).toMatchObject({ state: 'scheduled', origin: 'user' });

@@ -28,7 +28,7 @@ jobs:
       - name: Build the web app and compile the server and the desktop shell
         run: npm run desktop:prepare
       - name: Start the real app and check it
-        run: xvfb-run -a npx playwright test e2e/desktop.spec.ts
+        run: xvfb-run -a npm run e2e:desktop
         env:
           CI: "true"
       - name: Package the unpacked app
@@ -38,7 +38,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop-test-results
-          path: test-results
+          path: test-results-desktop
 
   # The release is made once, here; the installers below only add their files to it.
   release:

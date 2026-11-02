@@ -25,7 +25,8 @@ test('open someone from the river, nudge, switch channel, never contact', async 
   await page.getByRole('button', { name: 'Bisi Alade, Said hello' }).click();
   await expect(page.getByText('Founder at Ikoyi Pay')).toBeVisible();
   await page.getByRole('button', { name: 'Nudge now' }).click();
-  await expect(page.getByText('Bisi is next. It goes out as soon as sending hours and pace allow.')).toBeVisible();
+  // The toast names a real slot (`tomorrow at 9:00 their time`, `Thursday at 9:00`, `12 Nov at 9:00`), not a promise.
+  await expect(page.getByText(/^Bisi is next\. It goes out from (today|tomorrow|[A-Z][a-z]+|\d{1,2} [A-Z][a-z]{2}) at \d{1,2}:\d{2}( their time)?\.$/)).toBeVisible();
   s = await app.state();
   expect(new Date(byName(s, 'Bisi Alade').nextTouchAt!).getTime()).toBeLessThanOrEqual(Date.now() + 1_000);
   expect(byName(s, 'Bisi Alade').status).toBe('active');

@@ -63,12 +63,14 @@ test('go through the replies: snooze, close politely, book a call, reply and und
   // Reply to Kemi, then take it back inside the ten seconds: nothing is sent and she is back on the dock.
   await expect(deck.getByText('Kemi Eze')).toBeVisible();
   await deck.getByRole('button', { name: 'Reply', exact: true }).click();
-  await expect(page.getByText('Sending your reply to Kemi')).toBeVisible();
+  // Toasts stack (Femi's and Yaw's are still showing), so Kemi's is the one with her name in it.
+  const kemiToast = page.locator('.undo-toast', { hasText: 'Sending your reply to Kemi' });
+  await expect(kemiToast).toBeVisible();
   s = await app.state();
   const first = userItem(s.outbox, kemi.id, 'reply')!;
   expect(first.state).toBe('scheduled');
   expect(first.body).toContain('Thursday works, Kemi');
-  await page.getByRole('button', { name: 'Undo' }).click();
+  await kemiToast.getByRole('button', { name: 'Undo' }).click();
   await expect.poll(async () => app.sql<{ state: string }>('select state from outbox where id = ?', first.id)[0]?.state).toBe('cancelled');
   await expect.poll(async () => byName(await app.state(), 'Kemi').status).toBe('waiting');
   expect(app.sql("select * from messages where person_id = ? and direction = 'out' and kind = 'reply'", kemi.id)).toHaveLength(0);

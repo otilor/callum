@@ -1,5 +1,5 @@
 // Starts the real desktop app (Electron) on a throwaway data folder. Needs `npm run desktop:prepare` first;
-// on Linux without a display run it as `xvfb-run -a npx playwright test e2e/desktop.spec.ts`.
+// on Linux without a display run it as `xvfb-run -a npm run e2e:desktop`.
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

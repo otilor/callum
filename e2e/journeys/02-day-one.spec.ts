@@ -73,10 +73,11 @@ test('OK three hellos, edit one, skip one, undo one within ten seconds, and the 
   await expect.poll(async () => (await app.state()).outbox.filter((o) => o.state === 'scheduled' && !scheduledBefore.has(o.id)).length).toBe(1);
   const nextWaiting = (await app.state()).outbox.find((o) => o.state === 'scheduled' && !scheduledBefore.has(o.id))!;
   expect((await app.state()).projects[0]?.approvalsLeft).toBe(countBefore - 1);
-  // The toast for this OK replaces the one for the last, once the card has gone.
+  // Toasts stack, so each OK has its own: this one is found by the name in it, and its own Undo is the one pressed.
   const who = (await app.state()).people.find((p) => p.id === nextWaiting.personId)!;
-  await expect(page.locator('.undo-toast')).toContainText(`${who.firstName}'s hello goes out`);
-  await page.getByRole('button', { name: 'Undo' }).click();
+  const toast = page.locator('.undo-toast', { hasText: `${who.firstName}'s hello goes out` });
+  await expect(toast).toBeVisible();
+  await toast.getByRole('button', { name: 'Undo' }).click();
   await expect.poll(async () => (await app.state()).outbox.find((o) => o.id === nextWaiting.id)?.state).toBe('awaiting_ok');
   expect((await app.state()).projects[0]?.approvalsLeft).toBe(countBefore);
   await expect(left.getByText(`${countBefore} left`)).toBeVisible();

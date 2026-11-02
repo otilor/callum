@@ -30,7 +30,7 @@ Notes:
 - `desktop:dev` and the installers start from `dist/`, so run them after `npm run build` (the scripts do it for you).
 - On Linux as root (a container) Electron refuses to start without `--no-sandbox`: `npx electron . --no-sandbox`.
 - `CALLUM_DEMO=1` works in the desktop app too. `CALLUM_USER_DATA=<folder>` keeps its data somewhere else, which the end-to-end test uses.
-- The tests: `npm test` covers the tray menu, notifications, open at login and the LinkedIn browser choice. `xvfb-run -a npx playwright test e2e/desktop.spec.ts` starts the real app (drop `xvfb-run -a` on a computer with a screen).
+- The tests: `npm test` covers the tray menu, notifications, open at login and the LinkedIn browser choice. `xvfb-run -a npm run e2e:desktop` starts the real app (drop `xvfb-run -a` on a computer with a screen).
 - The builds have no developer certificate, which is why macOS and Windows warn the first time (see the README). The macOS app is signed ad hoc, so Apple Silicon does not call it damaged; it still opens through right-click, Open.
 - Releases (tags `v*`, `.github/workflows/desktop.yml`) attach a dmg for Apple Silicon and one for Intel, a Windows installer, and an AppImage and a `.deb` for Linux.
 

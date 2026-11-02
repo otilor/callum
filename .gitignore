@@ -3,6 +3,8 @@ dist
 data
 .superpowers
 test-results
+test-results-desktop
 playwright-report
+playwright-report-desktop
 .cache/
 release

@@ -6,6 +6,7 @@ data
 .superpowers
 .cache
 test-results
+test-results-desktop
 playwright-report
 e2e
 docs
