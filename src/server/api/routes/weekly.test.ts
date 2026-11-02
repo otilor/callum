@@ -80,6 +80,22 @@ describe('POST /api/people/:id/real-reply', () => {
   });
 });
 
+describe('POST /api/people/:id/away-seen', () => {
+  it('keeps an out-of-office card from coming back', async () => {
+    const h = harness();
+    const p = h.person({ stage: 'hello', touches: 1, lastTouchAt: '2026-11-02T10:00:00.000Z', nextTouchAt: '2026-11-23T08:00:00.000Z' });
+    h.ctx.repo.insertMessage({ personId: p.id, channel: 'email', direction: 'out', kind: 'hello', subject: null, body: 'Hi', at: '2026-11-02T10:00:00.000Z', externalId: null });
+    h.ctx.repo.insertMessage({ personId: p.id, channel: 'email', direction: 'in', kind: 'inbound', subject: null, body: "I'm out of the office until 20 November.", at: '2026-11-03T08:10:00.000Z', externalId: null });
+    const app = mount(h);
+    expect(((await (await app.request('/api/quiet')).json()) as { away: unknown[] }).away).toHaveLength(1);
+    const res = await post(app, `/people/${p.id}/away-seen`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(((await (await app.request('/api/quiet')).json()) as { away: unknown[] }).away).toEqual([]);
+    expect((await post(app, '/people/99/away-seen')).status).toBe(404);
+  });
+});
+
 describe('POST /api/people/:id/referral-hello', () => {
   it('queues the user hello and answers with the outbox item', async () => {
     const h = harness();

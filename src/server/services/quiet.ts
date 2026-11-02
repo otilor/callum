@@ -26,6 +26,17 @@ const DAY_TWO_WINDOW_MS = 3 * DAY_MS;
 const AWAY_LOOKBACK_MS = 21 * DAY_MS;
 const REFERRAL_LINK_MS = 10 * 60_000;
 const SENT_SHOWN = 3;
+/** A person someone pointed to is left to the user for this long before Callum's own first hello may go. */
+export const REFERRAL_HOLD_MS = DAY_MS;
+
+/**
+ * True while a referred stranger is still the user's to write to: a person who came from a referral and has not been
+ * written to, for the first 24 hours. The planner skips them for that long, so Callum never says hello first by accident.
+ */
+export function isHeldReferral(person: Person, now: Date): boolean {
+  return person.source === 'referral' && person.status === 'active' && person.stage === 'stranger' && person.touches === 0
+    && now.getTime() - new Date(person.createdAt).getTime() < REFERRAL_HOLD_MS;
+}
 
 const live = (p: Person): boolean => p.status !== 'removed';
 const isHello = (m: Message): boolean => m.direction === 'out' && (m.kind === 'hello' || m.kind === 'invite');
@@ -105,22 +116,43 @@ function used(project: Project, people: Person[], awaiting: number): QuietSnapsh
   };
 }
 
-function away(ctx: Ctx, now: Date): AwayPerson[] {
+/** The name to tag a card with: only worth saying when there is more than one project. */
+function tagFor(ctx: Ctx, projectId: number): string | null {
+  const projects = ctx.repo.listProjects();
+  return projects.length > 1 ? projects.find((p) => p.id === projectId)?.name ?? null : null;
+}
+
+function away(ctx: Ctx, now: Date, projectId: number | undefined): AwayPerson[] {
   const found: AwayPerson[] = [];
   const recent = new Date(now.getTime() - AWAY_LOOKBACK_MS).toISOString();
+  const seen = readNoteSettings(ctx).awaySeen ?? {};
   for (const p of ctx.repo.listPeople({ status: ['active'] })) {
+    if (projectId !== undefined && p.projectId !== projectId) continue;
     if (p.replyKind !== null || p.repliedAt !== null || p.stage === 'talking' || p.touches < 1) continue;
     if (p.updatedAt < recent || p.nextTouchAt === null || p.nextTouchAt <= now.toISOString()) continue;
     const last = ctx.repo.listMessages(p.id).at(-1);
     if (!last || last.direction !== 'in') continue;
+    // Okay was said about this auto-reply: it stays said. A newer auto-reply is a new card.
+    if (seen[String(p.id)] === last.at) continue;
     const read = classifyReply(last.body, new Date(last.at));
     if (read.kind !== 'out_of_office') continue;
     found.push({
-      personId: p.id, projectId: p.projectId, first: p.firstName, name: p.name, company: p.company, role: p.role,
+      personId: p.id, projectId: p.projectId, projectName: tagFor(ctx, p.projectId), first: p.firstName, name: p.name, company: p.company, role: p.role,
       until: read.returnDate, followUpAt: p.nextTouchAt, text: last.body.replace(/\s+/g, ' ').trim().slice(0, 280), at: last.at,
     });
   }
   return found.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** The user said Okay to an out-of-office card: it does not come back for that auto-reply. */
+export function markAwaySeen(ctx: Ctx, personId: number): void {
+  const person = ctx.repo.getPerson(personId);
+  if (!person || !live(person)) throw new NoteError('Callum could not find that person');
+  const last = ctx.repo.listMessages(person.id).at(-1);
+  if (!last || last.direction !== 'in') return;
+  const seen = { ...(readNoteSettings(ctx).awaySeen ?? {}), [String(person.id)]: last.at };
+  writeNoteSettings(ctx, { awaySeen: seen });
+  ctx.bus.emit('settings');
 }
 
 /** What the referrer said about the person, from after their name: `runs finance at Oko Pay`. */
@@ -130,7 +162,11 @@ function contextAfter(note: string | null, name: string, referrerCompany: string
   for (const needle of [name, name.split(/\s+/)[0] ?? name]) {
     const at = lower.indexOf(needle.toLowerCase());
     if (at < 0) continue;
-    const rest = note.slice(at + needle.length).replace(/^[\s,:-]+/, '');
+    // `Sam Bello (sam@x.com), she runs finance here`: the address and the pronoun are not part of what was said.
+    const rest = note.slice(at + needle.length)
+      .replace(/^\s*\([^)]*\)/, '')
+      .replace(/^[\s,:-]+/, '')
+      .replace(/^(?:she|he|they)\s+/i, '');
     const sentence = (rest.split(/(?<=[a-z0-9])[.?!](?:\s|$)/i)[0] ?? '').replace(/[.?!]+$/, '').trim();
     if (!/^[a-z]/.test(sentence) || sentence.length < 4 || sentence.length > 120) continue;
     return referrerCompany ? sentence.replace(/\bhere\b/i, `at ${referrerCompany}`) : sentence;
@@ -143,7 +179,7 @@ function referralWords(ctx: Ctx, p: Person, referrer: Person | null): { subject:
   const project = ctx.repo.getProject(p.projectId);
   const intro = referrer ? `${referrer.firstName} suggested I reach out.` : "I was told you're the right person to talk to.";
   return {
-    subject: referrer ? `${referrer.firstName} suggested I get in touch` : 'A quick question',
+    subject: referrer ? `${referrer.firstName} suggested I write to you` : 'A quick question',
     draft: `Hi ${p.firstName}, ${intro} ${offerSentence(project?.offer)} Would a short call next week be useful?`,
   };
 }
@@ -165,14 +201,15 @@ function isFreshReferral(ctx: Ctx, p: Person): boolean {
     && !ctx.repo.listMessages(p.id).some((m) => m.direction === 'out');
 }
 
-function referrals(ctx: Ctx): ReferralCard[] {
+function referrals(ctx: Ctx, projectId: number | undefined): ReferralCard[] {
   const cards: ReferralCard[] = [];
   for (const p of ctx.repo.listPeople({ status: ['active'] })) {
+    if (projectId !== undefined && p.projectId !== projectId) continue;
     if (!isFreshReferral(ctx, p)) continue;
     const referrer = referrerOf(ctx, p);
     const words = referralWords(ctx, p, referrer);
     cards.push({
-      personId: p.id, projectId: p.projectId, first: p.firstName, name: p.name, company: p.company,
+      personId: p.id, projectId: p.projectId, projectName: tagFor(ctx, p.projectId), first: p.firstName, name: p.name, company: p.company,
       referrer: referrer ? { id: referrer.id, first: referrer.firstName, name: referrer.name, company: referrer.company } : null,
       context: contextAfter(p.note, p.name, referrer?.company ?? null),
       channel: p.channel ?? chooseChannel(p, ctx.repo.listChannels().filter((c) => c.status === 'connected').map((c) => c.channel)),
@@ -184,7 +221,8 @@ function referrals(ctx: Ctx): ReferralCard[] {
 
 function pausedFor(ctx: Ctx, now: Date): QuietSnapshot['paused'] {
   const since = trackPause(ctx);
-  if (since === null || now.getTime() - new Date(since).getTime() < PAUSE_REMINDER_MS) return null;
+  // A pause with an end date is a decision the user already made: Callum does not ask again.
+  if (since === null || readNoteSettings(ctx).pausedUntil || now.getTime() - new Date(since).getTime() < PAUSE_REMINDER_MS) return null;
   const people = ctx.repo.listPeople({ status: ['active'] });
   return {
     since,
@@ -207,8 +245,8 @@ export function quietSnapshot(ctx: Ctx, projectId?: number): QuietSnapshot {
     empty: people.length === 0,
     day2: project ? day2(ctx, project, people, tz, now) : null,
     used: project ? used(project, people, awaiting) : null,
-    away: away(ctx, now),
-    referrals: referrals(ctx),
+    away: away(ctx, now, projectId),
+    referrals: referrals(ctx, projectId),
     paused: pausedFor(ctx, now),
   };
 }
@@ -227,15 +265,16 @@ export async function realReply(ctx: Ctx, personId: number): Promise<Person> {
   const patch: Partial<Person> = {
     status: 'waiting', replyKind: 'interested', suggested: 'reply', lastInbound: last.body, repliedAt: last.at, nextTouchAt: null,
   };
+  // The words are a help, not a condition: when the writer fails the person still moves to the dock, with a blank draft.
   const draft = await ctx.writer.write('reply', {
     person: { ...person, ...patch }, project, settings: repo.getSettings(), channel: last.channel, history: repo.listMessages(person.id),
-  });
+  }).catch(() => null);
   // Look again: writing takes a while and the person may have moved.
   const fresh = repo.getPerson(person.id);
   if (!fresh || fresh.status !== 'active') return fresh ?? person;
   const next = repo.transaction(() => {
     ctx.outbox.cancelPending(person.id, ['auto']);
-    return repo.updatePerson(person.id, { ...patch, draft: draft.body });
+    return repo.updatePerson(person.id, { ...patch, draft: draft?.body ?? null });
   });
   ctx.bus.emit('people');
   ctx.bus.emit('outbox');

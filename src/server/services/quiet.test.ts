@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Person } from '../../shared/types.js';
 import { dispatchDue } from '../runner/dispatch.js';
 import { harness, type Harness } from '../runner/testing.test-helpers.js';
-import { NoteError, quietSnapshot, realReply, sendReferral, trackPause } from './quiet.js';
+import { isHeldReferral, markAwaySeen, NoteError, quietSnapshot, REFERRAL_HOLD_MS, realReply, sendReferral, trackPause } from './quiet.js';
 
 const OPT_OUT = "If this isn't for you, just reply stop and I won't write again.";
 
@@ -147,7 +147,7 @@ describe('referrals', () => {
     expect(card).toMatchObject({
       personId: sam.id, first: 'Sam', name: 'Sam Bello', context: 'runs finance at Oko Pay and owns this', channel: 'email',
       referrer: { id: kemi.id, first: 'Kemi', name: 'Kemi Eze', company: 'Oko Pay' },
-      subject: 'Kemi suggested I get in touch',
+      subject: 'Kemi suggested I write to you',
     });
     expect(card?.draft).toBe(
       "Hi Sam, Kemi suggested I reach out. I help fintech teams take reconciliation off their ops team's plate. Would a short call next week be useful?",
@@ -167,7 +167,7 @@ describe('referrals', () => {
     const { sam } = referral(h);
     const body = 'Hi Sam, Kemi suggested I reach out. Would a short call next week be useful?';
     const item = sendReferral(h.ctx, sam.id, body);
-    expect(item).toMatchObject({ kind: 'hello', origin: 'user', state: 'scheduled', channel: 'email', subject: 'Kemi suggested I get in touch', body });
+    expect(item).toMatchObject({ kind: 'hello', origin: 'user', state: 'scheduled', channel: 'email', subject: 'Kemi suggested I write to you', body });
     expect(item.undoUntil).toBe('2026-11-03T08:30:10.000Z');
     expect(quietSnapshot(h.ctx).referrals).toEqual([]);
 
@@ -222,5 +222,95 @@ describe('paused for three days', () => {
     expect(quietSnapshot(h.ctx).paused).toBeNull();
     h.ctx.repo.updateSettings({ pauseState: 'paused' });
     expect(trackPause(h.ctx)).toBe('2026-11-06T08:30:00.000Z');
+  });
+});
+
+describe('fix round 1', () => {
+  const AWAY = "Thanks for your email. I'm out of the office until 20 November with limited access to email.";
+  function away(h: Harness, name = 'Kemi Eze', over: Partial<Person> = {}): Person {
+    const p = h.person({ name, stage: 'hello', touches: 1, lastTouchAt: '2026-11-02T10:00:00.000Z', nextTouchAt: '2026-11-23T08:00:00.000Z', ...over });
+    hello(h, p, '2026-11-02T10:00:00.000Z');
+    h.ctx.repo.insertMessage({ personId: p.id, channel: 'email', direction: 'in', kind: 'inbound', subject: null, body: AWAY, at: '2026-11-03T08:10:00.000Z', externalId: null });
+    return h.ctx.repo.getPerson(p.id) as Person;
+  }
+
+  it('keeps Okay on an out-of-office card said, until a newer auto-reply comes', () => {
+    const h = harness();
+    const p = away(h);
+    expect(quietSnapshot(h.ctx).away).toHaveLength(1);
+    markAwaySeen(h.ctx, p.id);
+    expect(quietSnapshot(h.ctx).away).toEqual([]);
+    h.ctx.repo.insertMessage({ personId: p.id, channel: 'email', direction: 'in', kind: 'inbound', subject: null, body: AWAY, at: '2026-11-03T08:20:00.000Z', externalId: null });
+    expect(quietSnapshot(h.ctx).away).toHaveLength(1);
+  });
+
+  it('says Okay for someone who is not there in words', () => {
+    const h = harness();
+    expect(() => markAwaySeen(h.ctx, 99)).toThrow(new NoteError('Callum could not find that person'));
+  });
+
+  it('reads who a referral is from "Sam Bello (sam@x.com), she runs finance here"', () => {
+    const h = harness();
+    h.person({ name: 'Kemi Eze', company: 'Oko Pay', status: 'waiting', stage: 'hello', touches: 1, replyKind: 'referral', repliedAt: h.clock.now().toISOString() });
+    h.ctx.repo.insertPerson({
+      projectId: h.project.id, name: 'Sam Bello', source: 'referral', email: 'sam@okopay.com',
+      note: 'You should talk to Sam Bello (sam@okopay.com), she runs finance here.',
+    });
+    expect(quietSnapshot(h.ctx).referrals[0]?.context).toBe('runs finance at Oko Pay');
+  });
+
+  it('moves them to the dock with a blank draft when the writer fails', async () => {
+    const h = harness();
+    const p = away(h);
+    vi.spyOn(h.ctx.writer, 'write').mockRejectedValue(new Error('the writer is down'));
+    const next = await realReply(h.ctx, p.id);
+    expect(next).toMatchObject({ status: 'waiting', replyKind: 'interested', draft: null, nextTouchAt: null });
+  });
+
+  it('does not ask about a pause that has an end date', () => {
+    const h = harness();
+    h.person();
+    h.ctx.repo.updateSettings({ pauseState: 'paused', pausedUntil: '2026-11-20T08:00:00.000Z' });
+    trackPause(h.ctx);
+    h.clock.set('2026-11-08T08:30:00.000Z');
+    expect(quietSnapshot(h.ctx).paused).toBeNull();
+    h.ctx.repo.updateSettings({ pausedUntil: null });
+    expect(quietSnapshot(h.ctx).paused).toMatchObject({ days: 5 });
+  });
+
+  it('keeps away cards and referrals to the project asked for, and tags them when there are several', () => {
+    const h = harness();
+    const other = h.ctx.repo.insertProject({ name: 'Payroll' });
+    const mine = away(h, 'Kemi Eze');
+    const theirs = away(h, 'Ada Nwosu', { projectId: other.id });
+    const sam = h.ctx.repo.insertPerson({ projectId: other.id, name: 'Sam Bello', source: 'referral', email: 'sam@okopay.com' });
+    const all = quietSnapshot(h.ctx);
+    expect(all.away.map((a) => a.personId).sort()).toEqual([mine.id, theirs.id].sort());
+    const one = quietSnapshot(h.ctx, h.project.id);
+    expect(one.away.map((a) => [a.personId, a.projectName])).toEqual([[mine.id, h.project.name]]);
+    expect(one.referrals).toEqual([]);
+    const two = quietSnapshot(h.ctx, other.id);
+    expect(two.away.map((a) => [a.personId, a.projectName])).toEqual([[theirs.id, 'Payroll']]);
+    expect(two.referrals.map((r) => [r.personId, r.projectName])).toEqual([[sam.id, 'Payroll']]);
+  });
+
+  it('has no project tag while there is one project', () => {
+    const h = harness();
+    away(h);
+    expect(quietSnapshot(h.ctx).away[0]?.projectName).toBeNull();
+  });
+
+  it('holds a fresh referral for 24 hours so Callum does not say hello first', () => {
+    const h = harness();
+    const sam = h.ctx.repo.insertPerson({ projectId: h.project.id, name: 'Sam Bello', source: 'referral', email: 'sam@okopay.com' });
+    const born = new Date(sam.createdAt).getTime();
+    expect(REFERRAL_HOLD_MS).toBe(86_400_000);
+    expect(isHeldReferral(sam, new Date(born + 60_000))).toBe(true);
+    expect(isHeldReferral(sam, new Date(born + REFERRAL_HOLD_MS - 1))).toBe(true);
+    expect(isHeldReferral(sam, new Date(born + REFERRAL_HOLD_MS))).toBe(false);
+    // Only a referral that has not been written to is held.
+    expect(isHeldReferral({ ...sam, source: 'csv' }, new Date(born))).toBe(false);
+    expect(isHeldReferral({ ...sam, touches: 1, stage: 'hello' }, new Date(born))).toBe(false);
+    expect(isHeldReferral({ ...sam, status: 'stopped' }, new Date(born))).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { WeeklyAnswer, WeeklyGroup, WeeklyReply, WeeklyRest, WeeklyWarm } from '../../../shared/types.js';
 import { api, ApiError, noteApi } from '../../api.js';
+import { trapTab } from '../../ui/focusTrap.js';
 import { Marble } from '../../ui/Marble.js';
 import { dayAndTime, dayLong, timeOf } from './quietCopy.js';
 import './Weekly.css';
@@ -133,6 +134,7 @@ export function Weekly({ tz, onChanged, onOpenPerson }: WeeklyProps) {
   const [error, setError] = useState<string | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
   const marked = useRef(false);
   const titleId = useId();
 
@@ -174,6 +176,7 @@ export function Weekly({ tz, onChanged, onOpenPerson }: WeeklyProps) {
     closeButton.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
+      else trapTab(e, stage.current);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -223,8 +226,8 @@ export function Weekly({ tz, onChanged, onOpenPerson }: WeeklyProps) {
       {open ? (
         <div className="wk-layer">
           <div className="wk-veil" onClick={close} aria-hidden="true" />
-          <div className={emailOn ? 'wk-stage wk-stage-pair' : 'wk-stage'}>
-            <section className="wk-note" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+          <div ref={stage} className={emailOn ? 'wk-stage wk-stage-pair' : 'wk-stage'} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+            <section className="wk-note">
               <div className="wk-head">
                 <div>
                   <span className="wk-date">{dayAndTime(note.at, tz)}</span>
@@ -302,7 +305,7 @@ export function Weekly({ tz, onChanged, onOpenPerson }: WeeklyProps) {
                 <button type="button" className="soft wk-light" aria-pressed={emailOn} onClick={() => setEmailOn(!emailOn)}>
                   {emailOn ? 'Hide the email' : 'See it as email'}
                 </button>
-                <span className="wk-quiet">Next note {dayLong(note.nextAt, tz)}, {timeOf(note.nextAt, tz)}</span>
+                <span className="wk-quiet">Next note {dayLong(note.nextAt, tz)} at {timeOf(note.nextAt, tz)}</span>
               </div>
             </section>
 

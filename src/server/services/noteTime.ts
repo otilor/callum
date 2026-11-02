@@ -1,18 +1,7 @@
-import { addLocalDays, localParts, startOfLocalDay, zonedTime } from '../engine/time.js';
+import { addLocalDays, localParts, startOfLocalDay } from '../engine/time.js';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-export const NOTE_HOUR = 8;
-export const NOTE_MINUTE = 30;
-
-/** The Monday at 8:30 (user time) the weekly note was last due: now, or the Monday before. */
-export function lastNoteAt(now: Date, tz: string): Date {
-  const p = localParts(now, tz);
-  const back = (p.weekday + 6) % 7;
-  const monday = zonedTime(tz, p.year, p.month, p.day - back, NOTE_HOUR, NOTE_MINUTE);
-  return monday.getTime() <= now.getTime() ? monday : zonedTime(tz, p.year, p.month, p.day - back - 7, NOTE_HOUR, NOTE_MINUTE);
-}
 
 /** The same wall time n days later (or earlier) in `tz`. */
 export const shiftDays = (d: Date, n: number, tz: string): Date => addLocalDays(d, n, tz);

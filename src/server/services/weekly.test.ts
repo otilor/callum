@@ -233,6 +233,33 @@ describe('maybeSendWeekly', () => {
     expect(h.adapters.email.sent[1]?.subject).toBe('Your week: 1 hello, no replies yet');
   });
 
+  it('does not send the same Monday again after the time zone is changed', async () => {
+    const h = ready();
+    expect(await maybeSendWeekly(h.ctx)).toBe(true);
+    h.ctx.repo.updateSettings({ timezone: 'America/New_York' });
+    h.clock.set('2026-11-02T14:00:00.000Z'); // Monday 9:00 in New York
+    expect(await maybeSendWeekly(h.ctx)).toBe(false);
+    expect(h.adapters.email.sent).toHaveLength(1);
+    // The next Monday there is still a new note.
+    h.clock.set('2026-11-09T14:00:00.000Z');
+    const p = h.person({ name: 'New Person' });
+    out(h, p.id, 'hello', '2026-11-04T09:00:00.000Z');
+    expect(await maybeSendWeekly(h.ctx)).toBe(true);
+    expect(h.adapters.email.sent).toHaveLength(2);
+  });
+
+  it('remembers which Monday it sent for as a local date', async () => {
+    const h = ready();
+    await maybeSendWeekly(h.ctx);
+    expect(h.ctx.repo.getSettings()).toMatchObject({ lastWeeklyFor: '2026-11-02' });
+  });
+
+  it('still honours a note sent before the date was kept', async () => {
+    const h = ready();
+    writeNoteSettings(h.ctx, { lastWeeklyAt: '2026-11-02T07:31:00.000Z' });
+    expect(await maybeSendWeekly(h.ctx)).toBe(false);
+  });
+
   it('stays quiet when email is not connected or the morning brief is off', async () => {
     const off = ready();
     writeNoteSettings(off.ctx, { morningBrief: false });

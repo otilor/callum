@@ -18,7 +18,7 @@ export type VariantAction =
   | { kind: 'skip_bounced'; personIds: number[] }
   | { kind: 'retry'; outboxId: number; first: string }
   | { kind: 'copy'; text: string; first: string }
-  | { kind: 'switch_channel'; action: Extract<AskAction, { kind: 'switch_channel' }> };
+  | { kind: 'switch_channel'; action: Extract<AskAction, { kind: 'switch_channel' }>; projectId: number | null };
 
 export interface VariantButton { label: string; action: VariantAction }
 
@@ -202,7 +202,9 @@ function weeklyLimit(i: Incident, state: AppState, base: Pick<IncidentVariant, '
   const parts = sentences(i.message);
   const emailOn = state.channels.some((c) => c.channel === 'email' && c.status === 'connected');
   // Invites that have not gone out yet, for people Callum could write to instead.
-  const waiting = state.people.filter((p) => p.channel === 'linkedin' && p.status === 'active' && p.stage === 'stranger' && p.touches === 0 && p.linkedinState === 'none' && p.email !== null);
+  // Only the project on screen: a move is made inside one project, and the server checks the people against it.
+  const projectId = state.settings.currentProjectId;
+  const waiting = state.people.filter((p) => (projectId === null || p.projectId === projectId) && p.channel === 'linkedin' && p.status === 'active' && p.stage === 'stranger' && p.touches === 0 && p.linkedinState === 'none' && p.email !== null);
   const move = emailOn && waiting.length > 0;
   const n = waiting.length;
   return {
@@ -221,6 +223,7 @@ function weeklyLimit(i: Incident, state: AppState, base: Pick<IncidentVariant, '
         action: {
           kind: 'switch_channel',
           action: { kind: 'switch_channel', label: `Move ${n} to email`, args: { personIds: waiting.map((p) => p.id), channel: 'email' } },
+          projectId,
         },
       }
       : OKAY,

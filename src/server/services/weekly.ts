@@ -3,8 +3,8 @@ import type {
 } from '../../shared/types.js';
 import type { Ctx } from '../context.js';
 import { findPlaceholders } from '../engine/guard.js';
-import { localParts, zonedTime } from '../engine/time.js';
-import { dayMonth, dayName, lastNoteAt, shiftDays, slotText } from './noteTime.js';
+import { endOfLocalDay, lastNoteAt, localParts } from '../engine/time.js';
+import { dayMonth, dayName, shiftDays, slotText } from './noteTime.js';
 import { readNoteSettings, writeNoteSettings } from './noteSettings.js';
 
 const TITLE = 'Last week, in people';
@@ -220,6 +220,12 @@ export function weeklyEmail(note: WeeklyNote): WeeklyEmail {
   return { subject, text: lines.join('\n') };
 }
 
+/** `2026-11-02`: the local date of the Monday a weekly note is for. */
+function weekKey(noteAt: Date, tz: string): string {
+  const p = localParts(noteAt, tz);
+  return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+}
+
 /** Taken before the email goes out, so two overlapping ticks never send the same week twice. */
 const sending = new WeakSet<Ctx>();
 
@@ -239,11 +245,11 @@ export async function maybeSendWeekly(ctx: Ctx): Promise<boolean> {
 
   const tz = settings.timezone;
   const noteAt = lastNoteAt(now, tz);
-  if (settings.lastWeeklyAt && settings.lastWeeklyAt >= noteAt.toISOString()) return false;
+  // Which Monday it is for is kept as a local date, so changing the time zone on a Monday cannot send the same week again.
+  const key = weekKey(noteAt, tz);
+  if (settings.lastWeeklyFor ? settings.lastWeeklyFor === key : settings.lastWeeklyAt && settings.lastWeeklyAt >= noteAt.toISOString()) return false;
   // The note is a Monday morning thing: it is not sent on Wednesday because Callum was switched off on Monday.
-  const p = localParts(noteAt, tz);
-  const endOfMonday = zonedTime(tz, p.year, p.month, p.day + 1, 0);
-  if (now.getTime() >= endOfMonday.getTime()) return false;
+  if (now.getTime() >= endOfLocalDay(noteAt, tz).getTime()) return false;
   if (settings.weeklyTriedAt && now.getTime() - new Date(settings.weeklyTriedAt).getTime() < RETRY_MS) return false;
   const adapter = ctx.adapters.get('email');
   if (!adapter) return false;
@@ -252,7 +258,7 @@ export async function maybeSendWeekly(ctx: Ctx): Promise<boolean> {
   try {
     const note = weeklyNote(ctx, weekStartFor(noteAt, tz));
     if (note.hellos === 0 && note.replied.length === 0) {
-      writeNoteSettings(ctx, { lastWeeklyAt: now.toISOString() });
+      writeNoteSettings(ctx, { lastWeeklyAt: now.toISOString(), lastWeeklyFor: key });
       return false;
     }
     const mail = weeklyEmail(note);
@@ -268,7 +274,7 @@ export async function maybeSendWeekly(ctx: Ctx): Promise<boolean> {
       writeNoteSettings(ctx, { weeklyTriedAt: now.toISOString() });
       throw new Error(`The weekly note did not go out: ${result.error.message}`);
     }
-    writeNoteSettings(ctx, { lastWeeklyAt: now.toISOString(), weeklyTriedAt: null });
+    writeNoteSettings(ctx, { lastWeeklyAt: now.toISOString(), lastWeeklyFor: key, weeklyTriedAt: null });
     ctx.bus.emit('settings');
     return true;
   } finally {

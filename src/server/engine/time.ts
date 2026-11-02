@@ -79,3 +79,20 @@ export function addLocalDays(d: Date, n: number, tz: string): Date {
   const p = localParts(d, tz);
   return zonedTime(tz, p.year, p.month, p.day + n, p.hour, p.minute);
 }
+
+/** The first instant of the calendar day after the one `d` falls on, in `tz`. */
+export function endOfLocalDay(d: Date, tz: string): Date {
+  const p = localParts(d, tz);
+  return zonedTime(tz, p.year, p.month, p.day + 1, 0);
+}
+
+export const NOTE_HOUR = 8;
+export const NOTE_MINUTE = 30;
+
+/** The Monday at 8:30 (in `tz`) the weekly note was last due: now, or the Monday before. */
+export function lastNoteAt(now: Date, tz: string): Date {
+  const p = localParts(now, tz);
+  const back = (p.weekday + 6) % 7;
+  const monday = zonedTime(tz, p.year, p.month, p.day - back, NOTE_HOUR, NOTE_MINUTE);
+  return monday.getTime() <= now.getTime() ? monday : zonedTime(tz, p.year, p.month, p.day - back - 7, NOTE_HOUR, NOTE_MINUTE);
+}

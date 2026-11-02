@@ -6,12 +6,12 @@ import { ApiError } from '../../api.js';
 import { pickMoment, Quiet, starterChips, type QuietProps } from './Quiet.js';
 
 const mocks = vi.hoisted(() => ({
-  ask: vi.fn(), act: vi.fn(), undo: vi.fn(), pause: vi.fn(), resumeAll: vi.fn(), realReply: vi.fn(), referralHello: vi.fn(),
+  ask: vi.fn(), act: vi.fn(), undo: vi.fn(), pause: vi.fn(), resumeAll: vi.fn(), realReply: vi.fn(), referralHello: vi.fn(), awaySeen: vi.fn(),
 }));
 vi.mock('../../api.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api.js')>()),
   api: { ask: mocks.ask, act: mocks.act, undo: mocks.undo, pause: mocks.pause, resumeAll: mocks.resumeAll },
-  noteApi: { realReply: mocks.realReply, referralHello: mocks.referralHello },
+  noteApi: { realReply: mocks.realReply, referralHello: mocks.referralHello, awaySeen: mocks.awaySeen },
 }));
 
 const NOW = new Date('2026-11-03T08:30:00.000Z'); // Tuesday 9:30 in Lagos
@@ -22,13 +22,13 @@ function snapshot(over: Partial<QuietSnapshot> = {}): QuietSnapshot {
 }
 
 const kemi: AwayPerson = {
-  personId: 1, projectId: 1, first: 'Kemi', name: 'Kemi Eze', company: 'Oko Pay', role: 'Founder', until: '2026-11-20',
+  personId: 1, projectId: 1, projectName: null, first: 'Kemi', name: 'Kemi Eze', company: 'Oko Pay', role: 'Founder', until: '2026-11-20',
   followUpAt: '2026-11-23T08:00:00.000Z', text: "Thanks for your email. I'm out of the office until 20 November.", at: '2026-11-03T08:10:00.000Z',
 };
 const sam: ReferralCard = {
-  personId: 7, projectId: 1, first: 'Sam', name: 'Sam Bello', company: null,
+  personId: 7, projectId: 1, projectName: null, first: 'Sam', name: 'Sam Bello', company: null,
   referrer: { id: 1, first: 'Kemi', name: 'Kemi Eze', company: 'Oko Pay' }, context: 'runs finance at Oko Pay', channel: 'email',
-  subject: 'Kemi suggested I get in touch',
+  subject: 'Kemi suggested I write to you',
   draft: "Hi Sam, Kemi suggested I reach out. I help fintech teams take reconciliation off their ops team's plate. Would a short call next week be useful?",
 };
 
@@ -64,27 +64,28 @@ describe('pickMoment', () => {
 });
 
 describe('Quiet: empty river', () => {
-  it('invites the person to say who to meet, with starter chips that go to the Ask bar', async () => {
+  it('invites the person to say who to meet, with a chip from the project that goes to the Ask bar', async () => {
     const onAsk = vi.fn();
     const onBringList = vi.fn();
-    view({ quiet: snapshot({ empty: true }), onAsk, onBringList });
+    view({ quiet: snapshot({ empty: true }), project: { ...project, audience: 'Heads of finance in Accra' }, onAsk, onBringList });
     expect(screen.getByText('Your river is empty.')).toBeInTheDocument();
     expect(screen.getByText(/Tell Callum who you want to meet/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'bring a list' }));
     expect(onBringList).toHaveBeenCalled();
-    await userEvent.click(screen.getByRole('button', { name: 'Founders at small fintechs' }));
-    expect(onAsk).toHaveBeenCalledWith('Founders at small fintechs');
+    await userEvent.click(screen.getByRole('button', { name: 'Heads of finance in Accra' }));
+    expect(onAsk).toHaveBeenCalledWith('Heads of finance in Accra');
   });
 
-  it('starts the chips with who the project is for', () => {
-    expect(starterChips({ ...project, audience: 'Heads of finance in Accra' })[0]).toBe('Heads of finance in Accra');
-    expect(starterChips(null)).toHaveLength(2);
+  it('suggests nothing about who to meet when the project does not say', () => {
+    view({ quiet: snapshot({ empty: true }), onAsk: vi.fn() });
+    expect(screen.queryByRole('group', { name: 'Ways to start' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/fintech/i)).not.toBeInTheDocument();
   });
 
-  it('never offers the same chip twice', () => {
-    const chips = starterChips({ ...project, audience: 'founders at small fintechs' });
-    expect(chips).toHaveLength(2);
-    expect(new Set(chips.map((c) => c.toLowerCase())).size).toBe(2);
+  it('takes its chip from who the project is for, and has none otherwise', () => {
+    expect(starterChips({ ...project, audience: 'Heads of finance in Accra' })).toEqual(['Heads of finance in Accra']);
+    expect(starterChips({ ...project, audience: '  ' })).toEqual([]);
+    expect(starterChips(null)).toEqual([]);
   });
 });
 
@@ -173,10 +174,25 @@ describe('Quiet: out of office', () => {
     expect(screen.getByText(kemi.text)).toBeInTheDocument();
     expect(screen.getByText('Auto-reply from Kemi Eze, Oko Pay, Tuesday at 9:10')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Kemi Eze, Oko Pay, away' })).toBeInTheDocument();
+    mocks.awaySeen.mockResolvedValue({ ok: true });
     await userEvent.click(screen.getByRole('button', { name: 'Okay' }));
-    expect(screen.getByText('Kemi rests until they are back')).toBeInTheDocument();
+    expect(mocks.awaySeen).toHaveBeenCalledWith(1);
+    expect(await screen.findByText('Kemi rests until they are back')).toBeInTheDocument();
     expect(screen.getByText("Callum holds Kemi's follow-up until Monday 23 November at 9:00.")).toBeInTheDocument();
     expect(mocks.realReply).not.toHaveBeenCalled();
+  });
+
+  it('keeps the card, with the words, when Okay could not be saved', async () => {
+    mocks.awaySeen.mockRejectedValue(new ApiError(0, "Callum can't be reached. Check that it is still running."));
+    view({ quiet: snapshot({ away: [kemi] }) });
+    await userEvent.click(screen.getByRole('button', { name: 'Okay' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("Callum can't be reached.");
+    expect(screen.getByText('Kemi is away until Friday 20 November.')).toBeInTheDocument();
+  });
+
+  it('names the project on the card when there is more than one', () => {
+    view({ quiet: snapshot({ away: [{ ...kemi, projectName: 'Payroll' }] }) });
+    expect(screen.getByText('Payroll')).toBeInTheDocument();
   });
 
   it('moves them to the dock when the person says it is a real reply', async () => {
@@ -222,7 +238,7 @@ describe('Quiet: referral', () => {
     await userEvent.clear(draft);
     await userEvent.type(draft, 'Hi Sam, Kemi said you own finance.');
     await userEvent.click(screen.getByRole('button', { name: 'Send to Sam' }));
-    expect(mocks.referralHello).toHaveBeenCalledWith(7, 'Hi Sam, Kemi said you own finance.', 'Kemi suggested I get in touch');
+    expect(mocks.referralHello).toHaveBeenCalledWith(7, 'Hi Sam, Kemi said you own finance.', 'Kemi suggested I write to you');
     expect(await screen.findByText('Your hello to Sam leaves in a few seconds. Undo if you want to change it.')).toBeInTheDocument();
     expect(onChanged).toHaveBeenCalled();
 
@@ -258,9 +274,15 @@ describe('Quiet: referral', () => {
     view({ quiet: snapshot({ referrals: [sam] }) });
     await userEvent.click(screen.getByRole('button', { name: 'Later' }));
     expect(screen.getByText('Saved for later')).toBeInTheDocument();
+    expect(screen.getByText("Callum writes to Sam tomorrow if you don't.")).toBeInTheDocument();
     expect(mocks.referralHello).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Write it now' }));
     expect(screen.getByLabelText('Hello to Sam, drafted by Callum')).toBeInTheDocument();
+  });
+
+  it('names the project on the card when there is more than one', () => {
+    view({ quiet: snapshot({ referrals: [{ ...sam, projectName: 'Payroll' }] }) });
+    expect(screen.getByText('Payroll')).toBeInTheDocument();
   });
 
   it('still reads well when nobody is known to have pointed', () => {

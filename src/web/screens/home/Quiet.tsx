@@ -29,12 +29,10 @@ export function pickMoment(input: { quiet: QuietSnapshot | null; offline: boolea
   return null;
 }
 
-/** Starter chips for an empty river: who the project is for, then two ways to put it. */
+/** Starter chips for an empty river: who the project is for, when the project says. Callum does not guess an audience for people. */
 export function starterChips(project: Project | null): string[] {
   const own = project?.audience?.trim();
-  const generic = ['Founders at small fintechs', 'Heads of finance at growing teams'];
-  if (!own) return generic;
-  return [own, ...generic.filter((g) => g.toLowerCase() !== own.toLowerCase()).slice(0, 1)];
+  return own ? [own] : [];
 }
 
 /** The blinking caret the empty river puts in the Ask bar. Place it inside the bar, beside the input, while the input is empty. */
@@ -93,7 +91,7 @@ function Empty({ project, onAsk, onBringList }: Pick<QuietProps, 'project' | 'on
       <p className="qm-lede">
         Tell Callum who you want to meet{onBringList ? <>, or <button type="button" className="qm-link" onClick={onBringList}>bring a list</button></> : null}.
       </p>
-      {onAsk ? (
+      {onAsk && starterChips(project).length > 0 ? (
         <div className="qm-chips" role="group" aria-label="Ways to start">
           {starterChips(project).map((text) => (
             <button key={text} type="button" className="qm-chip" onClick={() => onAsk(text)}>{text}</button>
@@ -251,6 +249,20 @@ function Away({ people, tz, now, onChanged }: { people: AwayPerson[]; tz: string
   const state = settled[shown.personId];
   const when = shown.followUpAt ? `${dayLong(shown.followUpAt, tz)} at ${timeOf(shown.followUpAt, tz)}` : null;
 
+  async function okay() {
+    if (busy || !shown) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await noteApi.awaySeen(shown.personId);
+      setSettled({ ...settled, [shown.personId]: 'ok' });
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function real() {
     if (busy || !shown) return;
     setBusy(true);
@@ -275,7 +287,10 @@ function Away({ people, tz, now, onChanged }: { people: AwayPerson[]; tz: string
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"><path d="M3 8a3 3 0 0 1 6 0M1.5 10h9M6 2.2v1.3M2.4 4.2l.9.9M9.6 4.2l-.9.9" /></svg>
           </i>
         </span>
-        <p className="qm-big qm-big-tight">{state === 'real' ? `${shown.first} wrote back.` : awayTitle(shown)}</p>
+        <div>
+          <p className="qm-big qm-big-tight">{state === 'real' ? `${shown.first} wrote back.` : awayTitle(shown)}</p>
+          {shown.projectName ? <span className="qm-tag">{shown.projectName}</span> : null}
+        </div>
       </div>
       {!state ? (
         <>
@@ -285,7 +300,7 @@ function Away({ people, tz, now, onChanged }: { people: AwayPerson[]; tz: string
             <span>Auto-reply from {shown.name}{shown.company ? `, ${shown.company}` : ''}, {sinceText(shown.at, tz, now)}</span>
           </div>
           <div className="qm-actions">
-            <button type="button" className="qm-dark" onClick={() => setSettled({ ...settled, [shown.personId]: 'ok' })}>Okay</button>
+            <button type="button" className="qm-dark" disabled={busy} onClick={() => void okay()}>Okay</button>
             <button type="button" className="qm-light" disabled={busy} onClick={() => void real()}>It's a real reply</button>
           </div>
           {error ? <p className="qm-error" role="alert">{error}</p> : null}
@@ -347,7 +362,7 @@ function Referral({ card, onChanged, onPhase }: { card: ReferralCard; onChanged(
       <div className="qm-who">
         <Marble seed={300 + card.personId} size={52} tone="cool" ring="#A9B8F5" />
         <div>
-          <p className="qm-title"><strong>{card.name}</strong><span className="qm-tag">Warm intro</span></p>
+          <p className="qm-title"><strong>{card.name}</strong><span className="qm-tag">Warm intro</span>{card.projectName ? <span className="qm-tag">{card.projectName}</span> : null}</p>
           <p className="qm-said">{said}</p>
         </div>
       </div>
@@ -371,7 +386,7 @@ function Referral({ card, onChanged, onPhase }: { card: ReferralCard; onChanged(
       ) : null}
       {phase.kind === 'sent' ? <Done dot="#22B07D" head="Sent" line={`${card.first} is in the river now.`} /> : null}
       {phase.kind === 'later' ? (
-        <Done dot="#C5CAD6" head="Saved for later" line={`Callum keeps ${card.first} with the strangers. ${card.first} gets the usual first hello unless you send yours first.`}>
+        <Done dot="#C5CAD6" head="Saved for later" line={`Callum writes to ${card.first} tomorrow if you don't.`}>
           <div className="qm-actions"><button type="button" className="qm-light" onClick={() => setPhase({ kind: 'idle' })}>Write it now</button></div>
         </Done>
       ) : null}

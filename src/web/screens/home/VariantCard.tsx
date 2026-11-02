@@ -108,7 +108,7 @@ export function VariantCard({ variant: v, onReconnect, onDismiss, onChanged }: V
         await api.retry(action.outboxId);
         setDone(`Trying again. Your reply to ${action.first} leaves in a few seconds.`);
       } else {
-        const result = await api.act(action.action);
+        const result = await api.act(action.action, action.projectId ?? undefined);
         setDone(result.text);
       }
       onChanged();

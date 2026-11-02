@@ -134,10 +134,22 @@ describe('weekly limit', () => {
     ]);
     expect(v?.primary).toEqual({
       label: 'Move these 2 to email',
-      action: { kind: 'switch_channel', action: { kind: 'switch_channel', label: 'Move 2 to email', args: { personIds: [1, 2], channel: 'email' } } },
+      action: { kind: 'switch_channel', action: { kind: 'switch_channel', label: 'Move 2 to email', args: { personIds: [1, 2], channel: 'email' } }, projectId: 1 },
     });
     expect(v?.secondary).toEqual({ label: 'Wait until Monday', action: { kind: 'dismiss' } });
     expect(v?.waitLine).toBe('2 invites wait until Monday');
+  });
+
+  it('only offers the people of the project on screen', () => {
+    const other = person(9, 'Li Nine', { projectId: 2, channel: 'linkedin', linkedinUrl: 'https://linkedin.com/in/li9' });
+    const v = incidentVariant(limit, appState({ people: [...invitees, other] }), NOW);
+    expect(v?.waitIds).toEqual([1, 2]);
+    expect(v?.primary.label).toBe('Move these 2 to email');
+    const onTwo = appState({ people: [...invitees, other] });
+    onTwo.settings = { ...onTwo.settings, currentProjectId: 2 };
+    const w = incidentVariant(limit, onTwo, NOW);
+    expect(w?.waitIds).toEqual([9]);
+    expect(w?.primary).toMatchObject({ label: 'Move this 1 to email', action: { projectId: 2 } });
   });
 
   it('only says Okay when there is nobody to move or email is not connected', () => {
@@ -197,8 +209,8 @@ describe('faceReactions', () => {
     });
     const quiet = {
       projectId: 1, empty: false, day2: null, used: null, paused: null,
-      away: [{ personId: 20, projectId: 1, first: 'Kemi', name: 'Kemi Eze', company: null, role: null, until: '2026-11-20', followUpAt: null, text: '', at: '' }],
-      referrals: [{ personId: 21, projectId: 1, first: 'Sam', name: 'Sam Bello', company: null, referrer: null, context: null, channel: 'email' as const, subject: null, draft: '' }],
+      away: [{ personId: 20, projectId: 1, projectName: null, first: 'Kemi', name: 'Kemi Eze', company: null, role: null, until: '2026-11-20', followUpAt: null, text: '', at: '' }],
+      referrals: [{ personId: 21, projectId: 1, projectName: null, first: 'Sam', name: 'Sam Bello', company: null, referrer: null, context: null, channel: 'email' as const, subject: null, draft: '' }],
     };
     const r = faceReactions(s, quiet, NOW);
     expect(r.get(5)).toMatchObject({ mark: 'in', label: 'moved to LinkedIn' });

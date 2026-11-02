@@ -74,7 +74,7 @@ describe('VariantStack', () => {
     });
     const { props } = stack(s);
     await userEvent.click(screen.getByRole('button', { name: 'Move these 2 to email' }));
-    expect(mocks.act).toHaveBeenCalledWith({ kind: 'switch_channel', label: 'Move 2 to email', args: { personIds: [1, 2], channel: 'email' } });
+    expect(mocks.act).toHaveBeenCalledWith({ kind: 'switch_channel', label: 'Move 2 to email', args: { personIds: [1, 2], channel: 'email' } }, 1);
     expect(await screen.findByText('2 people get their hello by email instead.')).toBeInTheDocument();
     expect(props.onChanged).toHaveBeenCalled();
   });

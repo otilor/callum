@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Ctx } from '../../context.js';
-import { NoteError, quietSnapshot, realReply, sendReferral } from '../../services/quiet.js';
+import { markAwaySeen, NoteError, quietSnapshot, realReply, sendReferral } from '../../services/quiet.js';
 import { readNoteSettings, writeNoteSettings } from '../../services/noteSettings.js';
 import { noteDue, weeklyEmail, weeklyNote } from '../../services/weekly.js';
 
@@ -30,6 +30,7 @@ const wholeNumber = (v: unknown): number | null => {
  *  POST /weekly/seen                  the person opened the note
  *  GET  /quiet?projectId=             what the quiet moments of Home need
  *  POST /people/:id/real-reply        an auto-reply was a real reply
+ *  POST /people/:id/away-seen         Okay on an out-of-office card: it does not come back for that auto-reply
  *  POST /people/:id/referral-hello    the user's hello to a person someone pointed to: { body, subject? }
  */
 export function weeklyRoutes(ctx: Ctx): Hono {
@@ -70,6 +71,13 @@ export function weeklyRoutes(ctx: Ctx): Hono {
     const id = wholeNumber(c.req.param('id'));
     if (id === null || !ctx.repo.getPerson(id)) return c.json({ error: "Callum can't find that." }, 404);
     return c.json(await realReply(ctx, id));
+  });
+
+  app.post('/people/:id/away-seen', (c) => {
+    const id = wholeNumber(c.req.param('id'));
+    if (id === null || !ctx.repo.getPerson(id)) return c.json({ error: "Callum can't find that." }, 404);
+    markAwaySeen(ctx, id);
+    return c.json({ ok: true });
   });
 
   app.post('/people/:id/referral-hello', async (c) => {

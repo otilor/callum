@@ -155,6 +155,8 @@ export const noteApi = {
   quiet: (projectId?: number) => get<import('../shared/types.js').QuietSnapshot>('/quiet', { projectId }),
   /** The person's auto-reply was a real reply: they move to the dock. */
   realReply: (id: number) => post<Person>(`/people/${id}/real-reply`),
+  /** Okay on an out-of-office card: it does not come back for that auto-reply. */
+  awaySeen: (id: number) => post<{ ok: true }>(`/people/${id}/away-seen`),
   /** The user's hello to a person someone pointed to. */
   referralHello: (id: number, body: string, subject?: string | null) =>
     post<OutboxItem>(`/people/${id}/referral-hello`, subject ? { body, subject } : { body }),

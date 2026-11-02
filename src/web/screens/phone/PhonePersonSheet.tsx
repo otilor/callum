@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Message, PathStep, Person } from '../../../shared/types.js';
 import { api, ApiError, type PersonDetail } from '../../api.js';
+import { trapTab } from '../../ui/focusTrap.js';
 import { Marble, lookForStage } from '../../ui/Marble.js';
 import { formatSlot } from '../../ui/format.js';
 import { channelName, messageMeta, nextStepLabel } from './phoneCopy.js';
@@ -55,6 +56,7 @@ export function PhonePersonSheet({ person, tag, tz, now, paused, notify, refresh
   const [busy, setBusy] = useState(false);
   const typed = useRef(false);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
   const opener = useRef<Element | null>(null);
 
   useEffect(() => {
@@ -68,6 +70,7 @@ export function PhonePersonSheet({ person, tag, tz, now, paused, notify, refresh
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      else trapTab(e, sheetRef.current);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -122,7 +125,9 @@ export function PhonePersonSheet({ person, tag, tz, now, paused, notify, refresh
   const send = () =>
     run(async () => {
       const item = await api.reply(person.id, draft.trim());
-      const until = item.undoUntil ? Math.max(1_000, new Date(item.undoUntil).getTime() - Date.now()) : 10_000;
+      // The server's own window, from when it queued the message: the phone never promises more time than there is.
+      const span = item.undoUntil ? Date.parse(item.undoUntil) - Date.parse(item.createdAt) : NaN;
+      const until = Number.isFinite(span) && span > 0 ? span : 10_000;
       onClose();
       notify(`Sending your reply to ${first}`, {
         ms: until,
@@ -190,7 +195,7 @@ export function PhonePersonSheet({ person, tag, tz, now, paused, notify, refresh
   return (
     <>
       <div className="pa-veil fade-in" onClick={onClose} aria-hidden="true" />
-      <section className="pa-sheet" role="dialog" aria-modal="true" aria-labelledby="pa-sheet-name">
+      <section ref={sheetRef} className="pa-sheet" role="dialog" aria-modal="true" aria-labelledby="pa-sheet-name">
         <span className="pa-grip" aria-hidden="true" />
         <div className="pa-sheet-head">
           <Marble seed={300 + person.id} size={46} tone={waiting ? 'warm' : look.tone} ring={waiting ? 'var(--sun)' : look.ring} />

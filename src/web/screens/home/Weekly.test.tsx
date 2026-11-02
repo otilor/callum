@@ -57,7 +57,7 @@ describe('Weekly', () => {
     expect(within(dialog).getByText('Monday 2 November, 8:30')).toBeInTheDocument();
     expect(within(dialog).getByText('Callum said hello to 42 people. 6 replied and 2 calls are booked.')).toBeInTheDocument();
     expect(within(dialog).getByText('9 people, back on 16 November')).toBeInTheDocument();
-    expect(within(dialog).getByText('Next note Monday 9 November, 8:30')).toBeInTheDocument();
+    expect(within(dialog).getByText('Next note Monday 9 November at 8:30')).toBeInTheDocument();
     expect(mocks.weeklySeen).toHaveBeenCalledTimes(1);
   });
 
@@ -81,6 +81,26 @@ describe('Weekly', () => {
     await userEvent.click(open);
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('keeps Tab inside the dialog, and the email beside the note is part of it', async () => {
+    mocks.weekly.mockResolvedValue(answer({ shouldOpen: true }));
+    view();
+    const dialog = await screen.findByRole('dialog', { name: 'Last week, in people' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'See it as email' }));
+    expect(screen.getByRole('dialog')).toContainElement(screen.getByLabelText('The same note as an email'));
+    const buttons = within(dialog).getAllByRole('button');
+    const first = buttons[0] as HTMLElement;
+    const last = buttons[buttons.length - 1] as HTMLElement;
+    last.focus();
+    await userEvent.tab();
+    expect(first).toHaveFocus();
+    await userEvent.tab({ shift: true });
+    expect(last).toHaveFocus();
+    // Focus that got out comes back in.
+    (document.body as HTMLElement).focus();
+    await userEvent.tab();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
   });
 
   it('shows nothing when the week was empty or the note cannot be read', async () => {

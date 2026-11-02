@@ -264,6 +264,7 @@
   font-size: 18px;
 }
 .qm-tag {
+  display: inline-block;
   padding: 3px 10px;
   border-radius: 12px;
   background: var(--mist);

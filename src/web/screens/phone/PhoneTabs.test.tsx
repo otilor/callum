@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppState, Message, Person } from '../../../shared/types.js';
@@ -207,7 +207,7 @@ describe('person sheet', () => {
 
   it('sends the reply, says it is sending, and takes it back on Undo', async () => {
     const user = userEvent.setup();
-    mocks.reply.mockResolvedValue({ id: 91, undoUntil: iso('2026-11-03T08:30:10Z') });
+    mocks.reply.mockResolvedValue({ id: 91, createdAt: iso('2026-11-03T08:30:00Z'), undoUntil: iso('2026-11-03T08:30:10Z') });
     mocks.undo.mockResolvedValue({ id: 91 });
     view();
     await user.click(screen.getByRole('button', { name: /Kemi Eze/ }));
@@ -219,6 +219,57 @@ describe('person sheet', () => {
     await user.click(screen.getByRole('button', { name: 'Undo' }));
     expect(mocks.undo).toHaveBeenCalledWith(91);
     expect(await screen.findByText('Not sent. Kemi is back with you.')).toBeInTheDocument();
+  });
+
+  it('keeps Undo for as long as the server does, counted from when it queued the message', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    // Queued at 08:30:00 with a 6 second window: the phone clock is not the server's, so only the gap counts.
+    mocks.reply.mockResolvedValue({ id: 92, createdAt: iso('2026-11-03T08:30:00Z'), undoUntil: iso('2026-11-03T08:30:06Z') });
+    view();
+    await user.click(screen.getByRole('button', { name: /Kemi Eze/ }));
+    const sheet = await screen.findByRole('dialog', { name: 'Kemi Eze' });
+    await user.click(within(sheet).getByRole('button', { name: 'Send' }));
+    expect(await screen.findByRole('button', { name: 'Undo' })).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_500); });
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+  });
+
+  it('does not lose Undo when another line arrives; it waits behind', async () => {
+    mocks.reply.mockResolvedValue({ id: 93, createdAt: iso('2026-11-03T08:30:00Z'), undoUntil: iso('2026-11-03T08:30:10Z') });
+    mocks.undo.mockResolvedValue({ id: 93 });
+    mocks.snooze.mockResolvedValue({ ...zainab, status: 'snoozed', snoozedUntil: iso('2026-11-09T08:00:00Z') });
+    const user = userEvent.setup();
+    view();
+    await user.click(screen.getByRole('button', { name: /Kemi Eze/ }));
+    await user.click(within(await screen.findByRole('dialog', { name: 'Kemi Eze' })).getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Sending your reply to Kemi')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Zainab Musa/ }));
+    mocks.draft.mockResolvedValue({ body: 'Fair enough.' });
+    await user.click(within(await screen.findByRole('dialog', { name: 'Zainab Musa' })).getByRole('button', { name: 'Snooze' }));
+    await waitFor(() => expect(mocks.snooze).toHaveBeenCalled());
+    // The Undo for Kemi is still on screen, and the snooze line is waiting behind it.
+    expect(screen.getByText('Sending your reply to Kemi')).toBeInTheDocument();
+    expect(screen.queryByText('Zainab comes back Monday at 9:00')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(mocks.undo).toHaveBeenCalledWith(93);
+    expect(await screen.findByText('Zainab comes back Monday at 9:00')).toBeInTheDocument();
+  });
+
+  it('keeps Tab inside the sheet', async () => {
+    const user = userEvent.setup();
+    view();
+    await user.click(screen.getByRole('button', { name: /Kemi Eze/ }));
+    const sheet = await screen.findByRole('dialog', { name: 'Kemi Eze' });
+    const items = within(sheet).getAllByRole('button');
+    (items[items.length - 1] as HTMLElement).focus();
+    await user.tab();
+    expect(sheet).toContainElement(document.activeElement as HTMLElement);
+    expect(document.activeElement).toBe(within(sheet).getAllByRole('button')[0]);
+    await user.tab({ shift: true });
+    expect(sheet).toContainElement(document.activeElement as HTMLElement);
   });
 
   it('will not send an empty reply', async () => {

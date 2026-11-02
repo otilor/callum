@@ -102,6 +102,10 @@ export interface NoteSettings {
   morningBrief?: boolean;
   /** When the last weekly email went out (or was skipped because the week was empty). */
   lastWeeklyAt?: string | null;
+  /** The local date (YYYY-MM-DD) of the Monday the last weekly email was for, so a change of time zone cannot send a week twice. */
+  lastWeeklyFor?: string | null;
+  /** Who said Okay to an out-of-office card, by person id, with the time of the auto-reply they said it about. */
+  awaySeen?: Record<string, string>;
   /** When the last weekly email send was tried and failed, so a failure is not retried every few seconds. */
   weeklyTriedAt?: string | null;
   /** The note the person last opened. */
@@ -144,7 +148,9 @@ export interface WeeklyEmail { subject: string; text: string }
 export interface WeeklyAnswer { note: WeeklyNote; email: WeeklyEmail; shouldOpen: boolean }
 
 export interface AwayPerson {
-  personId: number; projectId: number; first: string; name: string; company: string | null; role: string | null;
+  personId: number; projectId: number;
+  /** The project's name, only when there is more than one project. */
+  projectName: string | null; first: string; name: string; company: string | null; role: string | null;
   /** The day they said they are back (YYYY-MM-DD), when the message gave one. */
   until: string | null;
   /** When Callum follows up. */
@@ -153,7 +159,9 @@ export interface AwayPerson {
   text: string; at: string;
 }
 export interface ReferralCard {
-  personId: number; projectId: number; first: string; name: string; company: string | null;
+  personId: number; projectId: number;
+  /** The project's name, only when there is more than one project. */
+  projectName: string | null; first: string; name: string; company: string | null;
   referrer: { id: number; first: string; name: string; company: string | null } | null;
   /** What the referrer said about them, starting after the name: `runs finance at Oko Pay`. */
   context: string | null;

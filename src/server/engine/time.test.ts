@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, addLocalDays, localParts, startOfLocalDay, zonedTime } from './time.js';
+import { addDays, addLocalDays, endOfLocalDay, lastNoteAt, localParts, startOfLocalDay, zonedTime } from './time.js';
 import { fixedClock } from './clock.js';
 
 describe('zonedTime', () => {
@@ -51,5 +51,24 @@ describe('fixedClock', () => {
     expect(c.now().toISOString()).toBe('2026-11-02T10:01:00.000Z');
     c.set('2026-12-01T00:00:00Z');
     expect(c.now().toISOString()).toBe('2026-12-01T00:00:00.000Z');
+  });
+});
+
+describe('lastNoteAt', () => {
+  it('is the Monday at 8:30 local that last passed', () => {
+    expect(lastNoteAt(new Date('2026-11-02T07:31:00Z'), 'Africa/Lagos').toISOString()).toBe('2026-11-02T07:30:00.000Z');
+    expect(lastNoteAt(new Date('2026-11-02T07:29:00Z'), 'Africa/Lagos').toISOString()).toBe('2026-10-26T07:30:00.000Z');
+    expect(lastNoteAt(new Date('2026-11-08T23:59:00Z'), 'UTC').toISOString()).toBe('2026-11-02T08:30:00.000Z');
+  });
+  it('follows the zone, across the New York DST change', () => {
+    expect(lastNoteAt(new Date('2027-03-15T12:31:00Z'), 'America/New_York').toISOString()).toBe('2027-03-15T12:30:00.000Z');
+    expect(lastNoteAt(new Date('2027-03-12T12:00:00Z'), 'America/New_York').toISOString()).toBe('2027-03-08T13:30:00.000Z');
+  });
+});
+
+describe('endOfLocalDay', () => {
+  it('is local midnight at the end of the day', () => {
+    expect(endOfLocalDay(new Date('2026-11-02T07:30:00Z'), 'Africa/Lagos').toISOString()).toBe('2026-11-02T23:00:00.000Z');
+    expect(endOfLocalDay(new Date('2027-03-13T15:00:00Z'), 'America/New_York').toISOString()).toBe('2027-03-14T05:00:00.000Z');
   });
 });
