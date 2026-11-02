@@ -5,7 +5,7 @@ import type { Channel, Message, OutKind, Tone } from '../../shared/types.js';
 import { clampNote } from '../channels/linkedin-detect.js';
 import { type Clock, systemClock } from '../engine/clock.js';
 import { findPlaceholders } from '../engine/guard.js';
-import { OFFER_PLACEHOLDER, isExplicitOptOut, messageDate, stripQuoted } from './templates.js';
+import { OFFER_PLACEHOLDER, classifyOptions, isExplicitOptOut, messageDate, stripQuoted } from './templates.js';
 import type { AskIntent, Classification, Writer, WriteContext } from './writer.js';
 
 const MAX_TOKENS = 4000;
@@ -193,7 +193,7 @@ export class ClaudeWriter implements Writer {
     if (!out) return template;
     // An explicit opt-out ("unsubscribe", "take me off", "don't email me") is never overridden by a softer reading.
     // Any other template guess (a bare "stop", a hostile word) yields to Claude.
-    if (template.kind === 'stop' && isExplicitOptOut(text) && out.kind !== 'stop' && out.kind !== 'hostile') return template;
+    if (template.kind === 'stop' && isExplicitOptOut(text, classifyOptions(ctx)) && out.kind !== 'stop' && out.kind !== 'hostile') return template;
     const referral = out.kind === 'referral' && out.referral && out.referral.name.trim()
       ? { name: out.referral.name.trim(), email: out.referral.email?.trim() || null, context: out.referral.context.trim() }
       : null;

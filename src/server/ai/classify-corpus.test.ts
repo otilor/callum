@@ -197,9 +197,138 @@ const rows: Record<string, Row[]> = {
     ["This is great, cc'ing Funmi Ade who owns this.", 'referral'], ['Please contact my assistant Jane Doe (jane@okopay.com) to set this up.', 'referral'],
     ['Try our CFO, Sam Bello.', 'referral'], ['Leave me out of this, ask Tunde.', '!lost'],
     ["I'm not the right person, you want Tolu Adebayo (tolu.adebayo@okopay.com).", '!lost'],
-    ['Please take me off this thread, but loop in Chidi Okafor.', 'stop'],
+    ['Please take me off this thread, but loop in Chidi Okafor.', 'referral'],
   ],
 };
+
+// ---- signatures and footers (fix round 4)
+const okoBody = "Yes, let's talk Thursday.\n\nBest,\nKemi Eze\nCFO, Oko Pay\n\n";
+const footerLines = [
+  'CONFIDENTIALITY NOTICE: This email and any attachments are confidential and intended solely for the addressee. If you are not the intended recipient, please notify the sender immediately and delete this email. Do not copy or distribute.',
+  'This e-mail and any files transmitted with it are confidential. If you have received this e-mail in error please notify the system manager. If you are not the named addressee you should not disseminate, distribute or copy this e-mail.',
+  'If you are not the intended recipient, please do not read, copy or use it, and do not disclose it to others. Please notify the sender of the delivery error by replying to this message, and then delete it from your system.',
+  'Oko Pay will never ask for your PIN or password. Never email us your card details.',
+  'Security notice: Oko Pay staff will never email you asking for your password. Do not reply to emails requesting card details.',
+  'If you no longer wish to receive emails from us, please reply with UNSUBSCRIBE in the subject line.',
+  'If you would prefer not to receive marketing emails from Oko Pay, you can unsubscribe at any time.',
+  'You can opt out of all marketing emails from Oko Pay at any time by replying to this email.',
+  'Please do not email this address with payment queries; use payments@okopay.com.',
+  'Please do not contact me outside working hours. I work Mon-Thu.',
+  'I work flexible hours. Please do not email me back outside your own working hours.',
+  "My working hours may not be your working hours. Please don't feel obliged to reply outside of yours.",
+  'Please consider the environment before printing this email.',
+  'Oko Pay Ltd is authorised by the Central Bank of Nigeria. Registered office: 12 Marina, Lagos.',
+  'Beware of fraud: we will never change our bank details by email. If in doubt, call us.',
+  'Scam alert: Oko Pay will never ask you to pay a fee. Report any scam emails to fraud@okopay.com.',
+  "This is a scam warning: don't send money to anyone claiming to be us.",
+  'Spam filter notice: this message was scanned and found clean.',
+  'To unsubscribe from this group and stop receiving emails from it, send an email\nto oko-team+unsubscribe@googlegroups.com.',
+  'Do not send me any more paper invoices; we are paperless.',
+  'Please never call me on this number after 6pm.',
+  'Stop.\nThink.\nRecycle.',
+  'Out of office on Fridays.',
+  'I am on leave from 20 Dec to 3 Jan.',
+  'Note: I will be out of the office until 20 November.',
+  'You can unsubscribe at any time.',
+  'To unsubscribe, reply with UNSUBSCRIBE in the subject.',
+  'You can opt out of marketing emails at any time.',
+  'Manage your preferences or unsubscribe from this group.',
+  'To stop receiving these emails, click the link in the footer\nor send a message to team+unsubscribe@oko.example.',
+];
+const legalFooters = [
+  '\n\nCONFIDENTIALITY NOTICE: This email and any attachments are confidential and intended solely for the addressee. If you are not the intended recipient, please notify the sender immediately and delete this email. Do not copy or distribute.',
+  '\n\nThis email was sent by Oko Pay Ltd. To unsubscribe from Oko Pay marketing emails, reply UNSUBSCRIBE. Oko Pay will never ask for your password.',
+  '\n\nDisclaimer: If you have received this message in error, please contact the sender and remove it from your system. Do not contact us via this address for support requests; use support@okopay.com.',
+  '\n\nThe information in this email is confidential. If you are not the intended recipient please do not read, copy, or forward. Please notify us immediately. Our office hours are Mon-Fri. I am out of the office on Fridays. This is not spam: you can opt out of our newsletter at any time.',
+  "\n\nIMPORTANT: Oko Pay will never email you asking for payment details. If you receive such an email, it's a scam - report it to fraud@okopay.com. Do not reply to this email address.",
+  '\n\nPrivileged & confidential. If received in error, please delete it and do not email us back. Stop and think before you print.',
+  '\n\nOko Pay is regulated by the CBN. Opt out of marketing: reply STOP. Remove me from list requests are handled within 10 days.',
+  '\n\nThis mailbox is unmonitored out of hours. Automatic reply messages may be sent. Do not contact me on weekends.',
+];
+const legalBodies = ["Yes, let's talk Thursday.", 'Interested, send me the deck.', 'Tell me more about pricing?', 'Sure, Tuesday works.'];
+const legalSigs = ['\n\nBest,\nKemi Eze\nCFO, Oko Pay', '\n\nKemi Eze\nCFO', ''];
+const legalRows: Row[] = [];
+for (const b of legalBodies) for (const g of legalSigs) for (const l of legalFooters) legalRows.push([b + g + l, '!lost']);
+
+rows['signatures and footers'] = [
+  // 1. a channel named in the signature, or in another sentence, never cancels an explicit opt-out
+  ["Don't email me again.\n\nKemi Eze\nCFO, Oko Pay\nLinkedIn: linkedin.com/in/kemieze", 'stop'],
+  ['Please do not contact me again.\n\nBest,\nKemi Eze\nCFO | Oko Pay\nWhatsApp: +234 803 555 0100', 'stop'],
+  ['Do not email me.\n\nKemi Eze\nTel/WhatsApp +234 803 555 0100', 'stop'],
+  ['Never contact me again.\n\nSent from my iPhone\nSMS me on +234 803 555 0100', 'stop'],
+  ['Please don\'t email me again.\n\nKemi\nKemi Eze | CFO | Oko Pay | Find us on LinkedIn', 'stop'],
+  ['Do not contact us anymore. We use Signal internally.', 'stop'],
+  ["Don't email me again. Call me if you must, WhatsApp is no use.", 'stop'],
+  ['Please do not contact me. Reach me on WhatsApp if there is a real emergency.', 'stop'],
+  // ... but a different channel named in the same sentence is a change of channel
+  ["Don't call me, email is best. Interested though.", '!stop'],
+  ["Please don't call me, I prefer email. Send the details.", '!stop'],
+  ["Interested. Don't text me, I'm on email.", '!lost'],
+  ["Don't message me on LinkedIn, I'm rarely there. Yes, keen.", '!lost'],
+  ["Don't email me at 9am, email me at kemi@okopay.com instead.", '!stop'],
+  // 2. qualified or differently-aimed "don't" phrases are not opt-outs
+  ["Don't email me on Fridays, but happy to chat Thursday.", '!stop'],
+  ['Do not contact me before January. After that, yes.', '!stop'],
+  ["Don't email me until after the audit, then let's talk.", '!stop'],
+  ['Please never call me on this number after 6pm.', '!stop'],
+  ["Never call me before 10am, but yes, interested.", '!lost'],
+  ["Please don't contact me next week, I'm travelling. Week after works.", '!lost'],
+  ["Don't send me any more attachments, our filter blocks them. Can you paste the pricing inline?", '!lost'],
+  ['Never email us your card details.', '!stop'],
+  ["Don't contact us through the website form, it's not monitored. This address is fine. Interested.", '!lost'],
+  ["Please don't email us at the info@ address. Reply here.", '!lost'],
+  ["Yes, let's talk Thursday.\n\nKemi Eze\nCFO, Oko Pay\nPlease do not contact me outside working hours.", '!lost'],
+  ['Thursday works.\n\nKemi\nLeave me alone on weekends please :)', '!lost'],
+  // plain opt-outs keep working, including ones with an "again" next to a place or a thing
+  ['Do not email me at this address again.', 'stop'], ["Don't email me with this stuff again.", 'stop'], ['Never contact me or my team again.', 'stop'],
+  ["Please don't send me any more emails or messages.", 'stop'], ['Do not contact us again, ever.', 'stop'],
+  ["Not interested.\n\nKind regards,\nKemi Eze\nCFO\n\nP.S. Please do not email me again.", 'stop'],
+  // text below a signature or a footer is not read for "don't email me" phrases, so footers cannot stop a person
+  ...footerLines.map((f): Row => [okoBody + f, '!lost']),
+  ...footerLines.map((f): Row => ['Interested, call me.\n\n' + f, '!lost']),
+  ...legalRows,
+  // 3. footer wording is skipped as a footer, hard-wrapped lines included, but short replies still count
+  ['unsubscribe', 'stop'], ['unsubscribe?', 'stop'], ['How do I unsubscribe?', 'stop'], ['Please unsubscribe me', 'stop'],
+  ['I want to unsubscribe.', 'stop'], ["I'd like to unsubscribe from this list.", 'stop'], ['Is there a way to unsubscribe?', 'stop'],
+  ['Please opt me out of all marketing emails.', 'stop'], ['I want to opt out of all marketing emails.', 'stop'],
+  ['Hello,\n\nHow do I unsubscribe?\n\nKemi', 'stop'],
+  ['I no longer wish to receive your emails.', 'stop'], ["I don't want to receive these emails.", 'stop'],
+  ["Please do not email me again unless it is urgent.", '!stop'],
+  ["Thanks,\nPlease don't email me again", 'stop'], ['Not interested.\nThanks,\nDo not email me again', 'stop'],
+  ["Do not email me. Call me on 0803 555 0100 if you must.", 'stop'], ['Do not call me. Email is fine.', 'stop'],
+  ['Please remove me.\nTo unsubscribe from marketing emails click https://x.co/u', 'stop'],
+  // 4. any stop phrase beats an away message, an auto-reply header included
+  ['Out of Office: back Monday. Who are you? Stop.', 'stop'], ['Away until 20 Nov. Not sure who you are, stop.', 'stop'],
+  ["I'm out of the office until 20 Nov. Please remove me from your list.", 'stop'], ['Out of office. Stop.', 'stop'],
+  ['Automatic reply: away until 20 Nov.\nStop.', 'stop'], ['On leave until December. Who are you? stop', 'stop'],
+  ['Auto-reply: away until Monday. Unsubscribe?', 'stop'],
+  ['Automatic reply: I am away. Do not reply to this message.', 'out_of_office'],
+  ['Not sure who you are, stop.', 'stop'], ['not sure why I got this, please stop', 'stop'], ['Who are you, stop.', 'stop'],
+  ['No idea who you are. stop', 'stop'], ['Stop. Not sure why I got this.', 'stop'], ['I am not sure. Stop.', 'stop'],
+  ['STOP. Who are you?', ['stop', 'question']], ['Stop sending these. Where did you get my email?', ['stop', 'question']],
+  ['Why do you keep emailing me? Stop.', ['stop', 'question']], ['Who is this? Stop.', ['stop', 'question']], ['Yes, stop.', ['stop', 'interested']],
+  ['Stop?', ['stop', 'question']], ['Can I opt out?', ['stop', 'question']], ['opt out?', ['stop', 'question']],
+  // 5. an away line in a signature is not an away message
+  ['Thursday 2pm WAT.\n\nKemi Eze\nCFO\nOut of the office 20-24 Nov.', '!lost'],
+  ['Ok, Thursday then.\n\nKemi Eze | CFO\nAway until 20 Nov, limited access to email.', '!lost'],
+  ['Thursday 2pm WAT works.\n\nBest,\nKemi Eze\nCFO, Oko Pay\nOn annual leave until 20 November', '!lost'],
+  ['Sure.\n\nKemi\n\nI am on annual leave until 20 November.', '!lost'],
+  ['Thursday at 2.\n\nRegards,\nKemi\nAuto-reply: away until 20 Nov', '!lost'],
+  ['Fine, 2pm Thursday.\n--\nKemi\nPlease note I am out of the office until 20 November.', '!lost'],
+  ['Re: Quick question\nAutomatic reply: I am out of the office until 20 November.', 'out_of_office'],
+  ['Out of Office: back Monday. Questions? call Tolu', 'out_of_office'],
+  ['Hi,\n\nI am out of the office until Monday.\n\nBest,\nKemi Eze\nCFO', 'out_of_office'],
+  ['Kemi Eze\nCFO\nOut of the office 20-24 Nov.', 'out_of_office'],
+  ['Hello,\n\nKemi Eze\nOut of the office until 20 Nov.', 'out_of_office'],
+  ['Not now, thanks.\n\nKemi Eze\nCFO\nOut of office 20-24 Nov', '!lost'],
+  ["I'm away until the 15th, will reply then.", 'out_of_office'],
+  ['I am out of the office until 9am on Monday 16 November.', 'out_of_office'],
+  // 6. a referral inside an opt-out must reach the dock
+  ['Please take me off this thread, but loop in Chidi Okafor.', 'referral'],
+  ['Remove me from the list, speak to Sam Bello (sam@okopay.com) instead.', 'referral'],
+  ["Stop emailing me, cc'ing Funmi Ade who owns this.", 'referral'],
+  ['Please do not contact me again.', 'stop'], ["Don't contact Oko Pay again, remove me.", 'stop'],
+];
 
 const writer = new TemplateWriter(fixedClock('2026-11-02T10:00:00.000Z'));
 const ctx = testCtx({ history: [outbound()] });

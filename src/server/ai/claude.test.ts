@@ -195,6 +195,19 @@ describe('ClaudeWriter.classify guards', () => {
       expect(out.kind).toBe('stop');
     }
   });
+  it('keeps an opt-out whose signature names another channel, and lets Claude decide when the opt-out names someone else', async () => {
+    const signed = "Don't email me again.\n\nKemi Eze\nCFO, Oko Pay\nLinkedIn: linkedin.com/in/kemieze";
+    const kept = await writerWith({ parsed_output: classified('interested', 'reply') }).writer.classify(signed, testCtx());
+    expect(kept.kind).toBe('stop');
+    const referralText = 'Please take me off this thread, but loop in Chidi Okafor.';
+    const fromTemplate = await template.classify(referralText, testCtx());
+    expect(fromTemplate.kind).toBe('referral');
+    expect(fromTemplate.referral?.name).toBe('Chidi Okafor');
+    const claudeSays = await writerWith({ parsed_output: classified('stop', 'close') }).writer.classify(referralText, testCtx());
+    expect(claudeSays.kind).toBe('stop');
+    const claudeInterested = await writerWith({ parsed_output: classified('interested', 'reply') }).writer.classify(referralText, testCtx());
+    expect(claudeInterested.kind).toBe('interested');
+  });
   it('lets Claude correct the template when the template only guessed', async () => {
     const out = await writerWith({ parsed_output: classified('interested', 'reply') }).writer.classify("Stop it, you're onto something. Call me Thursday.", testCtx());
     expect(out.kind).toBe('interested');

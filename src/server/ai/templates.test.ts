@@ -486,6 +486,37 @@ describe('classify round 2: signatures, stop, hostile, out of office, other lang
     expect(isExplicitOptOut(text)).toBe(true);
   });
 
+  it('a channel in the signature or another sentence never excuses an opt-out, one in the same sentence does', () => {
+    expect(isExplicitOptOut("Don't email me again.\n\nKemi Eze\nCFO\nWhatsApp: +234 803 555 0100")).toBe(true);
+    expect(isExplicitOptOut('Do not contact us anymore. We use Signal internally.')).toBe(true);
+    expect(isExplicitOptOut("Don't call me, email is best.")).toBe(false);
+    expect(isExplicitOptOut("Don't email me at 9am, email me at kemi@okopay.com instead.")).toBe(false);
+  });
+  it('a qualified or differently aimed "don\'t" is not an opt-out', () => {
+    for (const text of ["Don't email me on Fridays.", 'Do not contact me before January.', 'Please never call me on this number after 6pm.', 'Never email us your card details.', "Don't send me any more attachments."]) {
+      expect(isExplicitOptOut(text), text).toBe(false);
+    }
+    expect(isExplicitOptOut("Please don't send me any more emails or messages.")).toBe(true);
+  });
+  it('a "don\'t" below the signature or inside footer wording is not read, but plain stop words still are', () => {
+    expect(isExplicitOptOut("Interested.\n\nBest,\nKemi Eze\nCFO\n\nDo not email me again.")).toBe(false);
+    expect(isExplicitOptOut('Interested.\n\nYou can unsubscribe at any time.\nDo not email us again if you prefer.')).toBe(false);
+    expect(isExplicitOptOut('Interested.\n\nKemi\nTo unsubscribe from this group, send an email\nto team+unsubscribe@googlegroups.com.')).toBe(false);
+    expect(isExplicitOptOut('I want to unsubscribe.')).toBe(true);
+  });
+  it('an opt-out that names someone else to talk to is not explicit and is classified as the referral', async () => {
+    const text = 'Please take me off this thread, but loop in Chidi Okafor.';
+    expect(isExplicitOptOut(text)).toBe(false);
+    expect(await kindOf(text)).toBe('referral');
+    expect(isExplicitOptOut("Please don't contact Chidi Okafor, remove me.")).toBe(true);
+  });
+  it('scheduling words and a signature decide whether an away line is an away message', async () => {
+    expect(await kindOf('Thursday 2pm WAT.\n\nKemi Eze\nCFO\nOut of the office 20-24 Nov.')).not.toBe('out_of_office');
+    expect(await kindOf('Ok, Thursday then.\n\nKemi Eze | CFO\nAway until 20 Nov.')).not.toBe('out_of_office');
+    expect(await kindOf('I am out of the office until 9am on Monday 16 November.')).toBe('out_of_office');
+    expect(await kindOf('Out of Office: back Monday. Who are you? Stop.')).toBe('stop');
+  });
+
   it.each([
     ["I'll report your note to my boss, sounds promising.", 'interested'],
     ['We were targeted by scammers last year, how do you prevent fraud?', 'question'],
