@@ -140,6 +140,26 @@ function projectMoveReason(ctx: Ctx, p: Person): string | null {
 interface Plan { line: string | null; at: Date | null }
 
 const KIND_LABEL: Record<string, string> = { hello: 'First hello', invite: 'The invite', thanks: 'The thank-you', follow_up: 'Follow-up' };
+const KIND_A: Record<string, string> = { hello: 'A first hello', invite: 'An invite', thanks: 'A thank-you', follow_up: 'A follow-up' };
+
+/** Callum's own message for this person that is stopped or did not go, if one is holding them still. */
+function stuckItem(p: Person, ctx: Ctx): OutboxItem | null {
+  return ctx.repo.listOutbox({ personId: p.id, state: ['blocked', 'failed'] })
+    .find((i) => i.origin === 'auto' && (p.lastTouchAt === null || i.createdAt >= p.lastTouchAt)) ?? null;
+}
+
+function stuckLine(item: OutboxItem): string {
+  const a = KIND_A[item.kind] ?? 'A message';
+  if (item.state === 'blocked') return `${a} is waiting for your edit`;
+  // A send Callum could not confirm may have gone: it says so rather than claim it did not.
+  try {
+    const d = JSON.parse(item.detail ?? 'null') as { maybeSent?: unknown; thrown?: unknown } | null;
+    if (d?.maybeSent === true || d?.thrown === true) return `${a} may have gone out, and Callum couldn't confirm it`;
+  } catch {
+    // no detail: it plainly did not go
+  }
+  return `${a} didn't go out`;
+}
 
 function plan(ctx: Ctx, p: Person, project: Project | null, pending: OutboxItem[], connected: Channel[]): Plan {
   const first = p.firstName;
@@ -170,6 +190,9 @@ function plan(ctx: Ctx, p: Person, project: Project | null, pending: OutboxItem[
   if (project && project.startedAt === null) return none(`Callum starts on ${first} once you press Start`);
 
   const channel = p.channel;
+  // A message that was stopped or did not go holds this person still until the user deals with it. Say so.
+  const stuck = stuckItem(p, ctx);
+  if (stuck) return none(stuckLine(stuck));
   const queued = pending.find((i) => i.origin === 'auto');
   if (queued && channel) {
     const at = new Date(queued.sendAfter);
@@ -411,8 +434,10 @@ export function wakeEarly(ctx: Ctx, personId: number): { person: Person; undoUnt
   const person = requirePerson(ctx, personId);
   if (person.status !== 'resting') throw new UserError(`${person.firstName} isn't resting.`);
   const now = ctx.clock.now();
-  const woken = ctx.repo.updatePerson(person.id, wake(person));
   const undoUntil = now.getTime() + UNDO_MS;
+  // The first hello waits out the 10 seconds as well as sending hours, so Undo really takes it back before anything leaves.
+  const first = nextSendingTime(new Date(undoUntil), personTz(person, ctx.repo.getSettings().timezone));
+  const woken = ctx.repo.updatePerson(person.id, { ...wake(person), nextTouchAt: iso(first) });
   tokensOf(ctx).set(person.id, {
     until: undoUntil,
     before: {

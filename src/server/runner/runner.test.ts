@@ -17,7 +17,8 @@ const FOLLOW_UP = { touches: 1, stage: 'hello' as const, lastTouchAt: '2026-10-2
 
 function runnerFor(h: Harness, opts: ConstructorParameters<typeof Runner>[1] = {}): { runner: Runner; errors: unknown[] } {
   const errors: unknown[] = [];
-  return { runner: new Runner(h.ctx, { onError: (e) => errors.push(e), ...opts }), errors };
+  // Spacing has its own tests (runner.spacing.test.ts); these are about what is sent, not how far apart.
+  return { runner: new Runner(h.ctx, { onError: (e) => errors.push(e), spacing: false, ...opts }), errors };
 }
 
 afterEach(() => {

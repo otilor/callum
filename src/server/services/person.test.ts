@@ -322,6 +322,22 @@ describe('wakeEarly and restAgain', () => {
     expect(scopes).toContain('people');
   });
 
+  it('holds the first hello until the 10 seconds of Undo are over, not just until sending hours', () => {
+    connect('x');
+    const mei = resting();
+    const result = wakeEarly(ctx, mei.id);
+    const undoUntil = Date.parse(result.undoUntil);
+    expect(Date.parse(result.person.nextTouchAt ?? '')).toBeGreaterThanOrEqual(undoUntil);
+    expect(result.person.nextTouchAt).toBe('2026-11-02T10:00:10.000Z');
+  });
+
+  it('holds it into the next sending day when the 10 seconds run past the end of today\'s hours', () => {
+    connect('x');
+    clock.set('2026-11-02T15:59:55.000Z'); // 16:59:55 in Lagos, sending ends at 17:00
+    const result = wakeEarly(ctx, resting().id);
+    expect(Date.parse(result.person.nextTouchAt ?? '')).toBeGreaterThanOrEqual(Date.parse(result.undoUntil));
+  });
+
   it('says the project is paused rather than promising a hello', () => {
     connect('x');
     ctx.repo.updateProject(project.id, { state: 'paused' });

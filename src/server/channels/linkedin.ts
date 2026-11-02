@@ -439,7 +439,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
       confirmed = await pendingInMoreMenu();
     }
     await stopIfBlocked(page);
-    if (!confirmed) throw new Stop(fail('unknown', "LinkedIn didn't confirm the invitation. Callum will check before trying again."));
+    if (!confirmed) throw new Stop(fail('unknown', "LinkedIn didn't confirm the invitation. It may have gone out, so check LinkedIn before sending it again."));
     if (await locate(page, SELECTORS.dialog)) await dismissDialog(page);
     return { ok: true, externalId: null, ...(noteDropped ? { noteDropped: true as const } : {}) };
   }
@@ -569,7 +569,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     const arrived = async () => (await countMessagesIn(bubble)) > before && (await lastMessageIn(bubble)) === wanted;
     const delivered = await pollUntil(page, arrived);
     await stopIfBlocked(page);
-    if (!delivered) throw new Stop(fail('unknown', "LinkedIn didn't confirm the message. Callum will check before trying again."));
+    if (!delivered) throw new Stop(fail('unknown', "LinkedIn didn't confirm the message. It may have gone out, so check LinkedIn before sending it again."));
     // LinkedIn shows a message at once and may mark it "failed to send" a moment later, so watch it for a while.
     const failed = new Stop(fail('unknown', "LinkedIn couldn't send the message. Callum will check before trying again."));
     const watchEnd = Date.now() + watchMs;

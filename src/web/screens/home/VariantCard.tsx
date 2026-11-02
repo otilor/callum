@@ -89,6 +89,8 @@ export function VariantCard({ variant: v, onReconnect, onOpenPerson, onDismiss, 
           return;
         case 'dismiss':
           onDismiss(v.id);
+          // A notice that came from the server is settled there too, not only hidden in this browser.
+          if (v.incidentId !== null) void api.dismissIncident(v.incidentId).then(() => onChanged(), () => undefined);
           return;
         case 'open_person':
           onOpenPerson?.(action.personId);

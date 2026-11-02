@@ -7,9 +7,9 @@ import { chooseChannel, nextKind, nextTouchTime, personTz, rest, restDue, unsnoo
 import { capFor } from '../engine/pacing.js';
 import { addLocalDays, startOfLocalDay } from '../engine/time.js';
 import { firstSlotAfterStart, isSendingTime, nextSendingTime } from '../engine/windows.js';
-import { capKinds, dispatchDue } from './dispatch.js';
+import { capKinds, createSpacer, dispatchDue, type Spacer } from './dispatch.js';
 import { handleInbound, heldBackPeople, retryFailedInbound } from './inbound.js';
-import { INCIDENT_COPY, channelSignedOut, openIncident, refreshSignedOutCount, resolveChannelIncidents } from './incidents.js';
+import { INCIDENT_COPY, channelSignedOut, openIncident, refreshSignedOutCount, resolveChannelIncidents, syncAutoIncidents } from './incidents.js';
 import { isHeldReferral, trackPause } from '../services/quiet.js';
 import { maybeSendWeekly } from '../services/weekly.js';
 
@@ -39,6 +39,12 @@ export interface RunnerOptions {
   pollTimeoutMs?: number;
   planBudgetMs?: number;
   wallNow?: () => number;
+  /**
+   * How Callum's own messages are spaced out on a channel (see `SEND_GAP_MS`): one at a time with a random gap.
+   * `random` replaces the dice in tests; `false` sends everything due at once, which only tests that are not about
+   * spacing ask for.
+   */
+  spacing?: false | { random?: () => number };
   /** Where problems that do not stop the run are reported. Defaults to the console. */
   onError?: (err: unknown) => void;
 }
@@ -197,6 +203,7 @@ export class Runner {
   private readonly planBudgetMs: number;
   private readonly wallNow: () => number;
   private readonly onError: (err: unknown) => void;
+  private readonly spacer: Spacer | undefined;
   /** When each channel was last asked, so a poll that fails is not retried every tick. */
   private readonly asked = new Map<Channel, number>();
   /** The poll under way per channel. A new one does not start until it has settled, and its events are never dropped. */
@@ -208,6 +215,7 @@ export class Runner {
     this.planBudgetMs = opts.planBudgetMs ?? PLAN_BUDGET_MS;
     this.wallNow = opts.wallNow ?? Date.now;
     this.onError = opts.onError ?? ctx.onError;
+    this.spacer = opts.spacing === false ? undefined : createSpacer(opts.spacing?.random);
   }
 
   /** One pass. A second call while one is running gets the same promise, so nothing is done twice. */
@@ -262,8 +270,9 @@ export class Runner {
       await planDue(this.ctx, { budgetMs: this.planBudgetMs, wallNow: this.wallNow, onError: this.onError });
     });
     await this.step(async () => {
-      await dispatchDue(this.ctx, { onError: this.onError });
+      await dispatchDue(this.ctx, { onError: this.onError, ...(this.spacer ? { spacer: this.spacer } : {}) });
     });
+    await this.step(() => syncAutoIncidents(this.ctx));
     await this.step(() => refreshSignedOutCount(this.ctx));
     await this.step(() => {
       trackPause(this.ctx);

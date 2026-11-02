@@ -1,4 +1,4 @@
-import type { Correction, Message, OutboxItem, PathStep, Person, Project } from '../../shared/types.js';
+import type { Correction, Incident, Message, OutboxItem, PathStep, Person, Project } from '../../shared/types.js';
 import type { Ctx } from '../context.js';
 import { findPlaceholders } from '../engine/guard.js';
 import * as life from '../engine/lifecycle.js';
@@ -6,6 +6,7 @@ import { personTz } from '../engine/lifecycle.js';
 import { nextMonday } from '../engine/windows.js';
 import type { WriteContext } from '../ai/writer.js';
 import { PlaceholderError } from '../outbox/outbox.js';
+import { parseAutoDetail, syncAutoIncidents } from '../runner/incidents.js';
 import { planProjectNow } from '../runner/runner.js';
 import { afterSaved, canWriteBy, cancelPendingRefunding, parseWhen, requirePerson, requireProject, userTz } from './common.js';
 import { asUserError, UserError, userFacing } from './errors.js';
@@ -104,6 +105,8 @@ function resolveSendFailed(ctx: Ctx, outboxId: number): void {
   let any = false;
   for (const incident of ctx.repo.listIncidents({ open: true })) {
     if (incident.kind !== 'send_failed' || incident.detail === null) continue;
+    // A notice about Callum's own messages covers several; it follows them (see syncAutoIncidents), not one id.
+    if (parseAutoDetail(incident.detail) !== null) continue;
     let id: unknown;
     try {
       id = (JSON.parse(incident.detail) as { outboxId?: unknown }).outboxId;
@@ -117,11 +120,35 @@ function resolveSendFailed(ctx: Ctx, outboxId: number): void {
   if (any) ctx.bus.emit('incidents');
 }
 
-/** Sends the same words again. The failed one is replaced and its incident is settled. */
-export function retry(ctx: Ctx, outboxId: number): OutboxItem {
+/** True when the channel may have sent this one before it failed, so sending it again could double it. */
+function mayHaveGone(item: OutboxItem): boolean {
+  try {
+    const d = JSON.parse(item.detail ?? 'null') as { maybeSent?: unknown; thrown?: unknown } | null;
+    return d?.maybeSent === true || d?.thrown === true;
+  } catch {
+    return false;
+  }
+}
+
+export const MAY_HAVE_GONE = 'This may have gone out already. Send again?';
+
+/**
+ * Sends the same words again. For the user's own message the failed one is replaced and its notice is settled. For one of
+ * Callum's own that did not go, the same item goes back in line; if it may have gone out already the user has to say
+ * they want it sent again (`again`), because a second copy cannot be taken back.
+ */
+export function retry(ctx: Ctx, outboxId: number, opts: { again?: boolean } = {}): OutboxItem {
   const item = requireItem(ctx, outboxId);
-  if (item.state !== 'failed' || item.origin !== 'user') throw new UserError('Only a message that did not go out can be tried again.');
+  if (item.state !== 'failed') throw new UserError('Only a message that did not go out can be tried again.');
   const person = requirePerson(ctx, item.personId);
+  if (item.origin === 'auto') {
+    if (person.status !== 'active') throw new UserError(`Callum isn't writing to ${person.firstName} any more.`);
+    if (mayHaveGone(item) && opts.again !== true) throw new UserError(MAY_HAVE_GONE, 409, { mayHaveGone: true });
+    const next = ctx.repo.updateOutbox(item.id, { state: 'scheduled', sendAfter: ctx.clock.now().toISOString(), error: null, detail: null, claimedAt: null });
+    syncAutoIncidents(ctx);
+    ctx.bus.emit('outbox');
+    return next;
+  }
   assertCanWrite(person);
   assertNoNewerReply(ctx, item, person.firstName);
   const kind = item.kind as HandKind;
@@ -145,6 +172,7 @@ export function editBlocked(ctx: Ctx, outboxId: number, body: string, subject?: 
     assertNoNewerReply(ctx, item, person.firstName);
     const next = userFacing(() => ctx.outbox.queueUserSend(item.personId, item.kind as HandKind, text, nextSubject));
     ctx.repo.updateOutbox(item.id, { state: 'cancelled' });
+    syncAutoIncidents(ctx);
     ctx.bus.emit('outbox');
     return next;
   }
@@ -155,7 +183,31 @@ export function editBlocked(ctx: Ctx, outboxId: number, body: string, subject?: 
     body: text, subject: nextSubject, error: null, state: needsOk ? 'awaiting_ok' : 'scheduled',
     sendAfter: new Date(Math.max(now, new Date(item.sendAfter).getTime())).toISOString(),
   });
+  // The notice about it no longer has this one on it.
+  syncAutoIncidents(ctx);
   ctx.bus.emit('outbox');
+  return next;
+}
+
+// ---- notices -------------------------------------------------------------------------------------------
+
+/** Notices that are true until something is done (a check, a sign-in, a daily limit, a paused channel, messages to fix). Okay hides these; it does not settle them. */
+const STAYS_UNTIL_FIXED: ReadonlySet<Incident['kind']> = new Set([
+  'linkedin_check', 'mailbox_signed_out', 'x_signed_out', 'linkedin_signed_out', 'x_limit', 'channel_paused',
+]);
+
+/**
+ * "Okay" on a notice: it is read, so it is settled. A notice about something still in the way (a check, a sign-in, a limit,
+ * a paused channel) stays open until that is dealt with, and so does one about Callum's own messages that still need the
+ * user; those come back unchanged.
+ */
+export function dismissIncident(ctx: Ctx, incidentId: number): Incident {
+  const incident = ctx.repo.listIncidents().find((i) => i.id === incidentId);
+  if (!incident) throw new UserError("Callum can't find that notice.", 404);
+  if (incident.state === 'resolved' || STAYS_UNTIL_FIXED.has(incident.kind)) return incident;
+  if (incident.kind === 'send_failed' && parseAutoDetail(incident.detail) !== null) return incident;
+  const next = ctx.repo.updateIncident(incident.id, { state: 'resolved', resolvedAt: ctx.clock.now().toISOString() });
+  ctx.bus.emit('incidents');
   return next;
 }
 
