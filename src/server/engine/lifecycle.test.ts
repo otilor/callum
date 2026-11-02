@@ -334,7 +334,20 @@ describe('switchChannel', () => {
     expect(patch.channel).toBe('x');
     expect(patch.linkedinState).toBe('none');
     expect(patch.nextTouchAt).toBe(addDays(last, 7).toISOString()); // next Tuesday 10:00 is a sending time
-    expect(patch.touches).toBeUndefined();
+    expect(patch.touches).toBe(0);
+    expect(patch.invitedAt).toBeNull();
+    expect(patch.stage).toBeUndefined();
+    expect(patch.lastTouchAt).toBeUndefined();
+  });
+  it('restarts the sequence on the new channel', () => {
+    const now = lagos(20, 10);
+    const fromEmail = person({ touches: 1, stage: 'hello', lastTouchAt: lagos(3, 10).toISOString() });
+    const toLinkedin = { ...fromEmail, ...switchChannel(fromEmail, 'linkedin', now, tz) };
+    expect(nextKind(toLinkedin)).toBe('invite');
+    const fromLinkedin = person({ channel: 'linkedin', touches: 2, stage: 'following', linkedinState: 'connected', lastTouchAt: lagos(3, 10).toISOString() });
+    const toEmail = { ...fromLinkedin, ...switchChannel(fromLinkedin, 'email', now, tz) };
+    expect(toEmail.stage).toBe('following');
+    expect(nextKind(toEmail)).toBe('hello');
   });
   it('lands on the next sending time when the gap ends off-hours', () => {
     const last = lagos(3, 18); // Tuesday 18:00, gap ends Tuesday 18:00

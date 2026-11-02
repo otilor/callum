@@ -173,11 +173,11 @@ export function correct(p: Person, kind: Correction, now: Date, tz: string): Par
   return { ...cleared, ...rest(p, now) };
 }
 
-/** Move to another channel, at least a week after the last touch. */
+/** Move to another channel and restart the sequence there, at least a week after the last touch. The stage stays as it is. */
 export function switchChannel(p: Person, ch: Channel, now: Date, tz: string): Partial<Person> {
   const last = ms(p.lastTouchAt);
   const earliest = last === null ? now : new Date(Math.max(now.getTime(), addDays(new Date(last), CHANNEL_SWITCH_GAP_DAYS).getTime()));
-  return { channel: ch, linkedinState: 'none', invitedAt: null, nextTouchAt: iso(nextSendingTime(earliest, tz)) };
+  return { channel: ch, touches: 0, linkedinState: 'none', invitedAt: null, nextTouchAt: iso(nextSendingTime(earliest, tz)) };
 }
 
 /** The steps shown in the face popover, with when each happened or is due. */
