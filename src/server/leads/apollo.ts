@@ -62,8 +62,11 @@ export interface ApolloQuery {
   employeeRanges?: string[];
   /** Where the person is, `Accra`. */
   personLocations?: string[];
+  /** True for an Apollo id Callum has already looked up. Those people are left out and later pages are read for new ones. */
+  exclude?: (apolloId: string) => boolean;
 }
-export interface ApolloSearchResult { total: number; previews: ApolloPreview[] }
+/** `skippedKnown` counts the people Apollo found who were left out because `exclude` knew them. */
+export interface ApolloSearchResult { total: number; previews: ApolloPreview[]; skippedKnown: number }
 export interface ApolloEnrichment { people: PersonLead[]; creditsUsed: number }
 
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
@@ -91,6 +94,8 @@ function toLead(raw: unknown): PersonLead | null {
   const name = text(p.name) ?? ([first, last].filter(Boolean).join(' ') || null);
   if (!name) return null;
   const lead: PersonLead = { name, source: 'apollo' };
+  const apolloId = text(p.id);
+  if (apolloId) lead.apolloId = apolloId;
   if (first) lead.firstName = first;
   const role = text(p.title);
   if (role) lead.role = role;
@@ -120,6 +125,8 @@ export class ApolloSource {
     const want = Math.max(1, Math.floor(q.count));
     const perPage = Math.min(want, PAGE_MAX);
     const previews: ApolloPreview[] = [];
+    const seen = new Set<string>();
+    let skippedKnown = 0;
     let total = 0;
     for (let page = 1; page <= MAX_PAGES; page++) {
       // Apollo's examples write the brackets of array parameters as they are, so this is built by hand.
@@ -136,13 +143,16 @@ export class ApolloSource {
       const pages = pagination.total_pages;
       for (const raw of found) {
         const preview = toPreview(raw);
-        if (preview) previews.push(preview);
+        if (!preview || seen.has(preview.apolloId)) continue;
+        seen.add(preview.apolloId);
+        if (q.exclude?.(preview.apolloId)) skippedKnown++;
+        else previews.push(preview);
       }
       total = typeof entries === 'number' ? entries : previews.length;
       const lastPage = typeof pages === 'number' && page >= pages;
       if (previews.length >= want || found.length < perPage || lastPage) break;
     }
-    return { total, previews: previews.slice(0, want) };
+    return { total, previews: previews.slice(0, want), skippedKnown };
   }
 
   /** Looks the chosen people up by their Apollo id, ten at a time. Spends credits. */

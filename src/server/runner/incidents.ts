@@ -51,6 +51,17 @@ export const INCIDENT_COPY = {
   mailbox_limit: "Your mailbox reached its daily sending limit, so Callum paused email until tomorrow. Nothing is lost and replies keep arriving.",
   send_unsure: (first: string): string =>
     `Callum was closed while your reply to ${first} was going out. It may have gone, so check your Sent folder before you try again.`,
+  /** Callum's own messages that were stopped or did not go, for one channel on one day. `what` reads "3 follow-ups" or "a follow-up". */
+  auto_failed: (what: string, channel: Channel, when: string): string =>
+    `Callum couldn't send ${what} ${channel === 'email' ? 'by email' : `by ${CHANNEL_NAME[channel]}`} ${when}`,
+  /** Three sends in a row that Callum could not confirm: the channel is paused so nothing goes twice. */
+  channel_paused: (channel: Channel): string => {
+    switch (channel) {
+      case 'linkedin': return "LinkedIn changed something and Callum couldn't confirm 3 sends in a row. It paused LinkedIn so nothing goes twice. Check LinkedIn, then resume.";
+      case 'x': return "X changed something and Callum couldn't confirm 3 sends in a row. It paused X so nothing goes twice. Check X, then resume.";
+      case 'email': return "Callum couldn't confirm 3 emails in a row. It paused email so nothing goes twice. Check your Sent folder, then resume.";
+    }
+  },
 } as const;
 
 interface BounceDetail { domain: string; people: { id: number; fallback: Channel | null }[] }
@@ -78,6 +89,12 @@ function findOpen(ctx: Ctx, i: NewIncident): Incident | null {
       if (parseBounceDetail(open.detail)?.domain !== parseBounceDetail(i.detail ?? null)?.domain || !sameUtcDay(open.createdAt, now)) continue;
     }
     if ((i.kind === 'send_failed' || i.kind === 'reply_unread') && open.personId !== (i.personId ?? null)) continue;
+    // Callum's own messages that did not go are one card for each channel and day, not one for each person.
+    if (i.kind === 'send_failed') {
+      const mine = parseAutoDetail(i.detail ?? null);
+      const theirs = parseAutoDetail(open.detail);
+      if ((mine === null) !== (theirs === null) || (mine && theirs && mine.day !== theirs.day)) continue;
+    }
     return open;
   }
   return null;
@@ -121,7 +138,9 @@ export function resumeChannel(ctx: Ctx, ch: Channel, pace: 'half' | 'full'): Cha
     pausedUntil: null,
     halfPaceUntil: pace === 'half' ? new Date(now.getTime() + 7 * DAY_MS).toISOString() : null,
   });
-  resolveIncidents(ctx, ch, ['linkedin_check', 'x_limit', 'mailbox_limit', 'mailbox_signed_out', 'x_signed_out', 'linkedin_signed_out']);
+  resolveIncidents(ctx, ch, ['linkedin_check', 'x_limit', 'mailbox_limit', 'mailbox_signed_out', 'x_signed_out', 'linkedin_signed_out', 'channel_paused']);
+  // A fresh start: the run of sends Callum could not confirm begins again from nothing.
+  unconfirmedRuns(ctx).delete(ch);
   ctx.bus.emit('channels');
   return account;
 }
@@ -339,4 +358,146 @@ export function handleBounce(ctx: Ctx, personId: number, ch: Channel): void {
   ctx.outbox.cancelPending(person.id, ['auto']);
   if (ch === 'email' && address) recordBounce(ctx, person, address, next);
   ctx.bus.emit('people');
+}
+
+// ---- Callum's own messages that were stopped or did not go ---------------------------------------------------
+
+/** What a grouped notice remembers: the day it is for and the outbox items it is about. */
+export interface AutoDetail { auto: true; day: string; outboxId: number; outboxIds: number[]; personIds: number[] }
+
+export function parseAutoDetail(detail: string | null): AutoDetail | null {
+  if (!detail) return null;
+  try {
+    const d = JSON.parse(detail) as Partial<AutoDetail>;
+    if (d.auto !== true || typeof d.day !== 'string' || !Array.isArray(d.outboxIds)) return null;
+    return {
+      auto: true, day: d.day, outboxId: typeof d.outboxId === 'number' ? d.outboxId : (d.outboxIds[0] as number),
+      outboxIds: d.outboxIds.filter((n): n is number => typeof n === 'number'),
+      personIds: Array.isArray(d.personIds) ? d.personIds.filter((n): n is number => typeof n === 'number') : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+const KIND_ONE: Record<string, string> = { hello: 'a first hello', invite: 'an invite', thanks: 'a thank-you', follow_up: 'a follow-up' };
+const KIND_MANY: Record<string, string> = { hello: 'first hellos', invite: 'invites', thanks: 'thank-yous', follow_up: 'follow-ups' };
+
+function localDay(ctx: Ctx, d: Date): string {
+  const p = localParts(d, ctx.repo.getSettings().timezone);
+  return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** `today`, `on Monday` for a notice about an earlier day this week, or `on 3 November` for an older one. */
+function dayWords(ctx: Ctx, day: string): string {
+  if (day === localDay(ctx, ctx.clock.now())) return 'today';
+  const [y, m, d] = day.split('-').map(Number) as [number, number, number];
+  const then = Date.UTC(y, m - 1, d);
+  const [ny, nm, nd] = localDay(ctx, ctx.clock.now()).split('-').map(Number) as [number, number, number];
+  if (Date.UTC(ny, nm - 1, nd) - then > 6 * 86_400_000) return `on ${d} ${MONTHS[m - 1]}`;
+  return `on ${WEEKDAYS[new Date(then).getUTCDay()]}`;
+}
+
+/** The items a grouped notice still stands for: stopped or failed, and for someone Callum is still writing to. */
+function liveItems(ctx: Ctx, ids: number[]): OutboxItem[] {
+  const out: OutboxItem[] = [];
+  for (const id of ids) {
+    const item = ctx.repo.getOutbox(id);
+    if (!item || (item.state !== 'blocked' && item.state !== 'failed')) continue;
+    if (ctx.repo.getPerson(item.personId)?.status !== 'active') continue;
+    out.push(item);
+  }
+  return out;
+}
+
+function autoMessage(ctx: Ctx, channel: Channel, day: string, items: OutboxItem[]): string {
+  const kinds = new Set(items.map((i) => i.kind));
+  const only = kinds.size === 1 ? [...kinds][0] as string : null;
+  const what = items.length === 1
+    ? (only ? KIND_ONE[only] : null) ?? 'a message'
+    : `${items.length} ${(only ? KIND_MANY[only] : null) ?? 'messages'}`;
+  return INCIDENT_COPY.auto_failed(what, channel, dayWords(ctx, day));
+}
+
+/**
+ * One of Callum's own messages was stopped (it still had a blank in it) or did not go. It is added to the notice for its
+ * channel and day, so twenty of them are one card with the people on it, not twenty cards.
+ */
+export function autoSendFailed(ctx: Ctx, item: OutboxItem): Incident {
+  const day = localDay(ctx, ctx.clock.now());
+  const probe: NewIncident = { channel: item.channel, kind: 'send_failed', message: '', detail: JSON.stringify({ auto: true, day, outboxId: item.id, outboxIds: [], personIds: [] }) };
+  const open = findOpen(ctx, probe);
+  const before = parseAutoDetail(open?.detail ?? null);
+  const ids = [...new Set([...(before?.outboxIds ?? []), item.id])];
+  const items = liveItems(ctx, ids);
+  const detail: AutoDetail = {
+    auto: true, day, outboxId: before?.outboxId ?? item.id, outboxIds: items.map((i) => i.id), personIds: [...new Set(items.map((i) => i.personId))],
+  };
+  return openIncident(ctx, { channel: item.channel, kind: 'send_failed', message: autoMessage(ctx, item.channel, day, items), detail: JSON.stringify(detail) });
+}
+
+/**
+ * Keeps the notices about Callum's own messages true: an item the user fixed, tried again or cancelled leaves its notice,
+ * and a notice with nothing left on it is settled. Called every pass and after the user acts.
+ */
+export function syncAutoIncidents(ctx: Ctx): void {
+  const at = ctx.clock.now().toISOString();
+  let changed = false;
+  for (const open of ctx.repo.listIncidents({ open: true })) {
+    if (open.kind !== 'send_failed') continue;
+    const d = parseAutoDetail(open.detail);
+    if (!d) continue;
+    const items = liveItems(ctx, d.outboxIds);
+    if (items.length === 0) {
+      ctx.repo.updateIncident(open.id, { state: 'resolved', resolvedAt: at });
+      changed = true;
+      continue;
+    }
+    const next: AutoDetail = { ...d, outboxId: items[0]!.id, outboxIds: items.map((i) => i.id), personIds: [...new Set(items.map((i) => i.personId))] };
+    const message = autoMessage(ctx, open.channel, d.day, items);
+    const detail = JSON.stringify(next);
+    if (message === open.message && detail === open.detail) continue;
+    ctx.repo.updateIncident(open.id, { message, detail });
+    changed = true;
+  }
+  if (changed) ctx.bus.emit('incidents');
+}
+
+// ---- sends Callum could not confirm, in a row ------------------------------------------------------------------
+
+/** Three in a row on one channel and it stops. */
+export const UNCONFIRMED_LIMIT = 3;
+const runs = new WeakMap<object, Map<Channel, number>>();
+const unconfirmedRuns = (ctx: Ctx): Map<Channel, number> => {
+  let map = runs.get(ctx.repo);
+  if (!map) runs.set(ctx.repo, (map = new Map()));
+  return map;
+};
+
+/** A send went through: whatever run of unconfirmed sends there was is over. */
+export function sendConfirmed(ctx: Ctx, ch: Channel): void {
+  unconfirmedRuns(ctx).delete(ch);
+}
+
+/**
+ * Callum's own message failed with no way to tell why. The third one in a row on a channel pauses it, because the
+ * page or the service has probably changed and trying on would only stack up doubtful sends. Returns whether it paused.
+ */
+export function sendUnconfirmed(ctx: Ctx, ch: Channel): boolean {
+  const runsOf = unconfirmedRuns(ctx);
+  const n = (runsOf.get(ch) ?? 0) + 1;
+  if (n < UNCONFIRMED_LIMIT) {
+    runsOf.set(ch, n);
+    return false;
+  }
+  runsOf.delete(ch);
+  // Only a channel that was running is stopped; one the user already paused or signed out of stays as it is.
+  if (ctx.repo.getChannel(ch).status === 'connected') {
+    ctx.repo.updateChannel(ch, { status: 'paused', pausedUntil: null });
+    ctx.bus.emit('channels');
+  }
+  openIncident(ctx, { channel: ch, kind: 'channel_paused', message: INCIDENT_COPY.channel_paused(ch) });
+  return true;
 }

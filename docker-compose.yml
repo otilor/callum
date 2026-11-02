@@ -15,6 +15,8 @@ services:
       APOLLO_API_KEY: ${APOLLO_API_KEY:-}
       CALLUM_MICROSOFT_CLIENT_ID: ${CALLUM_MICROSOFT_CLIENT_ID:-}
       TZ_DEFAULT: ${TZ_DEFAULT:-}
+      # Set to 1 when an HTTPS reverse proxy sits in front of Callum (see the README).
+      CALLUM_TRUST_PROXY: ${CALLUM_TRUST_PROXY:-}
     volumes:
       - callum-data:/data
 

@@ -674,10 +674,14 @@ describe('dispatchDue: a send is never repeated', () => {
     expect(recoverSending(h.ctx)).toBe(2);
     expect(h.ctx.repo.getOutbox(a.id)).toMatchObject({ state: 'failed', error: CLOSED_WHILE_SENDING, detail: '{"maybeSent":true}' });
     expect(h.ctx.repo.getOutbox(u.id)?.detail).toBe('{"maybeSent":true}');
-    expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([{
-      kind: 'send_failed', personId: talker.id,
-      message: 'Callum was closed while your reply to Kemi was going out. It may have gone, so check your Sent folder before you try again.',
-    }]);
+    // Callum's own message, which may have gone, is on the notice for its channel and day; the user's reply has a notice of its own.
+    expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([
+      { kind: 'send_failed', personId: null, channel: 'email', message: "Callum couldn't send a first hello by email today" },
+      {
+        kind: 'send_failed', personId: talker.id,
+        message: 'Callum was closed while your reply to Kemi was going out. It may have gone, so check your Sent folder before you try again.',
+      },
+    ]);
     expect(recoverSending(h.ctx)).toBe(0);
   });
 

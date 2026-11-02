@@ -442,13 +442,13 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
       if (await pendingInMoreMenu()) confirmedIn = 'menu';
     }
     await stopIfBlocked(page);
-    if (!confirmedIn) throw new Stop(fail('unknown', "LinkedIn didn't confirm the invitation. Callum will check before trying again."));
+    if (!confirmedIn) throw new Stop(fail('unknown', "LinkedIn didn't confirm the invitation. It may have gone out, so check LinkedIn before sending it again."));
     // A Pending button can show for a moment and then go: LinkedIn takes the invitation back when it cannot keep it.
     // After a pause like a person's, look once more before calling it sent.
     await pause();
     await stopIfBlocked(page);
     const stillPending = confirmedIn === 'card' ? await inCard() : await pendingInMoreMenu();
-    if (!stillPending) throw new Stop(fail('unknown', "LinkedIn showed the invitation as sent, then took it back. Callum didn't count it as sent and will check before trying again."));
+    if (!stillPending) throw new Stop(fail('unknown', "LinkedIn showed the invitation as sent, then took it back. Callum didn't count it as sent. Check LinkedIn before sending it again."));
     if (await locate(page, SELECTORS.dialog)) await dismissDialog(page);
     return { ok: true, externalId: null, ...(noteDropped ? { noteDropped: true as const } : {}) };
   }
@@ -578,9 +578,9 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     const arrived = async () => (await countMessagesIn(bubble)) > before && (await lastMessageIn(bubble)) === wanted;
     const delivered = await pollUntil(page, arrived);
     await stopIfBlocked(page);
-    if (!delivered) throw new Stop(fail('unknown', "LinkedIn didn't confirm the message. Callum will check before trying again."));
+    if (!delivered) throw new Stop(fail('unknown', "LinkedIn didn't confirm the message. It may have gone out, so check LinkedIn before sending it again."));
     // LinkedIn shows a message at once and may mark it "failed to send" a moment later, so watch it for a while.
-    const failed = new Stop(fail('unknown', "LinkedIn couldn't send the message. Callum will check before trying again."));
+    const failed = new Stop(fail('unknown', "LinkedIn couldn't send the message. It may have gone out, so check LinkedIn before sending it again."));
     const watchEnd = Date.now() + watchMs;
     for (;;) {
       if (await newestMessageFailed(page, bubble)) throw failed;

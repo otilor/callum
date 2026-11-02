@@ -5,7 +5,7 @@ import { ApiError } from '../../api.js';
 import { appState, channel, incident, NOW, outboxItem, person } from '../../test/fixtures.js';
 import { VariantStack } from './VariantCard.js';
 
-const mocks = vi.hoisted(() => ({ retry: vi.fn(), remove: vi.fn(), act: vi.fn() }));
+const mocks = vi.hoisted(() => ({ retry: vi.fn(), remove: vi.fn(), act: vi.fn(), dismissIncident: vi.fn() }));
 vi.mock('../../api.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../api.js')>()), api: mocks }));
 
 const now = () => NOW;
@@ -17,6 +17,7 @@ function stack(state = appState(), over: Partial<React.ComponentProps<typeof Var
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.dismissIncident.mockResolvedValue({});
   window.localStorage.clear();
 });
 
@@ -101,6 +102,22 @@ describe('VariantStack', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Skip them instead' }));
     expect(mocks.remove).toHaveBeenCalledTimes(2);
     expect(await screen.findByText("Those 2 people won't hear from you. Everyone else carries on.")).toBeInTheDocument();
+  });
+
+  it('settles a notice on the server when the person says Okay to it, and keeps a card that is not from the server hidden here only', async () => {
+    const s = appState({
+      incidents: [incident(8, 'reply_unread', { personId: 9, message: "Callum couldn't read a reply from Tomás. It's on your dock." })],
+      people: [person(9, 'Tomás Ortega'), person(11, 'Ruth Mensah', { status: 'stopped', replyKind: 'stop', repliedAt: '2026-11-03T06:31:00.000Z', lastInbound: 'Please take me off your list.' })],
+    });
+    const { props } = stack(s);
+    const card = screen.getByRole('region', { name: "Callum couldn't read a reply from Tomás" });
+    await userEvent.click(within(card).getByRole('button', { name: 'Okay' }));
+    expect(mocks.dismissIncident).toHaveBeenCalledWith(8);
+    await vi.waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+    mocks.dismissIncident.mockClear();
+    const stop = screen.getByRole('region', { name: 'Ruth asked not to be contacted' });
+    await userEvent.click(within(stop).getByRole('button', { name: 'Okay' }));
+    expect(mocks.dismissIncident).not.toHaveBeenCalled();
   });
 
   it('opens the X plan page in a new tab', async () => {

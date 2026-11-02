@@ -264,3 +264,69 @@
     animation: none;
   }
 }
+
+/* Callum's own messages that were stopped or did not go: one card, the people listed. */
+.inc-title-sm {
+  font-size: 20px;
+}
+.inc-row-lead {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--slate);
+}
+.inc-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.inc-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 22px;
+  background: var(--error-tint);
+}
+.inc-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inc-row-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+.inc-row-why,
+.inc-row-ask {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--slate);
+}
+.inc-row-ask {
+  font-weight: 600;
+  color: var(--ink);
+}
+.inc-edit {
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-radius: 18px;
+  background: var(--white);
+  box-shadow: 0 0 0 1.5px var(--line);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+  resize: vertical;
+}
+.inc-edit:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}

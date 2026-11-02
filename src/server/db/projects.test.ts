@@ -143,7 +143,7 @@ describe('settings and the current project', () => {
 });
 
 describe('migration V3', () => {
-  const LATEST = 4;
+  const LATEST = 5;
   function dbAt(version: number): DatabaseSync {
     const db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON');

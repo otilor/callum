@@ -3,6 +3,7 @@ import type {
   NewProject, OutboxItem, OutboxState, OutKind, Person, PersonStatus, Project, ProjectState, Settings, Stage,
 } from '../../shared/types.js';
 import { CHANNELS } from '../../shared/types.js';
+import { createHash } from 'node:crypto';
 import type { Db } from './db.js';
 import { inTransaction } from './transaction.js';
 import { normalizeEmail, normalizeLinkedinUrl, normalizeXHandle } from './handles.js';
@@ -32,7 +33,7 @@ const PERSON_KEYS = [
   'projectId', 'name', 'firstName', 'company', 'role', 'email', 'linkedinUrl', 'xHandle', 'timezone', 'channel',
   'stage', 'status', 'touches', 'lastTouchAt', 'nextTouchAt', 'linkedinState', 'invitedAt',
   'snoozedUntil', 'restUntil', 'badge', 'replyKind', 'suggested', 'draft', 'lastInbound', 'repliedAt',
-  'source', 'note',
+  'source', 'note', 'apolloId',
 ] as const;
 const PROJECT_KEYS = [
   'name', 'offer', 'audience', 'tone', 'sample', 'calendarUrl', 'approvalsLeft', 'startedAt', 'state', 'pausedUntil',
@@ -44,7 +45,7 @@ const OUTBOX_KEYS = [
 ] as const;
 const INCIDENT_KEYS = ['channel', 'kind', 'state', 'message', 'detail', 'personId', 'resolvedAt'] as const;
 const CHANNEL_KEYS = [
-  'status', 'identity', 'connectedAt', 'pausedUntil', 'halfPaceUntil', 'invitesBlockedUntil', 'lastPolledAt',
+  'status', 'identity', 'connectedAt', 'rampIdentity', 'pausedUntil', 'halfPaceUntil', 'invitesBlockedUntil', 'lastPolledAt',
 ] as const;
 
 const DEFAULT_SETTINGS: Settings = {
@@ -54,7 +55,7 @@ const DEFAULT_SETTINGS: Settings = {
 
 function defaultChannel(channel: Channel): ChannelAccount {
   return {
-    channel, status: 'disconnected', identity: null, connectedAt: null,
+    channel, status: 'disconnected', identity: null, connectedAt: null, rampIdentity: null,
     pausedUntil: null, halfPaceUntil: null, invitesBlockedUntil: null, lastPolledAt: null,
   };
 }
@@ -64,6 +65,24 @@ function normalizeHandles<T extends { email?: string | null; linkedinUrl?: strin
   if (out.email !== undefined) out.email = normalizeEmail(out.email);
   if (out.linkedinUrl !== undefined) out.linkedinUrl = normalizeLinkedinUrl(out.linkedinUrl);
   if (out.xHandle !== undefined) out.xHandle = normalizeXHandle(out.xHandle);
+  return out;
+}
+
+/** The handles a stop is remembered by, as they are on a person or a row of a list. */
+export interface HandleSet { email?: string | null; linkedinUrl?: string | null; xHandle?: string | null }
+
+/**
+ * One entry per handle of someone who asked to stop: the kind, and a SHA-256 of the normalised value (a LinkedIn
+ * profile is its slug), so the do-not-contact list holds no address anyone could read back.
+ */
+function suppressionKeys(h: HandleSet): { kind: string; hash: string }[] {
+  const out: { kind: string; hash: string }[] = [];
+  const add = (kind: string, value: string | null) => {
+    if (value) out.push({ kind, hash: createHash('sha256').update(value).digest('hex') });
+  };
+  add('email', normalizeEmail(h.email));
+  add('linkedin', /\/in\/([^/?#]+)/.exec(normalizeLinkedinUrl(h.linkedinUrl) ?? '')?.[1] ?? null);
+  add('x', normalizeXHandle(h.xHandle));
   return out;
 }
 
@@ -245,7 +264,9 @@ export class Repo {
       updatedAt: t,
     };
     const id = this.insertRow('people', [...PERSON_KEYS, 'createdAt', 'updatedAt'], values);
-    return this.require(this.getPerson(id), 'person', id);
+    const person = this.require(this.getPerson(id), 'person', id);
+    if (person.status === 'stopped') this.suppress(person);
+    return person;
   }
 
   getPerson(id: number): Person | null {
@@ -255,7 +276,30 @@ export class Repo {
   updatePerson(id: number, patch: Partial<Person>): Person {
     this.require(this.getPerson(id), 'person', id);
     this.updateRow('people', [...PERSON_KEYS, 'updatedAt'], id, { ...normalizeHandles(patch), updatedAt: this.now() });
-    return this.require(this.getPerson(id), 'person', id);
+    const person = this.require(this.getPerson(id), 'person', id);
+    // However someone came to be stopped, every handle they have is on the do-not-contact list from that moment.
+    if (person.status === 'stopped') this.suppress(person);
+    return person;
+  }
+
+  // ---- the do-not-contact list -----------------------------------------
+
+  /** Remembers these handles as people who asked to stop. This survives "delete my data" on purpose. */
+  suppress(h: HandleSet): void {
+    const insert = this.db.prepare('INSERT OR IGNORE INTO suppressions (kind, hash, created_at) VALUES (?, ?, ?)');
+    const t = this.now();
+    for (const k of suppressionKeys(h)) insert.run(k.kind, k.hash, t);
+  }
+
+  /** True when any of these handles belongs to someone who asked to stop, whether or not they are still in Callum. */
+  isSuppressed(h: HandleSet): boolean {
+    const find = this.db.prepare('SELECT 1 AS found FROM suppressions WHERE kind = ? AND hash = ? LIMIT 1');
+    return suppressionKeys(h).some((k) => find.get(k.kind, k.hash) !== undefined);
+  }
+
+  /** Empties the list. Only a demo scene being replaced does this: it holds made-up people. */
+  clearSuppressions(): void {
+    this.db.exec('DELETE FROM suppressions');
   }
 
   listPeople(filter: { status?: PersonStatus[]; stage?: Stage[]; projectId?: number } = {}): Person[] {
@@ -282,16 +326,31 @@ export class Repo {
     return { sql: where.length ? ` WHERE ${where.join(' AND ')}` : '', params };
   }
 
-  /** Removes a person and their outbox items, unless Callum has a message with them. Returns whether they were removed. */
+  /** Removes a person and their outbox items, unless Callum has a message with them or they asked to stop. Returns whether they were removed. */
   deletePerson(id: number): boolean {
     return this.transaction(() => {
       const res = this.db
-        .prepare('DELETE FROM people WHERE id = ? AND NOT EXISTS (SELECT 1 FROM messages WHERE person_id = ?)')
+        .prepare("DELETE FROM people WHERE id = ? AND status != 'stopped' AND NOT EXISTS (SELECT 1 FROM messages WHERE person_id = ?)")
         .run(id, id);
       if (Number(res.changes) === 0) return false;
       this.db.prepare('UPDATE incidents SET person_id = NULL WHERE person_id = ?').run(id);
       return true;
     });
+  }
+
+  /**
+   * True when Apollo was already paid for this id: someone in Callum has it, or the look-up came back with nobody to
+   * write to (no email or LinkedIn) or the person was taken out again. Looking them up again would cost a credit twice.
+   */
+  hasApolloId(apolloId: string): boolean {
+    return this.db.prepare('SELECT 1 AS found FROM people WHERE apollo_id = ? UNION ALL SELECT 1 FROM apollo_seen WHERE apollo_id = ? LIMIT 1').get(apolloId, apolloId) !== undefined;
+  }
+
+  /** Remembers ids Apollo has been paid for, so a later search leaves them out. */
+  markApolloSeen(ids: Iterable<string>): void {
+    const insert = this.db.prepare('INSERT OR IGNORE INTO apollo_seen (apollo_id, created_at) VALUES (?, ?)');
+    const t = this.now();
+    for (const id of ids) insert.run(id, t);
   }
 
   findPersonByHandle(h: { email?: string | null; linkedinUrl?: string | null; xHandle?: string | null }): Person | null {
@@ -441,7 +500,8 @@ export class Repo {
 
   deleteAll(): void {
     this.transaction(() => {
-      for (const t of ['messages', 'outbox', 'incidents', 'inbound_failed', 'people', 'projects', 'channels', 'channel_secrets', 'settings']) {
+      // `suppressions` is not here: someone who asked to stop is still not written to after the user's data is deleted.
+      for (const t of ['messages', 'outbox', 'incidents', 'inbound_failed', 'people', 'projects', 'channels', 'channel_secrets', 'settings', 'apollo_seen']) {
         this.db.exec(`DELETE FROM ${t}`);
       }
       this.db.exec("DELETE FROM sqlite_sequence WHERE name IN ('messages','outbox','incidents','inbound_failed','people','projects')");

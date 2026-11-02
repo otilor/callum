@@ -37,6 +37,8 @@ const IDENTITY: Record<Channel, string> = { email: SENDER_EMAIL, linkedin: 'Gabr
  */
 export function seedScene(ctx: Ctx, scene: Scene): void {
   ctx.repo.deleteAll();
+  // A demo scene holds made-up people: their stops are not worth keeping.
+  ctx.repo.clearSuppressions();
   ctx.reloadKeys();
   ctx.repo.transaction(() => {
     if (scene === 'fresh') seedFresh(ctx);

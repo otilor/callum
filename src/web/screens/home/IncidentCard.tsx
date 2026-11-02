@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AppState, Channel, Incident, OutboxItem, Person } from '../../../shared/types.js';
-import { api } from '../../api.js';
+import { api, ApiError } from '../../api.js';
 import { ErrorNote } from '../../ui/ErrorNote.js';
 import { formatSlot } from '../../ui/format.js';
 import { Marble } from '../../ui/Marble.js';
+import { autoItems } from './incidentVariants.js';
 import { useToast } from '../../ui/Toast.js';
 import './Incident.css';
 
@@ -107,7 +108,10 @@ function titleOf(incident: Incident, state: AppState): string {
       const n = bounceCount(incident);
       return n > 0 ? `${n} ${n === 1 ? 'email' : 'emails'} bounced` : 'Some emails bounced';
     }
+    case 'channel_paused': return `${CHANNEL_NAME[incident.channel].replace(/^./, (c) => c.toUpperCase())} is paused`;
     case 'send_failed': {
+      // Callum's own messages: the sentence that says how many is the title.
+      if (autoItems(incident.detail) !== null) return incident.message;
       const who = state.people.find((p) => p.id === incident.personId);
       if (isDeferred(incident)) return who ? `Your reply to ${who.firstName} is waiting` : 'Your reply is waiting';
       return who ? `Your reply to ${who.firstName} didn't go out` : "Your reply didn't go out";
@@ -125,6 +129,7 @@ function nextStepOf(incident: Incident): string {
     case 'x_signed_out':
     case 'linkedin_signed_out': return `Connect ${CHANNEL_NAME[incident.channel]} again to carry on.`;
     case 'not_answering': return 'Callum keeps trying. If it stays quiet, connect it again.';
+    case 'channel_paused': return `Check ${CHANNEL_NAME[incident.channel]}, then resume it here.`;
     case 'reply_unread': return incident.personId === null ? 'Check that channel by hand, then press Okay.' : 'Open the conversation and read it yourself.';
     case 'send_failed': return isDeferred(incident) ? 'Nothing to do. It goes by itself.' : 'Try again, or copy it and send it another way.';
     default: return 'Nothing to do.';
@@ -204,6 +209,120 @@ function Shell({ incident, state, now, titleId, paused, children }: { incident: 
         </div>
       </div>
       {children}
+    </section>
+  );
+}
+
+/** True when the channel may have sent this message before it failed (so the user is asked before it goes again). */
+function mayHaveGone(item: OutboxItem): boolean {
+  try {
+    const d = JSON.parse(item.detail ?? 'null') as { maybeSent?: unknown; thrown?: unknown } | null;
+    return d?.maybeSent === true || d?.thrown === true;
+  } catch {
+    return false;
+  }
+}
+
+const ASK_AGAIN = 'This may have gone out already. Send again?';
+
+/** One person on a notice about Callum's own messages: what is wrong, and the way out of it. */
+function StuckRow({ item, person, refresh, onOpenPerson }: { item: OutboxItem; person: Person; refresh(): Promise<void>; onOpenPerson?: (id: number) => void }) {
+  const [phase, setPhase] = useState<'idle' | 'editing' | 'asking'>('idle');
+  const [text, setText] = useState(item.body);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run(task: () => Promise<void>) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await task();
+      setPhase('idle');
+      await refresh();
+    } catch (e) {
+      setError(e instanceof ApiError || e instanceof Error ? e.message : messageOf(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const blocked = item.state === 'blocked';
+  return (
+    <li className="inc-row">
+      <Marble seed={300 + person.id} size={36} tone="warm" ring="#D9480F" />
+      <div className="inc-row-main">
+        <span className="inc-row-name">{person.name}</span>
+        <span className="inc-row-why">
+          {blocked ? (item.error ?? 'Callum stopped this message.') : mayHaveGone(item) ? "Callum couldn't confirm it went out." : (item.error ?? "It didn't go out.")}
+        </span>
+        {phase === 'editing' ? (
+          <>
+            <textarea className="inc-edit" aria-label={`Message to ${person.firstName}`} value={text} rows={5} onChange={(e) => setText(e.target.value)} />
+            <div className="inc-actions">
+              <button type="button" className="inc-primary" aria-busy={busy} disabled={busy || text.trim() === ''} onClick={() => void run(async () => void (await api.editBlocked(item.id, text)))}>
+                Save and send
+              </button>
+              <button type="button" className="inc-quiet" disabled={busy} onClick={() => setPhase('idle')}>Cancel</button>
+            </div>
+          </>
+        ) : phase === 'asking' ? (
+          <>
+            <p className="inc-row-ask">{ASK_AGAIN}</p>
+            <div className="inc-actions">
+              <button type="button" className="inc-primary" aria-busy={busy} disabled={busy} onClick={() => void run(async () => void (await api.retry(item.id, true)))}>Send again</button>
+              <button type="button" className="inc-quiet" disabled={busy} onClick={() => setPhase('idle')}>Not now</button>
+            </div>
+          </>
+        ) : (
+          <div className="inc-actions">
+            {blocked ? (
+              <button type="button" className="inc-primary" onClick={() => { setText(item.body); setPhase('editing'); }}>Fix it</button>
+            ) : (
+              <button
+                type="button"
+                className="inc-primary"
+                aria-busy={busy}
+                disabled={busy}
+                onClick={() => (mayHaveGone(item) ? setPhase('asking') : void run(async () => void (await api.retry(item.id))))}
+              >
+                Try again
+              </button>
+            )}
+            {onOpenPerson ? <button type="button" className="inc-quiet" onClick={() => onOpenPerson(person.id)}>Open {person.firstName}</button> : null}
+          </div>
+        )}
+        {error ? <ErrorNote>{error}</ErrorNote> : null}
+      </div>
+    </li>
+  );
+}
+
+/** Callum's own messages that were stopped or did not go: one card for the channel and day, with the people on it. */
+function StuckCard({ incident, state, now, titleId, refresh, onOpenPerson }: {
+  incident: Incident; state: AppState; now: Date; titleId: string; refresh(): Promise<void>; onOpenPerson?: (id: number) => void;
+}) {
+  const ids = autoItems(incident.detail) ?? [];
+  const rows = ids.flatMap((id) => {
+    const item = state.outbox.find((o) => o.id === id);
+    const person = item ? state.people.find((p) => p.id === item.personId) : undefined;
+    return item && person && (item.state === 'blocked' || item.state === 'failed') ? [{ item, person }] : [];
+  });
+  return (
+    <section className="inc-card card-in" aria-labelledby={titleId} data-kind="send_failed">
+      <div className="inc-head">
+        <ChannelBadge channel={incident.channel} paused={false} />
+        <div className="inc-head-text">
+          <h2 id={titleId} className="inc-title inc-title-sm" tabIndex={-1}>{incident.message}</h2>
+          <span className="inc-when">{when(incident, state, now)}</span>
+        </div>
+      </div>
+      <p className="inc-row-lead">Callum holds these people until you decide. Nobody else is held up.</p>
+      <ul className="inc-rows" aria-label="People whose message did not go">
+        {rows.map(({ item, person }) => (
+          <StuckRow key={item.id} item={item} person={person} refresh={refresh} {...(onOpenPerson ? { onOpenPerson } : {})} />
+        ))}
+      </ul>
     </section>
   );
 }
@@ -330,7 +449,7 @@ export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss,
               aria-busy={busy}
               onClick={() =>
                 void run(async () => {
-                  await api.resumeChannel('linkedin', pace);
+                  await api.resumeChannel('linkedin', pace, true);
                   setPhase('resumed');
                   onResumed?.(incident);
                   toast(pace === 'half' ? 'LinkedIn is back on at half pace for a week' : 'LinkedIn is back on at full pace');
@@ -409,6 +528,39 @@ export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss,
             <button type="button" className="inc-primary" onClick={() => onOpenPerson(person.id)}>Open {person.firstName}'s conversation</button>
           ) : null}
           <button type="button" className={person && onOpenPerson ? 'inc-quiet' : 'inc-primary'} onClick={() => onDismiss(incident.id)}>Okay</button>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ---- Callum's own messages that did not go ---------------------------------------------------------------------------
+  if (incident.kind === 'send_failed' && autoItems(incident.detail) !== null) {
+    return <StuckCard incident={incident} state={state} now={at} titleId={titleId} refresh={refresh} {...(onOpenPerson ? { onOpenPerson } : {})} />;
+  }
+
+  // ---- a channel paused because Callum could not confirm its sends ------------------------------------------------------
+  if (incident.kind === 'channel_paused') {
+    const name = CHANNEL_NAME[incident.channel];
+    return (
+      <Shell incident={incident} state={state} now={at} titleId={titleId} paused>
+        <Lines what={incident.message} next={nextStepOf(incident)} />
+        {waiting.length > 0 ? <WaitStrip people={waiting} line={`${waiting.length} ${waiting.length === 1 ? 'person waits' : 'people wait'} for ${name}. Nothing is lost.`} /> : null}
+        {error ? <ErrorNote>{error}</ErrorNote> : null}
+        <div className="inc-actions">
+          <button
+            type="button"
+            className="inc-primary"
+            aria-busy={busy}
+            onClick={() =>
+              void run(async () => {
+                await api.resumeChannel(incident.channel, 'full', true);
+                toast(`${name.replace(/^./, (c) => c.toUpperCase())} is back on`);
+                await refresh();
+              })
+            }
+          >
+            I've checked, resume {name}
+          </button>
         </div>
       </Shell>
     );
@@ -525,6 +677,8 @@ export function IncidentCards({ state, refresh, onReconnect, onOpenPerson, inclu
             const next = new Set(dismissed).add(id);
             writeDismissed(next);
             setDismissed(next);
+            // Okay settles the notice on the server too. One that stays true until it is fixed comes back unchanged and stays hidden here.
+            void api.dismissIncident(id).then(() => refresh(), () => undefined);
           }}
           onResumed={(done) => {
             setKept((all) => [...all.filter((k) => k.id !== done.id), done]);

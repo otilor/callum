@@ -2,13 +2,13 @@ import { render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INCIDENT_COPY } from '../../../server/runner/incidents.js';
-import type { AppState } from '../../../shared/types.js';
+import type { AppState, Incident, OutboxItem } from '../../../shared/types.js';
 import { ApiError } from '../../api.js';
 import { appState, channel, incident, outboxItem, person } from '../../test/phoneLeaveFixtures.js';
 import { ToastProvider } from '../../ui/Toast.js';
 import { IncidentCards, stillChannels } from './IncidentCard.js';
 
-const mocks = vi.hoisted(() => ({ resumeChannel: vi.fn(), retry: vi.fn() }));
+const mocks = vi.hoisted(() => ({ resumeChannel: vi.fn(), retry: vi.fn(), editBlocked: vi.fn(), dismissIncident: vi.fn() }));
 vi.mock('../../api.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../api.js')>()), api: mocks }));
 
 const refresh = vi.fn(() => Promise.resolve());
@@ -18,6 +18,9 @@ let open: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   mocks.resumeChannel.mockReset();
   mocks.retry.mockReset();
+  mocks.editBlocked.mockReset();
+  mocks.dismissIncident.mockReset();
+  mocks.dismissIncident.mockResolvedValue({});
   refresh.mockClear();
   onReconnect.mockClear();
   open = vi.fn();
@@ -75,7 +78,7 @@ describe('IncidentCards: LinkedIn wants to check it is you', () => {
     await user.click(half);
 
     await user.click(screen.getByRole('button', { name: 'Resume LinkedIn' }));
-    expect(mocks.resumeChannel).toHaveBeenCalledWith('linkedin', 'half');
+    expect(mocks.resumeChannel).toHaveBeenCalledWith('linkedin', 'half', true);
     expect(await screen.findByText('LinkedIn is back on')).toBeInTheDocument();
     expect(screen.getByText(/The 2 people who waited go first\. 7 invites a day for a week, then 15\./)).toBeInTheDocument();
     expect(refresh).toHaveBeenCalled();
@@ -99,7 +102,7 @@ describe('IncidentCards: LinkedIn wants to check it is you', () => {
     await user.click(screen.getByRole('button', { name: "Done, I've finished the check" }));
     await user.click(screen.getByRole('radio', { name: 'Full pace (15 a day)' }));
     await user.click(screen.getByRole('button', { name: 'Resume LinkedIn' }));
-    expect(mocks.resumeChannel).toHaveBeenCalledWith('linkedin', 'full');
+    expect(mocks.resumeChannel).toHaveBeenCalledWith('linkedin', 'full', true);
   });
 
   it('keeps the resumed line on screen after the server settles the incident', async () => {
@@ -159,6 +162,8 @@ describe('IncidentCards: the other kinds', () => {
     expect(screen.getByRole('heading', { name: '2 emails bounced' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Okay' }));
     expect(screen.queryByRole('heading', { name: '2 emails bounced' })).not.toBeInTheDocument();
+    // Okay settles the notice on the server too, not only in this browser.
+    expect(mocks.dismissIncident).toHaveBeenCalledWith(3);
     unmount();
     setup(state);
     expect(screen.queryByRole('heading', { name: '2 emails bounced' })).not.toBeInTheDocument();
@@ -314,5 +319,115 @@ describe('stillChannels', () => {
     const state = appState({ channels: [channel('email', 'connected'), channel('linkedin', 'paused'), channel('x', 'error')] });
     expect(stillChannels(state)).toEqual(['linkedin', 'x']);
     expect(stillChannels(appState())).toEqual([]);
+  });
+});
+
+describe('IncidentCards: Callum\'s own messages that did not go', () => {
+  const auto = (ids: number[], over: Partial<Incident> = {}) =>
+    incident(7, 'send_failed', "Callum couldn't send 3 follow-ups by LinkedIn today", {
+      channel: 'linkedin',
+      detail: JSON.stringify({ auto: true, day: '2026-11-02', outboxId: ids[0], outboxIds: ids, personIds: [11, 12, 13] }),
+      ...over,
+    });
+  const item = (id: number, personId: number, over: Partial<OutboxItem> = {}) =>
+    outboxItem(id, personId, { channel: 'linkedin', kind: 'follow_up', origin: 'auto', state: 'failed', error: "LinkedIn couldn't send the message.", body: 'Hi, a quick follow-up.', ...over });
+  const people = [person(11, 'Kemi', { channel: 'linkedin' }), person(12, 'Tunde', { channel: 'linkedin' }), person(13, 'Bola', { channel: 'linkedin' })];
+
+  function stuck(over: Partial<AppState> = {}) {
+    return appState({
+      channels: [channel('email', 'connected'), channel('linkedin', 'connected'), channel('x')],
+      people,
+      outbox: [
+        item(101, 11, { state: 'blocked', error: 'Add your price first. Callum never sends a message with [YOUR PRICE] in it.', body: 'The pilot is [YOUR PRICE].' }),
+        item(102, 12),
+        item(103, 13, { detail: '{"maybeSent":true}', error: 'Callum was closed while this was going out.' }),
+      ],
+      incidents: [auto([101, 102, 103])],
+      ...over,
+    });
+  }
+
+  it('is one card with the sentence as its title and every person on it', () => {
+    setup(stuck());
+    const card = screen.getByRole('region', { name: 'Needs your attention' });
+    expect(within(card).getAllByRole('heading')).toHaveLength(1);
+    expect(within(card).getByRole('heading', { name: "Callum couldn't send 3 follow-ups by LinkedIn today" })).toBeInTheDocument();
+    for (const name of ['Kemi Eze', 'Tunde Eze', 'Bola Eze']) expect(within(card).getByText(name)).toBeInTheDocument();
+    expect(card.textContent).not.toContain('!');
+  });
+
+  it('lets the user fix a blocked message in place and sends the new words', async () => {
+    mocks.editBlocked.mockResolvedValue({});
+    const { user } = setup(stuck());
+    const row = screen.getByText('Kemi Eze').closest('li') as HTMLElement;
+    expect(within(row).getByText(/Add your price first/)).toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: 'Fix it' }));
+    const box = within(row).getByRole('textbox', { name: 'Message to Kemi' });
+    expect(box).toHaveValue('The pilot is [YOUR PRICE].');
+    await user.clear(box);
+    await user.type(box, 'The pilot is 400 dollars.');
+    await user.click(within(row).getByRole('button', { name: 'Save and send' }));
+    expect(mocks.editBlocked).toHaveBeenCalledWith(101, 'The pilot is 400 dollars.');
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('shows the server\'s words when the fixed message still has a blank', async () => {
+    mocks.editBlocked.mockRejectedValue(new ApiError(422, 'Add your price first. Callum never sends a message with [YOUR PRICE] in it.'));
+    const { user } = setup(stuck());
+    const row = screen.getByText('Kemi Eze').closest('li') as HTMLElement;
+    await user.click(within(row).getByRole('button', { name: 'Fix it' }));
+    await user.click(within(row).getByRole('button', { name: 'Save and send' }));
+    expect(await within(row).findByText(/Add your price first/, { selector: '[role="alert"], [role="alert"] *' })).toBeInTheDocument();
+  });
+
+  it('tries a failed message again with one press', async () => {
+    mocks.retry.mockResolvedValue({});
+    const { user } = setup(stuck());
+    const row = screen.getByText('Tunde Eze').closest('li') as HTMLElement;
+    await user.click(within(row).getByRole('button', { name: 'Try again' }));
+    expect(mocks.retry).toHaveBeenCalledWith(102);
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('asks first when the message may have gone out already, and sends nothing until the user says yes', async () => {
+    mocks.retry.mockResolvedValue({});
+    const { user } = setup(stuck());
+    const row = screen.getByText('Bola Eze').closest('li') as HTMLElement;
+    expect(within(row).getByText("Callum couldn't confirm it went out.")).toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: 'Try again' }));
+    expect(within(row).getByText('This may have gone out already. Send again?')).toBeInTheDocument();
+    expect(mocks.retry).not.toHaveBeenCalled();
+    await user.click(within(row).getByRole('button', { name: 'Not now' }));
+    expect(mocks.retry).not.toHaveBeenCalled();
+    await user.click(within(row).getByRole('button', { name: 'Try again' }));
+    await user.click(within(row).getByRole('button', { name: 'Send again' }));
+    expect(mocks.retry).toHaveBeenCalledWith(103, true);
+  });
+
+  it('drops a person from the card once their message is no longer stuck', () => {
+    const state = stuck();
+    state.outbox = state.outbox.map((o) => (o.id === 101 ? { ...o, state: 'scheduled' as const } : o));
+    setup(state);
+    expect(screen.queryByText('Kemi Eze')).not.toBeInTheDocument();
+    expect(screen.getByText('Tunde Eze')).toBeInTheDocument();
+  });
+});
+
+describe('IncidentCards: a channel paused because sends could not be confirmed', () => {
+  const paused = () =>
+    appState({
+      channels: [channel('email', 'connected'), channel('linkedin', 'paused'), channel('x')],
+      people: [person(1, 'Ada', { channel: 'linkedin' }), person(2, 'Chidi', { channel: 'linkedin' })],
+      incidents: [incident(9, 'channel_paused', INCIDENT_COPY.channel_paused('linkedin'), { channel: 'linkedin' })],
+    });
+
+  it('says what happened, and resumes only after the user has checked', async () => {
+    mocks.resumeChannel.mockResolvedValue({});
+    const { user } = setup(paused());
+    expect(screen.getByRole('heading', { name: 'LinkedIn is paused' })).toBeInTheDocument();
+    expect(screen.getByText(INCIDENT_COPY.channel_paused('linkedin'))).toBeInTheDocument();
+    expect(screen.getByText('2 people wait for LinkedIn. Nothing is lost.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: "I've checked, resume LinkedIn" }));
+    expect(mocks.resumeChannel).toHaveBeenCalledWith('linkedin', 'full', true);
   });
 });

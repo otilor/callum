@@ -183,6 +183,20 @@ describe('LeaveSheet: wrap up', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  const STOP_NOTE = 'People who asked you to stop stay on a private do-not-contact list, so they never hear from you again.';
+
+  it('says what a deletion keeps, only when deleting, and again on the step before it happens', async () => {
+    const user = setup();
+    await openWrap(user);
+    expect(screen.queryByText(STOP_NOTE)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('switch', { name: 'Delete my data from this computer' }));
+    expect(screen.getByText(STOP_NOTE)).toBeInTheDocument();
+    expect(STOP_NOTE).not.toContain('!');
+    await user.click(screen.getByRole('button', { name: 'Wrap up and delete' }));
+    await screen.findByRole('heading', { name: 'Your files are saved' });
+    expect(screen.getByText(STOP_NOTE)).toBeInTheDocument();
+  });
+
   it('downloads the JSON and the spreadsheet before it wraps, and offers them again afterwards', async () => {
     const order: string[] = [];
     save.mockImplementation(async (_url: string, name: string) => {

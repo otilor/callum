@@ -14,6 +14,8 @@ type View = 'choose' | 'wrap';
 type Pick = BreakChoice['key'] | 'date';
 
 const BREAK_LINES = ['New hellos stop right away', 'Follow-ups freeze in place', 'No double messages when you come back'];
+/** The one thing a deletion keeps, said at the moment of choosing it. */
+const STOP_LIST_NOTE = 'People who asked you to stop stay on a private do-not-contact list, so they never hear from you again.';
 const WRAP_TITLES = ['Download everything', 'Hand conversations back', 'Stop everyone else', 'Delete my data from this computer'] as const;
 
 function messageOf(e: unknown): string {
@@ -252,6 +254,7 @@ export function LeaveSheet({ state, refresh, onClose, now = () => new Date(), sa
           <div className="lv-head">
             <h1 id="lv-saved-title" className="lv-title" tabIndex={-1}>Your files are saved</h1>
             <p className="lv-lede lv-lede-sm">They are on this computer now. Callum deletes its copies when you go on, and that can't be undone.</p>
+            <p className="lv-lede lv-lede-sm">{STOP_LIST_NOTE}</p>
           </div>
           <ul className="lv-files" aria-label="Saved files">
             {saved.map((f) => (
@@ -335,6 +338,7 @@ export function LeaveSheet({ state, refresh, onClose, now = () => new Date(), sa
           </ol>
           {warn ? <ErrorNote>You won't be able to get these conversations back.</ErrorNote> : null}
           {deleteOn && !working ? <p className="lv-note">Callum deletes everything here once your files are saved. This can't be undone.</p> : null}
+          {deleteOn && !working ? <p className="lv-note">{STOP_LIST_NOTE}</p> : null}
           {error ? <ErrorNote>{error}</ErrorNote> : null}
           {!working ? (
             <div className="lv-actions">

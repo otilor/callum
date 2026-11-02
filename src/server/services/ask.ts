@@ -5,6 +5,7 @@ import { switchChannel, personTz } from '../engine/lifecycle.js';
 import { ApolloError, type ApolloEnrichment, type ApolloQuery } from '../leads/apollo.js';
 import { importPeople } from '../leads/import.js';
 import { resumeChannel } from '../runner/incidents.js';
+import { assertCanResume } from './channels.js';
 import { CHANNEL_NAME, cancelPendingRefunding, joinList, plural, requireProject, userTz, whenText } from './common.js';
 import { UserError } from './errors.js';
 
@@ -175,13 +176,21 @@ async function findMore(ctx: Ctx, projectId: number, args: { likePersonId: numbe
   }
 
   // Searching is free and shows a preview. Looking people up costs credits, so only the people found are looked up.
+  // People already looked up are left out, and further pages are read for new ones, so no credit is spent twice.
   let previews;
+  let skippedKnown = 0;
   try {
-    previews = (await apollo.search(query)).previews;
+    const found = await apollo.search({ ...query, exclude: (id) => ctx.repo.hasApolloId(id) });
+    previews = found.previews;
+    skippedKnown = found.skippedKnown;
   } catch (e) {
     throw apolloFailure(e);
   }
-  if (previews.length === 0) return answer('Apollo found nobody for that. Try different words.');
+  if (previews.length === 0) {
+    return answer(skippedKnown > 0
+      ? 'Everyone Apollo found is already in Callum, so nothing was spent. Try different words.'
+      : 'Apollo found nobody for that. Try different words.');
+  }
 
   let enriched: ApolloEnrichment;
   let stopped: string | null = null;
@@ -261,6 +270,8 @@ export async function act(ctx: Ctx, projectId: number, action: AskAction): Promi
     }
     case 'resume_channel': {
       const ch = channelArg(action.args.channel);
+      // Whatever stopped the channel has to be dealt with first: Ask cannot skip a check, a limit or a sign-in.
+      assertCanResume(ctx, ch);
       if (ctx.repo.getChannel(ch).status !== 'paused') throw new UserError(`${Cap(ch)} isn't paused.`);
       resumeChannel(ctx, ch, 'full');
       return answer(`Resumed ${CHANNEL_NAME[ch]}.`);

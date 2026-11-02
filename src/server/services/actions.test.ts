@@ -230,7 +230,10 @@ describe('retry and editBlocked', () => {
     const sched = h.ctx.outbox.queueUserSend(kemi.id, 'reply', 'Hi');
     expect(() => retry(h.ctx, sched.id)).toThrow('Only a message that did not go out can be tried again.');
     const auto = h.ctx.repo.insertOutbox({ personId: kemi.id, channel: 'email', kind: 'follow_up', body: 'x', state: 'failed', origin: 'auto', sendAfter: '2026-11-02T09:00:00.000Z' });
-    expect(() => retry(h.ctx, auto.id)).toThrow('Only a message that did not go out can be tried again.');
+    // Callum's own failed message can be tried again, but not for someone Callum is not writing to (Kemi is waiting on the dock).
+    expect(() => retry(h.ctx, auto.id)).toThrow("Callum isn't writing to Kemi any more.");
+    const gone = h.ctx.repo.insertOutbox({ personId: kemi.id, channel: 'email', kind: 'follow_up', body: 'x', state: 'cancelled', origin: 'auto', sendAfter: '2026-11-02T09:00:00.000Z' });
+    expect(() => retry(h.ctx, gone.id)).toThrow('Only a message that did not go out can be tried again.');
   });
 
   it('keeps the failed message when the retry itself is refused', () => {

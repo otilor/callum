@@ -116,7 +116,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     db.close();
   };
   try {
-    const app = createApp(ctx, { password: opts.password, webDir: opts.webDir, runner, extraRoutes: FEATURE_ROUTES.map((build) => build(ctx)) });
+    const app = createApp(ctx, { password: opts.password, webDir: opts.webDir, runner, trustProxy: conf.trustProxy, extraRoutes: FEATURE_ROUTES.map((build) => build(ctx)) });
     server = serve({ fetch: app.fetch, hostname: opts.host, port: opts.port }) as Server;
     await new Promise<void>((resolveListening, reject) => {
       server.once('listening', resolveListening);

@@ -79,6 +79,20 @@ describe('wrapUp', () => {
   });
 });
 
+describe('deleting data and the stop list', () => {
+  it('keeps people who asked to stop on a private list, so a later import cannot bring them back', async () => {
+    const h = harness();
+    const kemi = h.person({ name: 'Kemi Eze', email: 'kemi@okopay.com', linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' });
+    h.ctx.repo.updatePerson(kemi.id, { status: 'stopped' });
+    h.person({ name: 'Femi Ade', email: 'femi@ledgerly.io' });
+    wrapUp(h.ctx, { deleteData: true });
+    expect(h.ctx.repo.listPeople({ status: [] })).toEqual([]);
+    expect(h.ctx.repo.isSuppressed({ email: 'KEMI@okopay.com' })).toBe(true);
+    expect(h.ctx.repo.isSuppressed({ linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' })).toBe(true);
+    expect(h.ctx.repo.isSuppressed({ email: 'femi@ledgerly.io' })).toBe(false);
+  });
+});
+
 describe('forgetChannels', () => {
   it('signs every connected channel out and clears its secret', async () => {
     const h = harness({ connected: ['email', 'linkedin'] });

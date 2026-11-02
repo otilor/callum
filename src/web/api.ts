@@ -1,5 +1,5 @@
 import type {
-  AppState, AskAction, AskAnswer, Channel, ChannelAccount, Correction, Message, OutboxItem, PathStep, Person, PersonFull, Project, Settings, Skipped, Tone,
+  AppState, AskAction, AskAnswer, Channel, ChannelAccount, Correction, Incident, Message, OutboxItem, PathStep, Person, PersonFull, Project, Settings, Skipped, Tone,
 } from '../shared/types.js';
 
 
@@ -104,7 +104,8 @@ export const api = {
 
   connect: (ch: Channel, fields: Record<string, string>) => post<ChannelAccount>(`/channels/${ch}/connect`, fields),
   disconnect: (ch: Channel) => post<ChannelAccount>(`/channels/${ch}/disconnect`),
-  resumeChannel: (ch: Channel, pace: 'half' | 'full') => post<ChannelAccount>(`/channels/${ch}/resume`, { pace }),
+  /** `checked` is the person's word that they finished the check LinkedIn asked for. */
+  resumeChannel: (ch: Channel, pace: 'half' | 'full', checked?: boolean) => post<ChannelAccount>(`/channels/${ch}/resume`, checked ? { pace, checked: true } : { pace }),
   channelSummary: (ch: Channel) => get<ChannelSummary>(`/channels/${ch}/summary`),
   microsoftStart: (address: string) => post<DeviceCodeStart>('/channels/email/microsoft/start', { address }),
   microsoftPoll: (address?: string) => post<DevicePoll>('/channels/email/microsoft/poll', address ? { address } : {}),
@@ -131,7 +132,12 @@ export const api = {
   approve: (id: number, body?: string) => post<OutboxItem>(`/outbox/${id}/approve`, body === undefined ? {} : { body }),
   skip: (id: number) => post<OutboxItem>(`/outbox/${id}/skip`),
   undo: (id: number) => post<OutboxItem>(`/outbox/${id}/undo`),
-  retry: (id: number) => post<OutboxItem>(`/outbox/${id}/retry`),
+  /** `again` says yes to sending a message that may have gone out already. */
+  retry: (id: number, again?: boolean) => post<OutboxItem>(`/outbox/${id}/retry`, again ? { again: true } : {}),
+  /** The words of a message Callum would not send, fixed. */
+  editBlocked: (id: number, body: string, subject?: string | null) => post<OutboxItem>(`/outbox/${id}/edit`, subject === undefined ? { body } : { body, subject }),
+  /** `Okay` on a notice. */
+  dismissIncident: (id: number) => post<Incident>(`/incidents/${id}/dismiss`),
 
   person: (id: number) => get<PersonDetail>(`/people/${id}`),
   draft: (id: number, kind: 'reply' | 'booking' | 'close') => get<{ body: string }>(`/people/${id}/draft`, { kind }),

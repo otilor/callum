@@ -11,6 +11,7 @@ import { resumeChannel } from '../runner/incidents.js';
 import * as actions from '../services/actions.js';
 import { UserError } from '../services/errors.js';
 import * as ask from '../services/ask.js';
+import { assertCanResume } from '../services/channels.js';
 import * as leave from '../services/leave.js';
 import * as onboarding from '../services/onboarding.js';
 import * as projects from '../services/projects.js';
@@ -31,6 +32,8 @@ export interface AppOptions {
   runner?: { tick(): Promise<unknown> };
   /** Route modules from other parts of Callum (see features.ts); their paths are relative to /api. */
   extraRoutes?: Hono[];
+  /** Behind a reverse proxy (CALLUM_TRUST_PROXY=1): the sign-in lockout counts X-Forwarded-For. */
+  trustProxy?: boolean;
   /** Where a failure nobody expected is reported. Defaults to the console. */
   onError?: (err: unknown) => void;
 }
@@ -58,12 +61,19 @@ function dayStamp(ctx: Ctx): string {
 }
 
 export function createApp(ctx: Ctx, opts: AppOptions): Hono {
-  const auth = createAuth({ password: opts.password, clock: ctx.clock });
+  const auth = createAuth({ password: opts.password, clock: ctx.clock, trustProxy: opts.trustProxy === true });
   const report = opts.onError ?? ((err: unknown) => console.error(`[callum] ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`));
   const app = new Hono();
   const api = new Hono();
 
   // ---- guards ----------------------------------------------------------------------------------------
+
+  // Nobody may put Callum's page inside a frame on another site (click-jacking): every response says so, errors included.
+  app.use('*', async (c, next) => {
+    await next();
+    c.res.headers.set('X-Frame-Options', 'DENY');
+    c.res.headers.set('Content-Security-Policy', "frame-ancestors 'none'");
+  });
 
   // A page on another site must not be able to read from Callum or make the browser post to it, and without a
   // password a hostile name pointed at this computer (DNS rebinding) must not reach it either.
@@ -124,9 +134,11 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
 
   api.post('/channels/:ch/resume', async (c) => {
     const ch = channelParam(c);
-    const { pace } = await readBody(c);
+    const body = await readBody(c);
+    const { pace } = body;
     if (pace !== 'half' && pace !== 'full') throw new UserError('Pick half pace or full pace.');
     if (ctx.repo.getChannel(ch).status === 'disconnected') throw new UserError('Connect it first.');
+    assertCanResume(ctx, ch, { checked: body.checked === true });
     return c.json(resumeChannel(ctx, ch, pace));
   });
 
@@ -251,7 +263,17 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
     return c.json(ctx.repo.getOutbox(id));
   });
   api.post('/outbox/:id/undo', (c) => c.json(actions.undo(ctx, idParam(c))));
-  api.post('/outbox/:id/retry', (c) => c.json(actions.retry(ctx, idParam(c))));
+  api.post('/outbox/:id/retry', async (c) => c.json(actions.retry(ctx, idParam(c), { again: optBool(await readBody(c), 'again') === true })));
+  // The user fixed the words of a message Callum would not send (a blank left in it).
+  api.post('/outbox/:id/edit', async (c) => {
+    const b = await readBody(c);
+    const subject = b.subject === undefined ? undefined : b.subject === null ? null : optText(b, 'subject');
+    return c.json(actions.editBlocked(ctx, idParam(c), needText(b, 'body', 'a message'), subject));
+  });
+
+  // ---- notices ---------------------------------------------------------------------------------------
+
+  api.post('/incidents/:id/dismiss', (c) => c.json(actions.dismissIncident(ctx, idParam(c))));
 
   // ---- a person --------------------------------------------------------------------------------------
 

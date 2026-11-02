@@ -102,11 +102,17 @@ export class AdapterRegistry {
     this.endConnecting(ch);
 
     this.repo.setChannelSecret(ch, connected.secret);
+    const before = this.repo.getChannel(ch);
+    // The pace ramp belongs to the mailbox, not to Callum: signing in again as the same one carries on, but a different
+    // address is a new sender with no history and starts at the bottom. (An account from before Callum kept the address
+    // has none on file, and is given the benefit of the doubt.)
+    const sameSender = before.connectedAt !== null
+      && (before.rampIdentity == null || before.rampIdentity.trim().toLowerCase() === connected.identity.trim().toLowerCase());
     const account = this.repo.updateChannel(ch, {
       status: 'connected',
       identity: connected.identity,
-      // The first connection starts the pace ramp; reconnecting must not restart it.
-      connectedAt: this.repo.getChannel(ch).connectedAt ?? now.toISOString(),
+      connectedAt: sameSender ? before.connectedAt : now.toISOString(),
+      rampIdentity: connected.identity,
     });
     let resolvedIncident = false;
     const signedOut = SIGNED_OUT_KIND[ch];
@@ -130,7 +136,7 @@ export class AdapterRegistry {
     await adapter.forget?.().catch(() => undefined);
     await adapter.close().catch(() => undefined);
     this.repo.setChannelSecret(ch, null);
-    // connectedAt stays so that connecting again later continues the same ramp.
+    // connectedAt and rampIdentity stay, so connecting the same mailbox again later continues its ramp.
     const account = this.repo.updateChannel(ch, { status: 'disconnected', identity: null });
     this.bus.emit('channels');
     return account;

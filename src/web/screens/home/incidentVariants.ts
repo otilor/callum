@@ -109,6 +109,21 @@ function parseOutboxId(detail: string | null): number | null {
   }
 }
 
+/**
+ * The outbox items a notice about Callum's own messages stands for, or null when the notice is about something else
+ * (a reply of the user's own that did not go has one `outboxId` and a person).
+ */
+export function autoItems(detail: string | null): number[] | null {
+  if (!detail) return null;
+  try {
+    const d = JSON.parse(detail) as { auto?: unknown; outboxIds?: unknown };
+    if (d.auto !== true) return null;
+    return Array.isArray(d.outboxIds) ? d.outboxIds.filter((n): n is number => typeof n === 'number') : [];
+  } catch {
+    return null;
+  }
+}
+
 const OKAY: VariantButton = { label: 'Okay', action: { kind: 'dismiss' } };
 
 /** "Your mail server" in the middle of a sentence: only the first word of a name that starts with "Your" loses its capital. */
@@ -204,6 +219,8 @@ function mailboxLimit(i: Incident, state: AppState, base: Pick<IncidentVariant, 
 }
 
 function sendFailed(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when' | 'at'>): IncidentVariant | null {
+  // Callum's own messages that did not go are one card for the channel and day, drawn by the incident cards.
+  if (autoItems(i.detail) !== null) return null;
   const outboxId = parseOutboxId(i.detail);
   const item = outboxId === null ? undefined : state.outbox.find((o) => o.id === outboxId);
   const person = i.personId === null ? undefined : state.people.find((p) => p.id === i.personId);
@@ -316,7 +333,8 @@ export function incidentVariant(incident: Incident, state: AppState, now: Date):
     case 'mailbox_limit': return mailboxLimit(incident, state, base, tz, now);
     case 'send_failed': return sendFailed(incident, state, base);
     case 'linkedin_weekly_limit': return weeklyLimit(incident, state, base);
-    case 'linkedin_check': return null;
+    case 'linkedin_check':
+    case 'channel_paused': return null;
   }
 }
 
@@ -392,9 +410,17 @@ export function faceReactions(state: AppState, quiet: QuietSnapshot | null = nul
       for (const b of parseBounce(i.detail)?.people ?? []) {
         if (alive.has(b.id) && b.fallback) set(b.id, { mark: FALLBACK_MARK[b.fallback], label: `moved to ${CHANNEL_NAME[b.fallback]}` });
       }
+    } else if (i.kind === 'send_failed' && autoItems(i.detail) !== null) {
+      // The people whose message from Callum is stopped or did not go. The card only lists those still in that state.
+      for (const id of autoItems(i.detail) ?? []) {
+        const item = state.outbox.find((o) => o.id === id);
+        if (item && (item.state === 'blocked' || item.state === 'failed') && alive.has(item.personId)) {
+          set(item.personId, { mark: 'error', errorRing: true, label: 'message did not go' });
+        }
+      }
     } else if (i.kind === 'send_failed' && i.personId !== null && alive.has(i.personId)) {
       set(i.personId, { mark: 'error', errorRing: true, label: 'reply did not go' });
-    } else if (i.kind === 'linkedin_check') {
+    } else if (i.kind === 'linkedin_check' || i.kind === 'channel_paused') {
       for (const p of waitingOn(state.people, 'linkedin')) set(p.id, { mark: 'pause', still: true, label: 'waiting' });
     }
   }

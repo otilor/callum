@@ -8,6 +8,8 @@ export interface Env {
   model: string;
   apolloKey: string | null;
   timezone: string | null;
+  /** Behind a reverse proxy that sets X-Forwarded-For: the sign-in lockout counts the address the proxy saw. */
+  trustProxy: boolean;
 }
 
 export const DEFAULT_PORT = 4600;
@@ -40,5 +42,6 @@ export function readEnv(e: NodeJS.ProcessEnv = process.env): Env {
     model: clean(e.CALLUM_MODEL) ?? DEFAULT_MODEL,
     apolloKey: clean(e.APOLLO_API_KEY),
     timezone: clean(e.TZ_DEFAULT),
+    trustProxy: clean(e.CALLUM_TRUST_PROXY) === '1',
   };
 }
