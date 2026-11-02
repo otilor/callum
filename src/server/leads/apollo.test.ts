@@ -56,7 +56,7 @@ afterEach(async () => {
 });
 
 const apollo = (key = 'key-123') => new ApolloSource(key, undefined, base);
-const find = (o: Partial<{ query: string | null; titles: string[]; count: number }> = {}) => ({ query: null, titles: [], count: 25, ...o });
+const find = (o: Partial<{ query: string | null; titles: string[]; count: number; exclude: (id: string) => boolean }> = {}) => ({ query: null, titles: [], count: 25, ...o });
 
 describe('ApolloSource.search against a local Apollo-shaped server (real fetch)', () => {
   it('sends the People API Search request: POST, every parameter in the query string, x-api-key, no body', async () => {
@@ -122,7 +122,35 @@ describe('ApolloSource.search against a local Apollo-shaped server (real fetch)'
     respond = () => ({ status: 200, body: { total_entries: 90, people: [searchPerson({})] } });
     expect((await apollo().search(find())).total).toBe(90);
     respond = () => ({ status: 200, body: {} });
-    expect(await apollo().search(find())).toEqual({ total: 0, previews: [] });
+    expect(await apollo().search(find())).toEqual({ total: 0, previews: [], skippedKnown: 0 });
+  });
+
+  it('leaves out people it was told are known, and reads further pages until it has as many new ones as were asked for', async () => {
+    const asked: number[] = [];
+    respond = (req) => {
+      const n = Number(req.query.get('page'));
+      asked.push(n);
+      return { status: 200, body: { people: Array.from({ length: 5 }, (_, i) => searchPerson({ id: `p${n}-${i}` })), pagination: { page: n, per_page: 5, total_entries: 500, total_pages: 100 } } };
+    };
+    // The whole of page 1 and two of page 2 are people Callum has already looked up.
+    const known = new Set(['p1-0', 'p1-1', 'p1-2', 'p1-3', 'p1-4', 'p2-0', 'p2-1']);
+    const found = await apollo().search(find({ count: 5, exclude: (id) => known.has(id) }));
+    expect(found.previews.map((p) => p.apolloId)).toEqual(['p2-2', 'p2-3', 'p2-4', 'p3-0', 'p3-1']);
+    expect(found.skippedKnown).toBe(7);
+    expect(asked).toEqual([1, 2, 3]);
+  });
+
+  it('gives up after a bounded number of pages when everyone is known, and says how many it skipped', async () => {
+    const asked: number[] = [];
+    respond = (req) => {
+      const n = Number(req.query.get('page'));
+      asked.push(n);
+      return { status: 200, body: { people: Array.from({ length: 5 }, (_, i) => searchPerson({ id: `p${n}-${i}` })), pagination: { page: n, per_page: 5, total_entries: 5000, total_pages: 1000 } } };
+    };
+    const found = await apollo().search(find({ count: 5, exclude: () => true }));
+    expect(found.previews).toEqual([]);
+    expect(found.skippedKnown).toBe(50);
+    expect(asked).toHaveLength(10);
   });
 
   it('asks for more pages, 100 at a time, when more than 100 people are wanted, and stops at the count', async () => {
@@ -213,7 +241,7 @@ describe('ApolloSource.enrich against a local Apollo-shaped server (real fetch)'
   it('maps a match: full name, first name, role, company, LinkedIn, verified email, source apollo', async () => {
     respond = () => ({ status: 200, body: { matches: [match({})], credits_consumed: 1 } });
     expect(await apollo().enrich(['x'])).toEqual({
-      people: [{ name: 'Kemi Eze', firstName: 'Kemi', role: 'Head of Finance Operations', company: 'Oko Pay', linkedinUrl: 'http://www.linkedin.com/in/kemi-eze-5a2b1c', email: 'kemi@okopay.com', source: 'apollo' }],
+      people: [{ name: 'Kemi Eze', apolloId: '66a1f0c2b7c3d90001e4a111', firstName: 'Kemi', role: 'Head of Finance Operations', company: 'Oko Pay', linkedinUrl: 'http://www.linkedin.com/in/kemi-eze-5a2b1c', email: 'kemi@okopay.com', source: 'apollo' }],
       creditsUsed: 1,
     });
   });

@@ -35,6 +35,18 @@ describe('api', () => {
     expect(lastCall()).toEqual({ url: '/api/channels/email/microsoft/poll', method: 'POST', body: { address: 'a@b.co' } });
     await api.resumeChannel('linkedin', 'half');
     expect(lastCall()).toEqual({ url: '/api/channels/linkedin/resume', method: 'POST', body: { pace: 'half' } });
+    await api.resumeChannel('linkedin', 'half', true);
+    expect(lastCall()).toEqual({ url: '/api/channels/linkedin/resume', method: 'POST', body: { pace: 'half', checked: true } });
+    await api.retry(9);
+    expect(lastCall()).toEqual({ url: '/api/outbox/9/retry', method: 'POST', body: {} });
+    await api.retry(9, true);
+    expect(lastCall()).toEqual({ url: '/api/outbox/9/retry', method: 'POST', body: { again: true } });
+    await api.editBlocked(9, 'The pilot is 400 dollars.');
+    expect(lastCall()).toEqual({ url: '/api/outbox/9/edit', method: 'POST', body: { body: 'The pilot is 400 dollars.' } });
+    await api.editBlocked(9, 'The pilot is 400 dollars.', 'Following up');
+    expect(lastCall()).toEqual({ url: '/api/outbox/9/edit', method: 'POST', body: { body: 'The pilot is 400 dollars.', subject: 'Following up' } });
+    await api.dismissIncident(5);
+    expect(lastCall()).toMatchObject({ url: '/api/incidents/5/dismiss', method: 'POST' });
     await api.importLeads({ paste: 'Kemi', projectId: 3 });
     expect(lastCall()).toEqual({ url: '/api/leads/import', method: 'POST', body: { paste: 'Kemi', projectId: 3 } });
     await api.search('founders', 25, 3);

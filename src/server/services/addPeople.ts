@@ -175,7 +175,7 @@ export function groupSkips(skipped: Skipped[]): SkipGroup[] {
 }
 
 function previewOf(p: Person, key: string): PreviewPerson {
-  const { id: _id, createdAt: _created, updatedAt: _updated, ...rest } = p;
+  const { id: _id, createdAt: _created, updatedAt: _updated, apolloId: _apollo, ...rest } = p;
   return { ...rest, key };
 }
 
@@ -260,6 +260,8 @@ export async function describe(
   try {
     found = await ctx.apollo.search({
       query: words === '' ? null : words, titles: [], count: DESCRIBE_COUNT,
+      // Anyone already looked up is never shown again, so choosing them can never cost a second credit.
+      exclude: (id) => ctx.repo.hasApolloId(id),
       ...(chips.employeeRanges.length > 0 ? { employeeRanges: chips.employeeRanges } : {}),
       ...(cities.length > 0 ? { personLocations: cities } : {}),
     });
@@ -268,6 +270,9 @@ export async function describe(
     throw e;
   }
   if (found.previews.length === 0) {
+    if (found.skippedKnown > 0) {
+      return { batchId: null, total: 0, people: [], narrow: null, line: `Everyone Callum found for '${query}' is already in Callum. Try a wider role or a nearby city.` };
+    }
     return { batchId: null, total: 0, people: [], narrow: null, line: `Nobody matched '${query}'. Try a wider role or a nearby city.` };
   }
   const batchId = keep(ctx, { projectId, leads: [], unreadable: [], apollo: found.previews, known: new Set() });
@@ -379,8 +384,12 @@ export async function commit(ctx: Ctx, batchId: string, opts: { projectId?: numb
     let remaining: string[] = [];
     let known = batch.known;
     if (batch.apollo) {
-      const ids = batch.remaining ?? batch.apollo.map((p) => p.apolloId).filter((id) => !drop.has(id));
-      if (ids.length === 0) throw new UserError('Everyone was left out. Bring someone back.');
+      const wanted = (batch.remaining ?? batch.apollo.map((p) => p.apolloId)).filter((id) => !drop.has(id));
+      // Someone looked up since this list was made (another batch, a second press) is not paid for again.
+      const ids = wanted.filter((id) => !ctx.repo.hasApolloId(id));
+      if (ids.length === 0) {
+        throw new UserError(wanted.length > 0 ? 'Those people are already in Callum, so nothing more was spent.' : 'Everyone was left out. Bring someone back.');
+      }
       const looked = await enrichKept(ctx, ids);
       leads = looked.found.people;
       creditsUsed = looked.found.creditsUsed;

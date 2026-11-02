@@ -79,6 +79,14 @@ describe('seedScene fresh', () => {
     expect(ctx.repo.getSettings().onboarded).toBe(false);
   });
 
+  it('forgets the do-not-contact list of the scene it replaces, because that scene was made up', () => {
+    const ctx = demoCtx();
+    seedScene(ctx, 'morning');
+    ctx.repo.suppress({ email: 'ruth@example.com' });
+    seedScene(ctx, 'fresh');
+    expect(ctx.repo.isSuppressed({ email: 'ruth@example.com' })).toBe(false);
+  });
+
   it('tells the app what changed', () => {
     const ctx = demoCtx();
     const seen = new Set<string>();

@@ -33,7 +33,7 @@ describe('channels', () => {
   it('returns disconnected defaults in order email, linkedin, x', () => {
     expect(repo.listChannels().map((c) => c.channel)).toEqual(['email', 'linkedin', 'x']);
     expect(repo.getChannel('x')).toEqual({
-      channel: 'x', status: 'disconnected', identity: null, connectedAt: null,
+      channel: 'x', status: 'disconnected', identity: null, connectedAt: null, rampIdentity: null,
       pausedUntil: null, halfPaceUntil: null, invitesBlockedUntil: null, lastPolledAt: null,
     });
   });
@@ -310,5 +310,62 @@ describe('transaction', () => {
       } catch { /* expected */ }
     });
     expect(repo.listPeople().map((p) => p.name)).toEqual(['Kemi Eze']);
+  });
+});
+
+describe('the do-not-contact list', () => {
+  const stop = (over: Parameters<Repo['insertPerson']>[0] extends infer T ? Partial<T> : never) => {
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv', ...over } as Parameters<Repo['insertPerson']>[0]);
+    return repo.updatePerson(p.id, { status: 'stopped' });
+  };
+
+  it('remembers every handle of a person the moment they are stopped, however they are written later', () => {
+    stop({ email: 'Kemi@OkoPay.com', linkedinUrl: 'https://www.linkedin.com/in/kemi-eze/', xHandle: '@KemiEze' });
+    expect(repo.isSuppressed({ email: ' kemi@okopay.com ' })).toBe(true);
+    expect(repo.isSuppressed({ linkedinUrl: 'linkedin.com/in/KEMI-EZE?utm=1' })).toBe(true);
+    expect(repo.isSuppressed({ xHandle: 'https://x.com/kemieze' })).toBe(true);
+    expect(repo.isSuppressed({ email: 'someone@else.com', linkedinUrl: 'https://www.linkedin.com/in/other', xHandle: 'other' })).toBe(false);
+    // One matching handle is enough: the same person under a new address is still the same person.
+    expect(repo.isSuppressed({ email: 'new@okopay.com', linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' })).toBe(true);
+    expect(repo.isSuppressed({})).toBe(false);
+  });
+
+  it('remembers a person who is inserted already stopped, and one who is not stopped is not remembered', () => {
+    repo.insertPerson({ projectId, name: 'Ruth A', source: 'csv', email: 'ruth@stop.com', status: 'stopped' });
+    repo.insertPerson({ projectId, name: 'Bola A', source: 'csv', email: 'bola@fine.com' });
+    expect(repo.isSuppressed({ email: 'ruth@stop.com' })).toBe(true);
+    expect(repo.isSuppressed({ email: 'bola@fine.com' })).toBe(false);
+  });
+
+  it('holds hashes only: no address, profile or handle can be read back from it', () => {
+    const db = openDb(':memory:');
+    const r = new Repo(db, () => '2026-01-01T00:00:00.000Z');
+    const pid = makeProject(r).id;
+    const p = r.insertPerson({ projectId: pid, name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', linkedinUrl: 'https://www.linkedin.com/in/kemi-eze', xHandle: 'kemieze' });
+    r.updatePerson(p.id, { status: 'stopped' });
+    const rows = db.prepare('SELECT kind, hash FROM suppressions ORDER BY kind').all() as { kind: string; hash: string }[];
+    expect(rows.map((x) => x.kind)).toEqual(['email', 'linkedin', 'x']);
+    for (const row of rows) expect(row.hash).toMatch(/^[0-9a-f]{64}$/);
+    const dump = JSON.stringify(rows);
+    for (const secret of ['kemi', 'okopay', 'eze']) expect(dump).not.toContain(secret);
+  });
+
+  it('survives "delete my data": the person is gone and still cannot be written to', () => {
+    stop({ email: 'kemi@okopay.com' });
+    repo.deleteAll();
+    expect(repo.listPeople({ status: [] })).toEqual([]);
+    expect(repo.isSuppressed({ email: 'kemi@okopay.com' })).toBe(true);
+  });
+
+  it('is emptied only by clearSuppressions, which a demo scene uses', () => {
+    stop({ email: 'kemi@okopay.com' });
+    repo.clearSuppressions();
+    expect(repo.isSuppressed({ email: 'kemi@okopay.com' })).toBe(false);
+  });
+
+  it('keeps a stopped person from being deleted, whatever else is true of them', () => {
+    const p = stop({ email: 'ruth@stop.com' });
+    expect(repo.deletePerson(p.id)).toBe(false);
+    expect(repo.getPerson(p.id)?.status).toBe('stopped');
   });
 });

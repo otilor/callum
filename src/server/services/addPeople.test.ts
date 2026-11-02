@@ -44,6 +44,13 @@ describe('preview', () => {
     expect(s.scopes).toEqual([]);
   });
 
+  it('names someone who asked to stop even after the user deleted their data, and adds nobody who did', async () => {
+    s.ctx.repo.suppress({ email: 'kemi@okopay.com' });
+    const p = await preview(s.ctx, { csv: CSV });
+    expect(p.added.map((a) => a.name)).not.toContain('Kemi Eze');
+    expect(p.groups.find((g) => g.reason === 'stopped')).toMatchObject({ line: '1 asked not to be contacted', names: ['Kemi Eze'] });
+  });
+
   it('says have when more than one person has no way to be reached', async () => {
     const p = await preview(s.ctx, { paste: 'Bola\nSade' });
     expect(p.added).toEqual([]);
@@ -105,6 +112,15 @@ describe('preview', () => {
 describe('commit and undo', () => {
   let s: Setup;
   beforeEach(() => { s = setup(); });
+
+  it('leaves out someone who asked to stop between the preview and the Add', async () => {
+    const p = await preview(s.ctx, { csv: CSV });
+    expect(p.added.map((a) => a.name)).toContain('Kemi Eze');
+    s.ctx.repo.suppress({ email: 'kemi@okopay.com' });
+    const done = await commit(s.ctx, p.batchId);
+    expect(done.added.map((a) => a.name)).not.toContain('Kemi Eze');
+    expect(s.ctx.repo.listPeople().some((x) => x.email === 'kemi@okopay.com')).toBe(false);
+  });
 
   it('adds the two good rows, and the line says tomorrow at 9:00', async () => {
     seedExisting(s);

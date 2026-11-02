@@ -184,8 +184,25 @@ CREATE TABLE inbound_failed (
 );
 `;
 
+const V5 = `
+ALTER TABLE people ADD COLUMN apollo_id TEXT;
+CREATE INDEX idx_people_apollo_id ON people(apollo_id);
+ALTER TABLE channels ADD COLUMN ramp_identity TEXT;
+UPDATE channels SET ramp_identity = identity WHERE identity IS NOT NULL;
+CREATE TABLE suppressions (
+  kind TEXT NOT NULL,
+  hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (kind, hash)
+);
+CREATE TABLE apollo_seen (
+  apollo_id TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL
+);
+`;
+
 type Step = string | ((db: Db) => void);
-const STEPS: Step[] = [V1, V2, v3, V4];
+const STEPS: Step[] = [V1, V2, v3, V4, V5];
 
 /** Bring the database up to date, or up to version `upTo` (tests build older databases this way). */
 export function migrate(db: Db, upTo: number = STEPS.length): void {

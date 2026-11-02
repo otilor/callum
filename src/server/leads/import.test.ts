@@ -394,3 +394,33 @@ describe('importPeople as a dry run', () => {
     expect(() => importPeople(repo, null, [{ name: 'A', email: 'a@x.com', source: 'csv' }])).toThrow('No such project');
   });
 });
+
+describe('importPeople and the do-not-contact list', () => {
+  const lead = (over: Partial<PersonLead> = {}): PersonLead => ({ name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv', ...over });
+
+  it('skips someone who asked to stop after everything was deleted, as asked not to be contacted, on any handle', () => {
+    const kemi = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' });
+    repo.updatePerson(kemi.id, { status: 'stopped' });
+    repo.deleteAll();
+    projectId = makeProject(repo, { name: 'Payroll' }).id;
+    const result = importPeople(repo, projectId, [
+      lead(),
+      lead({ name: 'Kemi E', email: 'a-new-address@elsewhere.com', linkedinUrl: 'linkedin.com/in/Kemi-Eze' }),
+      lead({ name: 'Femi Ade', email: 'femi@ledgerly.io' }),
+    ]);
+    expect(result.added.map((p) => p.name)).toEqual(['Femi Ade']);
+    expect(result.skipped.map((s) => `${s.name}:${s.reason}`)).toEqual(['Kemi Eze:stopped', 'Kemi E:stopped']);
+    expect(repo.listPeople().map((p) => p.name)).toEqual(['Femi Ade']);
+  });
+
+  it('writes nothing for a dry run and still names the person as stopped', () => {
+    repo.suppress({ email: 'kemi@okopay.com' });
+    const result = importPeople(repo, projectId, [lead()], { dryRun: true });
+    expect(result.added).toEqual([]);
+    expect(result.skipped).toMatchObject([{ reason: 'stopped' }]);
+  });
+
+  it('adds the same person who was never stopped', () => {
+    expect(importPeople(repo, projectId, [lead()]).added).toHaveLength(1);
+  });
+});

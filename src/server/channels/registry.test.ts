@@ -59,13 +59,33 @@ describe('AdapterRegistry', () => {
     expect(registry.get('x')).toBeNull();
   });
 
-  it('reconnecting keeps the original connectedAt', async () => {
+  it('reconnecting the same mailbox keeps the original connectedAt, even after a disconnect', async () => {
     const registry = new AdapterRegistry(repo, (ch) => stubAdapter(ch), bus);
     await registry.connect('email', { address: 'a@x.com' }, new Date('2026-11-02T10:00:00Z'));
-    const again = await registry.connect('email', { address: 'b@x.com' }, new Date('2026-11-09T10:00:00Z'));
+    const again = await registry.connect('email', { address: 'A@x.com' }, new Date('2026-11-09T10:00:00Z'));
     expect(again.connectedAt).toBe('2026-11-02T10:00:00.000Z');
-    expect(again.identity).toBe('b@x.com');
+    await registry.disconnect('email');
+    expect(repo.getChannel('email')).toMatchObject({ identity: null, rampIdentity: 'A@x.com', connectedAt: '2026-11-02T10:00:00.000Z' });
+    const back = await registry.connect('email', { address: 'a@x.com' }, new Date('2026-11-16T10:00:00Z'));
+    expect(back.connectedAt).toBe('2026-11-02T10:00:00.000Z');
+  });
+
+  it('a different mailbox starts the pace ramp again, whether or not the old one was disconnected first', async () => {
+    const registry = new AdapterRegistry(repo, (ch) => stubAdapter(ch), bus);
+    await registry.connect('email', { address: 'a@x.com' }, new Date('2026-11-02T10:00:00Z'));
+    const swapped = await registry.connect('email', { address: 'b@x.com' }, new Date('2026-11-09T10:00:00Z'));
+    expect(swapped).toMatchObject({ identity: 'b@x.com', rampIdentity: 'b@x.com', connectedAt: '2026-11-09T10:00:00.000Z' });
     expect(repo.getChannelSecret('email')).toEqual({ address: 'b@x.com' });
+    await registry.disconnect('email');
+    const fresh = await registry.connect('email', { address: 'c@y.com' }, new Date('2026-11-16T10:00:00Z'));
+    expect(fresh.connectedAt).toBe('2026-11-16T10:00:00.000Z');
+  });
+
+  it('an account from before the ramp knew its mailbox is given the benefit of the doubt', async () => {
+    repo.updateChannel('email', { status: 'disconnected', connectedAt: '2026-10-01T10:00:00.000Z' });
+    const registry = new AdapterRegistry(repo, (ch) => stubAdapter(ch), bus);
+    const account = await registry.connect('email', { address: 'a@x.com' }, new Date('2026-11-09T10:00:00Z'));
+    expect(account).toMatchObject({ connectedAt: '2026-10-01T10:00:00.000Z', rampIdentity: 'a@x.com' });
   });
 
   it('resolves an open mailbox_signed_out incident for email only', async () => {

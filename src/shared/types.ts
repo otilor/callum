@@ -11,7 +11,7 @@ export type SuggestedAction = 'reply' | 'book' | 'snooze' | 'close';
 export type Tone = 'warm' | 'direct' | 'playful';
 export type IncidentKind =
   | 'linkedin_check' | 'linkedin_weekly_limit' | 'mailbox_signed_out' | 'x_signed_out' | 'linkedin_signed_out'
-  | 'bounces' | 'x_limit' | 'send_failed' | 'reply_unread' | 'not_answering';
+  | 'bounces' | 'x_limit' | 'send_failed' | 'reply_unread' | 'not_answering' | 'channel_paused';
 export type Correction = 'auto_reply' | 'wrong_person' | 'never_contact';
 export type ProjectState = 'running' | 'paused' | 'wrapped';
 
@@ -41,6 +41,8 @@ export interface Person {
   replyKind: ReplyKind | null; suggested: SuggestedAction | null;
   draft: string | null; lastInbound: string | null; repliedAt: string | null;
   source: LeadSource; note: string | null;
+  /** Apollo's id for this person, once looked up there; the same person is never paid for twice. */
+  apolloId?: string | null;
   createdAt: string; updatedAt: string;
 }
 export type NewPerson = Pick<Person, 'name' | 'source' | 'projectId'> & Partial<Omit<Person, 'id' | 'name' | 'source' | 'projectId' | 'createdAt' | 'updatedAt'>>;
@@ -74,6 +76,8 @@ export type NewIncident = Pick<Incident, 'channel' | 'kind' | 'message'> & Parti
 export interface ChannelAccount {
   channel: Channel; status: 'disconnected' | 'connected' | 'paused' | 'error';
   identity: string | null; connectedAt: string | null;
+  /** Who the pace ramp is counting for (the mailbox address). It survives a disconnect; a different one restarts the ramp. */
+  rampIdentity?: string | null;
   pausedUntil: string | null; halfPaceUntil: string | null; invitesBlockedUntil: string | null;
   lastPolledAt: string | null;
 }

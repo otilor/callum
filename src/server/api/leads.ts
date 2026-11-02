@@ -76,7 +76,8 @@ export interface Searched extends Imported {
 export async function searchLeads(ctx: Ctx, projectId: number, query: string, count: number = DEFAULT_FIND): Promise<Searched> {
   if (!ctx.apollo) throw new UserError(NEEDS_A_LIST);
   const want = Math.min(Math.max(Math.floor(count) || DEFAULT_FIND, 1), MAX_FIND);
-  const found = await ctx.apollo.search({ query: query.trim(), titles: [], count: want });
+  // People already looked up are left out of the search, so a second run asks Apollo for new ones and pays for none twice.
+  const found = await ctx.apollo.search({ query: query.trim(), titles: [], count: want, exclude: (id) => ctx.repo.hasApolloId(id) });
   if (found.previews.length === 0) return { total: found.total, added: [], skipped: [], creditsUsed: 0 };
   let enriched: ApolloEnrichment;
   let error: string | undefined;
