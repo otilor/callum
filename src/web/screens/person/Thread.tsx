@@ -1,7 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import type { Message, PersonFull } from '../../../shared/types.js';
 import { Marble } from '../../ui/Marble.js';
-import { dayLong, messageMeta, threadMeta, voiceOf, whenShort } from './when.js';
+import { dayLong, messageMeta, sentence, threadMeta, voiceOf, whenShort } from './when.js';
 
 /** A message the user wrote that is still inside its 10 seconds, or on its way out. */
 export interface PendingSend { id: number; text: string; undoUntil: string | null }
@@ -23,7 +23,7 @@ function entriesOf(detail: PersonFull, tz: string, now: Date, pending: PendingSe
     if (i === lastInvite && person.linkedinState === 'connected') out.push({ kind: 'note', text: `${first} accepted your invite`, dot: '#6E86F2' });
   });
   if (ordered.length === 0) {
-    out.push({ kind: 'note', text: detail.next && person.status === 'active' ? `Nothing sent yet. ${detail.next}.` : 'Nothing sent yet.', dot: '#D5D9E4' });
+    out.push({ kind: 'note', text: detail.next && person.status === 'active' ? `Nothing sent yet. ${sentence(detail.next)}` : 'Nothing sent yet.', dot: '#D5D9E4' });
   }
   if (person.status === 'stopped') {
     const stop = detail.path.find((s) => s.state === 'stop')?.at ?? person.updatedAt;
@@ -88,7 +88,7 @@ export function Thread({ detail, tz, now, pending, senderEmail, canCorrect, onCo
         <h2>Everything with {first}</h2>
         <span className="pv-quiet">{threadMeta(messages)}</span>
       </div>
-      <div className="pv-scroll" ref={scroller}>
+      <div className="pv-scroll" ref={scroller} tabIndex={0} role="region" aria-label={`Messages with ${first}`}>
         {entries.map((entry, i) => {
           if (entry.kind === 'note') {
             return (

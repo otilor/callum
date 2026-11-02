@@ -134,7 +134,7 @@
   color: var(--ink);
 }
 .pv-nomatch {
-  margin-top: 12px;
+  align-self: center;
   font-size: 15px;
   color: var(--slate);
 }

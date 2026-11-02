@@ -36,6 +36,9 @@ export function dayLong(iso: string, tz: string): string {
   return `${p.day} ${LONG_MONTHS[p.month - 1]}`;
 }
 
+/** A line without its full stop, as a sentence with exactly one. */
+export const sentence = (line: string): string => `${line.replace(/\.+$/, '')}.`;
+
 export const CHANNEL_NAME: Record<Channel, string> = { email: 'email', linkedin: 'LinkedIn', x: 'X' };
 export const CHANNEL_BY: Record<Channel, string> = { email: 'by email', linkedin: 'on LinkedIn', x: 'on X' };
 export const LAST_MESSAGE: Record<Channel, string> = { email: 'email', linkedin: 'LinkedIn message', x: 'X message' };

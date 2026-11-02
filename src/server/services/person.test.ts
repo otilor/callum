@@ -114,7 +114,7 @@ describe('personDetail: next, why and switchable', () => {
 
   it('says what the last follow-up means', () => {
     const p = add({ name: 'Kemi Eze', email: 'k@okopay.com', channel: 'email', stage: 'following', touches: 3, lastTouchAt: '2026-10-30T08:00:00.000Z' });
-    expect(personDetail(ctx, p.id).next).toBe('That was the last follow-up. If Kemi stays quiet, Kemi rests from tomorrow.');
+    expect(personDetail(ctx, p.id).next).toBe('That was the last follow-up. If Kemi stays quiet, Kemi rests from tomorrow');
   });
 
   it('says when a resting person starts again, and that a stopped one never does', () => {
@@ -131,6 +131,27 @@ describe('personDetail: next, why and switchable', () => {
     expect(personDetail(ctx, p.id).closedNote).toBe(
       'You asked Callum never to contact Ruth. Everything was cancelled, and Callum skips Ruth in any list you bring later.',
     );
+  });
+
+  it('never ends a next line with a full stop, so a sentence made of one has exactly one', () => {
+    const lines = [
+      afterHello(),
+      add({ name: 'Kemi Eze', email: 'k@okopay.com', channel: 'email', stage: 'following', touches: 3, lastTouchAt: '2026-10-30T08:00:00.000Z' }),
+      add({ name: 'Ngozi Ibe', linkedinUrl: 'https://www.linkedin.com/in/ngozi', channel: 'linkedin', stage: 'hello', touches: 1, linkedinState: 'invited', invitedAt: '2026-10-30T08:00:00.000Z', lastTouchAt: '2026-10-30T08:00:00.000Z', nextTouchAt: null }),
+      add({ name: 'Mei Lin', xHandle: 'mei', channel: 'x', status: 'resting', restUntil: '2027-02-03T08:00:00.000Z' }),
+      add({ name: 'Ruth A', email: 'r@o.com', channel: 'email', status: 'stopped' }),
+    ].map((p) => personDetail(ctx, p.id).next);
+    for (const line of lines) {
+      expect(line).not.toBeNull();
+      expect(line).not.toMatch(/\.$/);
+    }
+  });
+
+  it('calls only an email or X follow-up the last one, since LinkedIn has its own steps', () => {
+    const email = add({ name: 'Kemi Eze', email: 'k@okopay.com', channel: 'email', stage: 'following', touches: 2, lastTouchAt: FRIDAY_HELLO, nextTouchAt: THURSDAY_9 });
+    expect(personDetail(ctx, email.id).next).toBe('Last follow-up goes out Thursday at 9:00 by email');
+    const linkedin = add({ name: 'Ngozi Ibe', linkedinUrl: 'https://www.linkedin.com/in/ngozi', channel: 'linkedin', stage: 'following', touches: 2, linkedinState: 'connected', lastTouchAt: FRIDAY_HELLO, nextTouchAt: THURSDAY_9 });
+    expect(personDetail(ctx, linkedin.id).next).toBe('Follow-up goes out Thursday at 9:00 on LinkedIn');
   });
 
   it('throws a 404 UserError for someone who is not there', () => {
@@ -207,6 +228,8 @@ describe('personDetail: what can be done', () => {
     const second = ctx.repo.insertProject({ name: 'Payroll' });
     const wrapped = ctx.repo.insertProject({ name: 'Old' });
     ctx.repo.updateProject(wrapped.id, { state: 'wrapped' });
+    const paused = ctx.repo.insertProject({ name: 'Paused one' });
+    ctx.repo.updateProject(paused.id, { state: 'paused' });
     expect(personDetail(ctx, add({ email: 'c@m.com' }).id).projectMoves).toEqual([{ projectId: second.id, name: 'Payroll', reason: null }]);
     expect(personDetail(ctx, afterHello({ name: 'Ada N', email: 'a@n.com' }).id).projectMoves).toEqual([
       { projectId: second.id, name: 'Payroll', reason: "Ada has already heard from you about Reconciliation. Callum can move them once they're resting." },
@@ -265,6 +288,12 @@ describe('moveTo', () => {
     expect(() => moveTo(ctx, p.id, 'email', 'ADA@yaba.com')).toThrow('Ada already has that address.');
   });
 
+  it('refuses an address for the channel the person is already on', () => {
+    const p = afterHello();
+    expect(() => moveTo(ctx, p.id, 'email', 'other@marinaledger.com')).toThrow(new UserError('Chidi is already on email.'));
+    expect(ctx.repo.getPerson(p.id)?.email).toBe('chidi@marinaledger.com');
+  });
+
   it('refuses a channel that is not connected, and people who cannot move', () => {
     const p = afterHello();
     expect(() => moveTo(ctx, p.id, 'x', 'chidi')).toThrow("X isn't connected yet.");
@@ -283,14 +312,26 @@ describe('wakeEarly and restAgain', () => {
     });
   }
 
-  it('starts a resting person again as a stranger and says when the hello would go', () => {
+  it('starts a resting person again as a stranger and says what happens next', () => {
     connect('x');
     const mei = resting();
     const result = wakeEarly(ctx, mei.id);
     expect(result.undoUntil).toBe('2026-11-02T10:00:10.000Z');
-    expect(result.helloAt).toBe(MONDAY);
+    expect(result.next).toBe('First hello goes out today at 11:00 on X');
     expect(result.person).toMatchObject({ status: 'active', stage: 'stranger', touches: 0, restUntil: null });
     expect(scopes).toContain('people');
+  });
+
+  it('says the project is paused rather than promising a hello', () => {
+    connect('x');
+    ctx.repo.updateProject(project.id, { state: 'paused' });
+    expect(wakeEarly(ctx, resting().id).next).toBe('Reconciliation is paused, so nothing goes to Mei yet');
+  });
+
+  it('says Start has not been pressed when it has not', () => {
+    connect('x');
+    ctx.repo.updateProject(project.id, { startedAt: null });
+    expect(wakeEarly(ctx, resting().id).next).toBe('Callum starts on Mei once you press Start');
   });
 
   it('puts them back to rest exactly as they were within 10 seconds', () => {

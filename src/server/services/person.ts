@@ -173,7 +173,7 @@ function plan(ctx: Ctx, p: Person, project: Project | null, pending: OutboxItem[
   const queued = pending.find((i) => i.origin === 'auto');
   if (queued && channel) {
     const at = new Date(queued.sendAfter);
-    const label = KIND_LABEL[queued.kind] ?? 'The next message';
+    const label = queued.kind === 'follow_up' && p.touches >= 2 && channel !== 'linkedin' ? 'Last follow-up' : (KIND_LABEL[queued.kind] ?? 'The next message');
     if (queued.state === 'awaiting_ok') return { line: `${label} waits for your OK before it goes ${BY[channel]}`, at };
     return { line: `${label} goes out ${slotText(at, userTz, now)} ${BY[channel]}`, at };
   }
@@ -183,12 +183,12 @@ function plan(ctx: Ctx, p: Person, project: Project | null, pending: OutboxItem[
     const last = ms(p.lastTouchAt);
     if (p.touches >= MAX_TOUCHES && last !== null) {
       const restFrom = addDays(new Date(last), REST_AFTER_LAST_DAYS);
-      return none(`That was the last follow-up. If ${first} stays quiet, ${first} rests from ${dayText(restFrom, userTz, now)}.`);
+      return none(`That was the last follow-up. If ${first} stays quiet, ${first} rests from ${dayText(restFrom, userTz, now)}`);
     }
     const invited = ms(p.invitedAt);
     if (p.linkedinState === 'invited' && invited !== null) {
       const giveUp = addDays(new Date(invited), INVITE_TIMEOUT_DAYS);
-      return none(`Waiting for ${first} to accept the invite. If nothing comes, ${first} rests from ${dayText(giveUp, userTz, now)}.`);
+      return none(`Waiting for ${first} to accept the invite. If nothing comes, ${first} rests from ${dayText(giveUp, userTz, now)}`);
     }
     return none(null);
   }
@@ -207,7 +207,7 @@ function plan(ctx: Ctx, p: Person, project: Project | null, pending: OutboxItem[
   }
   if (due === null) return none(null);
   const at = due.getTime() > now.getTime() ? due : nextSendingTime(now, tz);
-  const label = kind === 'follow_up' && p.touches >= 2 ? 'Last follow-up' : (KIND_LABEL[kind] ?? 'The next message');
+  const label = kind === 'follow_up' && p.touches >= 2 && p.channel !== 'linkedin' ? 'Last follow-up' : (KIND_LABEL[kind] ?? 'The next message');
   return { line: `${label} goes out ${slotText(at, userTz, now)} ${BY[via]}`, at };
 }
 
@@ -319,7 +319,7 @@ export function personDetail(ctx: Ctx, personId: number): PersonFull {
   const next = plan(ctx, person, project, pending, connected);
 
   const projectMoves: ProjectMove[] = ctx.repo
-    .listProjects({ state: ['running', 'paused'] })
+    .listProjects({ state: ['running'] })
     .filter((other) => other.id !== person.projectId)
     .map((other) => ({ projectId: other.id, name: other.name, reason: projectMoveReason(ctx, person) }));
 
@@ -365,7 +365,10 @@ export function moveTo(ctx: Ctx, personId: number, ch: Channel, handle?: string)
   if (!CHANNELS.includes(ch)) throw new UserError("Callum can't find that channel.", 404);
   const block = moveBlock(person);
   if (block) throw new UserError(block);
-  if (ch === person.channel) return person;
+  if (ch === person.channel) {
+    if (handle !== undefined && handle.trim() !== '') throw new UserError(`${person.firstName} is already on ${NAME[ch]}.`);
+    return person;
+  }
   if (ctx.repo.getChannel(ch).status === 'disconnected') throw new UserError(`${NAME[ch]} isn't connected yet.`);
 
   const patch: Partial<Person> = {};
@@ -402,9 +405,9 @@ const tokensOf = (ctx: Ctx): Map<number, WakeToken> => {
 
 /**
  * A resting person starts again now, as a stranger. For 10 seconds `restAgain` takes it back.
- * `helloAt` is when their first new hello would go.
+ * `next` says what happens next in the same words as the page (a paused project, a missing Start and a waiting OK all show).
  */
-export function wakeEarly(ctx: Ctx, personId: number): { person: Person; undoUntil: string; helloAt: string } {
+export function wakeEarly(ctx: Ctx, personId: number): { person: Person; undoUntil: string; next: string | null } {
   const person = requirePerson(ctx, personId);
   if (person.status !== 'resting') throw new UserError(`${person.firstName} isn't resting.`);
   const now = ctx.clock.now();
@@ -418,8 +421,8 @@ export function wakeEarly(ctx: Ctx, personId: number): { person: Person; undoUnt
     },
   });
   ctx.bus.emit('people');
-  const tz = personTz(person, ctx.repo.getSettings().timezone);
-  return { person: woken, undoUntil: new Date(undoUntil).toISOString(), helloAt: iso(nextSendingTime(now, tz)) };
+  const next = plan(ctx, woken, ctx.repo.getProject(woken.projectId), ctx.outbox.pendingFor(woken.id), connectedChannels(ctx)).line;
+  return { person: woken, undoUntil: new Date(undoUntil).toISOString(), next };
 }
 
 /** Puts a person back to rest, if they were woken less than 10 seconds ago and nothing has gone out to them since. */

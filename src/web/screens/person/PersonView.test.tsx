@@ -216,12 +216,37 @@ describe('the left column', () => {
     expect(await screen.findByText("Chidi won't hear from Callum again.")).toBeInTheDocument();
   });
 
-  it('lets the user keep Chidi instead', async () => {
+  it('lets the user keep Chidi instead, with the keyboard where it was', async () => {
     await show(full(CHIDI));
-    await userEvent.click(screen.getByRole('button', { name: 'Never contact Chidi' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Keep' }));
+    const trigger = screen.getByRole('button', { name: 'Never contact Chidi' });
+    await userEvent.click(trigger);
+    expect(screen.getByRole('button', { name: 'Keep' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(mocks.correct).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Never contact Chidi' })).toHaveFocus();
+  });
+
+  it('keeps the form open, and the address, when another action is still running', async () => {
+    mocks.nudge.mockReturnValue(new Promise(() => {}));
+    await show(full(CHIDI, { switchable: [{ channel: 'linkedin', at: null, available: true, reason: "Add Chidi's LinkedIn first" }] }));
+    await userEvent.click(screen.getByRole('button', { name: 'Move to LinkedIn' }));
+    await userEvent.type(screen.getByLabelText('LinkedIn link for Chidi'), 'linkedin.com/in/chidi');
+    await userEvent.click(screen.getByRole('button', { name: 'Nudge now' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Callum is still finishing the last thing. Try again in a moment.');
+    expect(screen.getByLabelText('LinkedIn link for Chidi')).toHaveValue('linkedin.com/in/chidi');
+    expect(mocks.switchChannel).not.toHaveBeenCalled();
+  });
+
+  it('ends a toast made from a next line with exactly one full stop', async () => {
+    mocks.nudge.mockResolvedValue(CHIDI);
+    await show(full(CHIDI));
+    mocks.personFull.mockResolvedValue(full(CHIDI, { next: 'That was the last follow-up. If Chidi stays quiet, Chidi rests from tomorrow' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Nudge now' }));
+    const text = await screen.findByText(/That was the last follow-up/, { selector: '.toast-text' });
+    expect(text.textContent).toBe('That was the last follow-up. If Chidi stays quiet, Chidi rests from tomorrow.');
+    expect(document.body.textContent).not.toContain('..');
   });
 });
 
@@ -241,7 +266,7 @@ describe('the four states', () => {
 
   it('shows a resting person with the date and wakes them with a way back', async () => {
     const mei = person(5, 'Mei Lin', { status: 'resting', restUntil: '2027-02-03T08:00:00.000Z', channel: 'x', email: null, xHandle: 'mei', stage: 'following', touches: 3 });
-    mocks.wake.mockResolvedValue({ person: { ...mei, status: 'active' }, undoUntil: '2026-11-02T10:00:10.000Z', helloAt: '2026-11-02T10:00:00.000Z' });
+    mocks.wake.mockResolvedValue({ person: { ...mei, status: 'active' }, undoUntil: '2026-11-02T10:00:10.000Z', next: 'First hello goes out today at 11:00 on X' });
     mocks.rest.mockResolvedValue(mei);
     await show(full(mei, {
       next: 'Mei rests until 3 February, then starts again as a stranger', switchable: [], projectMoves: [], nudge: { ok: false, reason: null },
@@ -252,7 +277,7 @@ describe('the four states', () => {
     expect(screen.queryByRole('button', { name: 'Nudge now' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Wake Mei now' }));
     expect(mocks.wake).toHaveBeenCalledWith(5);
-    expect(await screen.findByText('Mei is back. A new hello goes today at 11:00.')).toBeInTheDocument();
+    expect(await screen.findByText('Mei is back. First hello goes out today at 11:00 on X.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(mocks.rest).toHaveBeenCalledWith(5);
     expect(await screen.findByText('Undone. Mei keeps resting.')).toBeInTheDocument();
@@ -285,6 +310,8 @@ describe('the thread', () => {
     // Handed over out of order on purpose.
     await show(full(kemi, { messages: [thread[2]!, thread[0]!, thread[1]!], path: [], switchable: [], projectMoves: [] }));
     const log = screen.getByRole('region', { name: 'Everything with Kemi' });
+    const scroller = within(log).getByRole('region', { name: 'Messages with Kemi' });
+    expect(scroller).toHaveAttribute('tabindex', '0');
     const bubbles = [...log.querySelectorAll('[data-voice]')];
     expect(bubbles.map((el) => el.getAttribute('data-voice'))).toEqual(['callum', 'them', 'you']);
     expect(bubbles[0]).toHaveTextContent('Callum, by email · Tue 9:12');
@@ -407,7 +434,9 @@ describe('find someone', () => {
   it('says nobody is there when nobody matches', async () => {
     await show(full(CHIDI));
     await userEvent.type(screen.getByLabelText('Find someone'), 'zzz');
-    expect(screen.getByText("Nobody called 'zzz' in your river.")).toBeInTheDocument();
+    const none = screen.getByText("Nobody called 'zzz' in your river.");
+    expect(none).toHaveAttribute('role', 'status');
+    expect(none.closest('[role="list"]')).toBeNull();
     await userEvent.clear(screen.getByLabelText('Find someone'));
     expect(screen.queryByText(/Nobody called/)).not.toBeInTheDocument();
   });

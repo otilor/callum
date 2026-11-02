@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Channel, PersonFull } from '../../../shared/types.js';
 import { CHANNEL_NAME } from './when.js';
 
@@ -33,6 +33,16 @@ export function Actions({ detail, busy, onNudge, onHold, onResume, onWake, onMov
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const neverRef = useRef<HTMLButtonElement>(null);
+  const backToNever = useRef(false);
+
+  // Keep closes the question; the keyboard goes back to the button that opened it.
+  useEffect(() => {
+    if (!confirming && backToNever.current) {
+      backToNever.current = false;
+      neverRef.current?.focus();
+    }
+  }, [confirming]);
 
   if (detail.closedNote) return <p className="pv-closed fade-in">{detail.closedNote}</p>;
 
@@ -146,11 +156,20 @@ export function Actions({ detail, busy, onNudge, onHold, onResume, onWake, onMov
           <p>Never contact {first}? Callum cancels everything still waiting and won't reach out again, even if {first} shows up in a list later.</p>
           <div className="pv-confirm-btns">
             <button type="button" data-ink onClick={onNever}>Never contact {first}</button>
-            <button type="button" onClick={() => setConfirming(false)}>Keep</button>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => {
+                backToNever.current = true;
+                setConfirming(false);
+              }}
+            >
+              Keep
+            </button>
           </div>
         </div>
       ) : (
-        <button type="button" className="pv-never" onClick={() => setConfirming(true)}>Never contact {first}</button>
+        <button type="button" className="pv-never" ref={neverRef} onClick={() => setConfirming(true)}>Never contact {first}</button>
       )}
     </div>
   );

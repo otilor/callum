@@ -7,7 +7,7 @@ import { useToast } from '../../ui/Toast.js';
 import { Wordmark } from '../../ui/Wordmark.js';
 import { Actions } from './Actions.js';
 import { Thread, type PendingSend } from './Thread.js';
-import { CHANNEL_NAME, dayLong, LAST_MESSAGE, whenShort } from './when.js';
+import { CHANNEL_NAME, dayLong, LAST_MESSAGE, sentence, whenShort } from './when.js';
 import './PersonView.css';
 
 const BROKEN = 'Something went wrong. Callum kept everything as it was.';
@@ -150,9 +150,9 @@ export function PersonView({ state, personId, onOpen, onBack, now = () => new Da
               </div>
             );
           })}
-          {query && matches.length === 0 ? <p className="pv-nomatch fade-in">Nobody called '{q.trim()}' in your river.</p> : null}
           {more > 0 ? <span className="pv-more">and {more} more</span> : null}
         </div>
+        {query && matches.length === 0 ? <p className="pv-nomatch fade-in" role="status">Nobody called '{q.trim()}' in your river.</p> : null}
       </div>
 
       <Pane key={personId} state={state} personId={personId} tz={tz} now={now} onBack={onBack} />
@@ -236,7 +236,7 @@ function Pane({ state, personId, tz, now, onBack }: { state: AppState; personId:
   const nudge = () => run(async () => {
     await api.nudge(person.id);
     const fresh = await load();
-    toast(fresh?.next ? `${fresh.next}.` : 'Nudged.');
+    toast(fresh?.next ? sentence(fresh.next) : 'Nudged.');
   });
   const hold = () => run(async () => {
     await api.hold(person.id);
@@ -246,7 +246,7 @@ function Pane({ state, personId, tz, now, onBack }: { state: AppState; personId:
   const resume = () => run(async () => {
     await api.resume(person.id);
     const fresh = await load();
-    toast(fresh?.next ? `${first} is back in the river. ${fresh.next}.` : `${first} is back in the river.`);
+    toast(fresh?.next ? `${first} is back in the river. ${sentence(fresh.next)}` : `${first} is back in the river.`);
   });
   const never = () => run(async () => {
     await api.correct(person.id, 'never_contact');
@@ -256,7 +256,7 @@ function Pane({ state, personId, tz, now, onBack }: { state: AppState; personId:
   const wake = () => run(async () => {
     const woke = await api.wake(person.id);
     await load();
-    toast(`${first} is back. A new hello goes ${formatSlot(woke.helloAt, tz, now())}.`, {
+    toast(woke.next ? `${first} is back. ${sentence(woke.next)}` : `${first} is back.`, {
       ms: UNDO_MS,
       action: {
         label: 'Undo',
@@ -273,7 +273,7 @@ function Pane({ state, personId, tz, now, onBack }: { state: AppState; personId:
     });
   });
   const moveChannel = async (channel: Channel, handle?: string): Promise<string | null> => {
-    if (busy) return null;
+    if (busy) return 'Callum is still finishing the last thing. Try again in a moment.';
     setBusy(true);
     try {
       const old = person.channel;
