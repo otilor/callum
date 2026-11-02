@@ -12,5 +12,5 @@
     "esModuleInterop": true,
     "noEmit": true
   },
-  "include": ["src", "e2e", "*.config.ts"]
+  "include": ["src", "e2e", "electron", "*.config.ts"]
 }

@@ -7,7 +7,7 @@ export default defineConfig({
       {
         test: {
           name: 'server',
-          include: ['src/server/**/*.test.{ts,tsx}', 'src/shared/**/*.test.{ts,tsx}'],
+          include: ['src/server/**/*.test.{ts,tsx}', 'src/shared/**/*.test.{ts,tsx}', 'electron/**/*.test.ts'],
           pool: 'forks',
           // node:sqlite prints an ExperimentalWarning; keep test output pristine.
           execArgv: ['--disable-warning=ExperimentalWarning'],

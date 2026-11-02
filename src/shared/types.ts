@@ -86,6 +86,8 @@ export interface Settings {
   notifications: boolean | null;
   /** Projects that Wrap up everything wrapped (so Start again can bring back exactly those). */
   wrappedByWrapUp?: number[];
+  /** Desktop app only: open Callum when the computer starts. Off until the person turns it on. */
+  openAtLogin?: boolean;
 }
 
 export interface PathStep { label: string; at: string | null; done: boolean }

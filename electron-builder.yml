@@ -1,0 +1,44 @@
+appId: app.callum.desktop
+productName: Callum
+copyright: Copyright (c) 2026 Gabriel
+directories:
+  output: release
+  buildResources: build
+# The built web app (dist/web), the server and electron code compiled by tsc (dist/src, dist/electron) and the preload script.
+# Production dependencies are added by electron-builder itself.
+files:
+  - dist/**
+  - package.json
+  - "!dist/**/*.map"
+extraResources:
+  - from: build/tray
+    to: tray
+  - from: build/icon.png
+    to: icon.png
+asar: true
+# Installers are attached to the GitHub release by CI, not published by electron-builder.
+publish: null
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.png
+  target:
+    - dmg
+  # Signed ad hoc ("-"), without a developer certificate: Apple Silicon refuses an app with no signature at all and calls it
+  # damaged. An ad-hoc one opens after right-click, Open (see README).
+  identity: "-"
+win:
+  icon: build/icon.png
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+linux:
+  icon: build/icon.png
+  category: Office
+  maintainer: Callum <callum@users.noreply.github.com>
+  target:
+    - AppImage
+    - deb
+artifactName: Callum-${version}-${os}-${arch}.${ext}

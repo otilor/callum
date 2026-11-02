@@ -46,8 +46,9 @@ jobs:
       - name: Build the image
         run: docker build --tag callum:ci .
 
-  # Slot for the jobs that come with the end-to-end tests and the desktop app. They are added when those land,
-  # not before, so nothing here claims to run what does not exist yet.
+  # The desktop app's tests and the installers for a release (tags v*) are in desktop.yml.
+  #
+  # Slot for the end-to-end job, added when those tests land, so nothing here claims to run what does not exist yet.
   #
   # e2e:
   #   name: End-to-end tests
@@ -60,17 +61,3 @@ jobs:
   #     - run: npm ci
   #     - run: npx playwright install --with-deps chromium
   #     - run: npm run e2e
-  #
-  # desktop:
-  #   name: Desktop app
-  #   runs-on: ubuntu-latest
-  #   needs: check
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-node@v4
-  #       with: { node-version: 22, cache: npm }
-  #     - run: npm ci
-  #     - run: xvfb-run -a npx playwright test e2e/desktop.spec.ts
-  #
-  # release:
-  #   on tags v*, a matrix of macos-latest (dmg), windows-latest (nsis) and ubuntu-latest (AppImage)

@@ -1,8 +1,8 @@
-import { existsSync } from 'node:fs';
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium, type BrowserContext, type Locator, type Page } from 'playwright';
 import type { PersonLead } from '../../shared/types.js';
+import { findBrowser as findInstalledBrowser, installedChannel, type BrowserChoice } from './browser.js';
 import { systemClock, type Clock } from '../engine/clock.js';
 import {
   SELECTORS, clampNote, cleanName, hasWeeklyLimitText, headerNameCandidates, humanDelayMs, isBlockedStatus, isCheckpointUrl,
@@ -11,7 +11,7 @@ import {
 } from './linkedin-detect.js';
 import { ConnectError, type ChannelAdapter, type ChannelError, type InboundEvent, type OutboundMessage, type SendResult } from './types.js';
 
-export type BrowserChannel = 'chrome' | 'msedge' | 'chromium';
+export { installedChannel };
 type LaunchOptions = NonNullable<Parameters<typeof chromium.launchPersistentContext>[1]>;
 type Selectors = readonly string[];
 
@@ -23,8 +23,8 @@ export interface LinkedinDeps {
   /** Show a window for sign-in (default true). Only tests without a display turn this off. */
   loginHeaded?: boolean;
   launch?: typeof chromium.launchPersistentContext;
-  /** Which browser to run. Default: an installed Chrome or Edge, else Playwright's Chromium. */
-  channel?: BrowserChannel;
+  /** Which browser to run. Default: an installed Chrome or Edge, else Playwright's Chromium (see browser.ts). */
+  findBrowser?: () => Promise<BrowserChoice | null>;
   /** Default https://www.linkedin.com. Local test sites override it. */
   baseUrl?: string;
   sleep?: (ms: number) => Promise<void>;
@@ -49,52 +49,23 @@ const MAX_CONNECTIONS = 80;
 const CHECKPOINT_MESSAGE = 'LinkedIn is asking you to confirm it is you. Open LinkedIn in your browser, finish the check, then resume LinkedIn in Callum.';
 const SIGNED_OUT_MESSAGE = 'LinkedIn signed Callum out. Sign in again from Your Callum.';
 const WEEKLY_LIMIT_MESSAGE = "LinkedIn says you've reached the weekly invitation limit. Callum will wait before sending more invitations.";
-const NO_BROWSER_MESSAGE = "Couldn't open the browser Callum uses for LinkedIn.";
+const NO_BROWSER_MESSAGE = 'LinkedIn needs Google Chrome or Microsoft Edge on this computer. Install one, then try again.';
+const BROWSER_WOULD_NOT_OPEN_MESSAGE = "Couldn't open the browser Callum uses for LinkedIn.";
 const OFFLINE_MESSAGE = "Couldn't open LinkedIn. Check your internet connection and try again.";
 const WINDOW_CLOSED_MESSAGE = 'The LinkedIn window was closed before you finished signing in.';
 
 // ---- choosing and launching the browser ----------------------------------------------------------
-
-/** Playwright looks for an installed Chrome or Edge in these places, so these are the ones that work. */
-function browserPaths(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): Record<'chrome' | 'msedge', string[]> {
-  if (platform === 'darwin') {
-    return {
-      chrome: ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'],
-      msedge: ['/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'],
-    };
-  }
-  if (platform === 'win32') {
-    const roots = [env.PROGRAMFILES, env['PROGRAMFILES(X86)'], env.LOCALAPPDATA].filter((r): r is string => !!r);
-    return {
-      chrome: roots.map((r) => join(r, 'Google', 'Chrome', 'Application', 'chrome.exe')),
-      msedge: roots.map((r) => join(r, 'Microsoft', 'Edge', 'Application', 'msedge.exe')),
-    };
-  }
-  return { chrome: ['/opt/google/chrome/chrome'], msedge: ['/opt/microsoft/msedge/msedge'] };
-}
-
-/** A real installed browser looks like the one the person signs in with, so prefer Chrome, then Edge. */
-export function installedChannel(
-  exists: (path: string) => boolean = existsSync,
-  platform: NodeJS.Platform = process.platform,
-  env: NodeJS.ProcessEnv = process.env,
-): 'chrome' | 'msedge' | null {
-  const paths = browserPaths(platform, env);
-  if (paths.chrome.some(exists)) return 'chrome';
-  if (paths.msedge.some(exists)) return 'msedge';
-  return null;
-}
 
 export function cleanUserAgent(userAgent: string): string {
   return userAgent.replace('HeadlessChrome', 'Chrome');
 }
 
 /** The same options for sign-in and for work, so LinkedIn sees one browser. */
-export function launchOptions(opts: { headless: boolean; channel?: BrowserChannel | null; userAgent?: string }): LaunchOptions {
-  const channel = opts.channel === undefined ? installedChannel() : opts.channel;
+export function launchOptions(opts: { headless: boolean; browser: BrowserChoice; userAgent?: string }): LaunchOptions {
   return {
-    // 'chromium' is the full browser in its new headless mode, not the stripped-down headless shell.
-    channel: channel ?? 'chromium',
+    // A channel means the installed Chrome or Edge; a path is Playwright's own full Chromium (never the headless shell).
+    ...(opts.browser.channel ? { channel: opts.browser.channel } : {}),
+    ...(opts.browser.executablePath ? { executablePath: opts.browser.executablePath } : {}),
     headless: opts.headless,
     viewport: { width: 1280, height: 900 },
     locale: 'en-US',
@@ -165,7 +136,8 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
   const headless = deps.headless ?? true;
   const loginHeaded = deps.loginHeaded ?? true;
   const launch: typeof chromium.launchPersistentContext = deps.launch ?? ((dir, options) => chromium.launchPersistentContext(dir, options));
-  const channel = deps.channel ?? installedChannel();
+  const chooseBrowser = deps.findBrowser ?? (() => findInstalledBrowser());
+  let browser: BrowserChoice | null = null;
   const sleep = deps.sleep ?? realSleep;
   const random = deps.random ?? Math.random;
   const clock = deps.clock ?? systemClock;
@@ -213,7 +185,10 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
   async function openContext(wantHeadless: boolean): Promise<BrowserContext> {
     await mkdir(profileDir, { recursive: true });
     const forced = forcedAgent.get(wantHeadless);
-    const opts = (userAgent?: string) => launchOptions({ headless: wantHeadless, channel, ...(userAgent ? { userAgent } : {}) });
+    browser ??= await chooseBrowser();
+    if (!browser) throw new ConnectError(NO_BROWSER_MESSAGE);
+    const chosen = browser;
+    const opts = (userAgent?: string) => launchOptions({ headless: wantHeadless, browser: chosen, ...(userAgent ? { userAgent } : {}) });
     let opened = await launch(profileDir, opts(forced ?? undefined));
     if (forced === undefined) {
       const probe = opened.pages()[0] ?? (await opened.newPage());
@@ -775,8 +750,8 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
         let ctx: BrowserContext;
         try {
           ctx = await getContext(showWindow ? false : headless);
-        } catch {
-          throw new ConnectError(NO_BROWSER_MESSAGE);
+        } catch (err) {
+          throw err instanceof ConnectError ? err : new ConnectError(BROWSER_WOULD_NOT_OPEN_MESSAGE);
         }
         const offline = (err: unknown) => (err instanceof ConnectError ? err : new ConnectError(OFFLINE_MESSAGE, 'temporary'));
         const finishFailure = (err: unknown) =>
@@ -862,7 +837,9 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
           });
         } catch (err) {
           if (err instanceof Stop) return err.result;
-          if (step.name === 'open the browser') return fail('temporary', `${NO_BROWSER_MESSAGE} Callum will try again.`);
+          if (step.name === 'open the browser') {
+            return fail('temporary', err instanceof ConnectError ? err.message : `${BROWSER_WOULD_NOT_OPEN_MESSAGE} Callum will try again.`);
+          }
           return fail('unknown', `Callum couldn't ${step.name} on LinkedIn. LinkedIn may have changed its page.`);
         }
       });
