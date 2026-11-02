@@ -148,7 +148,7 @@ export const api = {
   // Task 17
   /** The same route as `person`, with what the person page needs: next step, why this channel, what can be done. */
   personFull: (id: number) => get<PersonFull>(`/people/${id}`),
-  moveChannel: (id: number, channel: Channel, handle?: string) => post<Person>(`/people/${id}/move`, handle === undefined ? { channel } : { channel, handle }),
+  switchChannel: (id: number, channel: Channel, handle?: string) => post<Person>(`/people/${id}/switch-channel`, handle === undefined ? { channel } : { channel, handle }),
   wake: (id: number) => post<{ person: Person; undoUntil: string; helloAt: string }>(`/people/${id}/wake`),
   rest: (id: number) => post<Person>(`/people/${id}/rest`),
 };

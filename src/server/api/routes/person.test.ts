@@ -47,44 +47,28 @@ describe('person routes', () => {
     expect((await call('GET', '/people/abc')).status).toBe(404);
   });
 
-  it('moves to another channel with a new address', async () => {
+  it('switches to another channel with a new address', async () => {
     const p = add();
-    const res = await call('POST', `/people/${p.id}/move`, { channel: 'linkedin', handle: 'https://www.linkedin.com/in/chidi' });
+    const res = await call('POST', `/people/${p.id}/switch-channel`, { channel: 'linkedin', handle: 'https://www.linkedin.com/in/chidi' });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ id: p.id, channel: 'linkedin', linkedinUrl: 'https://www.linkedin.com/in/chidi' });
   });
 
   it('answers 422 with the plain sentence for a bad address', async () => {
     const p = add({ email: null, linkedinUrl: 'https://www.linkedin.com/in/chidi', channel: 'linkedin' });
-    const res = await call('POST', `/people/${p.id}/move`, { channel: 'email', handle: 'nope' });
+    const res = await call('POST', `/people/${p.id}/switch-channel`, { channel: 'email', handle: 'nope' });
     expect(res.status).toBe(422);
     expect(await res.json()).toEqual({ error: "That doesn't look like an email address." });
   });
 
-  it('moves to another project through the same door', async () => {
-    const other = ctx.repo.insertProject({ name: 'Payroll' });
-    const p = add();
-    const res = await call('POST', `/people/${p.id}/move`, { projectId: other.id });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ id: p.id, projectId: other.id });
-  });
-
-  it('gives the reason a project move is refused in words', async () => {
-    const other = ctx.repo.insertProject({ name: 'Payroll' });
-    const p = add({ stage: 'talking', status: 'waiting' });
-    const res = await call('POST', `/people/${p.id}/move`, { projectId: other.id });
-    expect(res.status).toBe(422);
-    expect(await res.json()).toEqual({ error: 'Chidi is talking with you about Reconciliation. Finish that conversation first.' });
-  });
-
-  it('asks which channel when neither a channel nor a project comes', async () => {
-    const res = await call('POST', `/people/${add().id}/move`, {});
+  it('asks which channel when none comes', async () => {
+    const res = await call('POST', `/people/${add().id}/switch-channel`, {});
     expect(res.status).toBe(422);
     expect(await res.json()).toEqual({ error: 'Pick email, LinkedIn or X.' });
   });
 
   it('rejects a body that is not JSON', async () => {
-    const res = await app.request(`/api/people/${add().id}/move`, { method: 'POST', body: '{nope' });
+    const res = await app.request(`/api/people/${add().id}/switch-channel`, { method: 'POST', body: '{nope' });
     expect(res.status).toBe(400);
   });
 

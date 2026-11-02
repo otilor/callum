@@ -277,7 +277,7 @@ function Pane({ state, personId, tz, now, onBack }: { state: AppState; personId:
     setBusy(true);
     try {
       const old = person.channel;
-      const moved = await api.moveChannel(person.id, channel, handle);
+      const moved = await api.switchChannel(person.id, channel, handle);
       await load();
       const gap = person.lastTouchAt !== null && new Date(person.lastTouchAt).getTime() + 7 * 86_400_000 > at.getTime();
       const when = moved.nextTouchAt ? ` The first message goes ${formatSlot(moved.nextTouchAt, tz, now())}${gap && old ? `, a week after the last ${LAST_MESSAGE[old]}` : ''}.` : '';

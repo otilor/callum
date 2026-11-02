@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   undo: vi.fn(),
   wake: vi.fn(),
   rest: vi.fn(),
-  moveChannel: vi.fn(),
+  switchChannel: vi.fn(),
   moveToProject: vi.fn(),
 }));
 vi.mock('../../api.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../api.js')>()), api: mocks }));
@@ -160,22 +160,22 @@ describe('the left column', () => {
 
   it('moves to LinkedIn straight away when the link is known, and says when it starts', async () => {
     const known = { ...CHIDI, linkedinUrl: 'https://www.linkedin.com/in/chidi' };
-    mocks.moveChannel.mockResolvedValue({ ...known, channel: 'linkedin', nextTouchAt: '2026-11-06T08:12:00.000Z' });
+    mocks.switchChannel.mockResolvedValue({ ...known, channel: 'linkedin', nextTouchAt: '2026-11-06T08:12:00.000Z' });
     await show(full(known));
     expect(screen.getByRole('button', { name: 'Move to LinkedIn' })).toHaveAccessibleDescription(
       'Callum can switch Chidi to LinkedIn from Friday, a week after the last email.',
     );
     await userEvent.click(screen.getByRole('button', { name: 'Move to LinkedIn' }));
-    expect(mocks.moveChannel).toHaveBeenCalledWith(1, 'linkedin', undefined);
+    expect(mocks.switchChannel).toHaveBeenCalledWith(1, 'linkedin', undefined);
     expect(await screen.findByText('Chidi moves to LinkedIn. The first message goes Friday at 9:12, a week after the last email.')).toBeInTheDocument();
   });
 
   it('asks for an address when there is none, checks it on the server and shows the sentence', async () => {
-    mocks.moveChannel.mockRejectedValueOnce(new ApiError(422, "That doesn't look like a LinkedIn profile link."));
-    mocks.moveChannel.mockResolvedValueOnce({ ...CHIDI, channel: 'linkedin', nextTouchAt: '2026-11-06T08:12:00.000Z' });
+    mocks.switchChannel.mockRejectedValueOnce(new ApiError(422, "That doesn't look like a LinkedIn profile link."));
+    mocks.switchChannel.mockResolvedValueOnce({ ...CHIDI, channel: 'linkedin', nextTouchAt: '2026-11-06T08:12:00.000Z' });
     await show(full(CHIDI, { switchable: [{ channel: 'linkedin', at: null, available: true, reason: "Add Chidi's LinkedIn first" }] }));
     expect(screen.getByText("Add Chidi's LinkedIn first")).toBeInTheDocument();
-    expect(mocks.moveChannel).not.toHaveBeenCalled();
+    expect(mocks.switchChannel).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Move to LinkedIn' }));
     const field = screen.getByLabelText('LinkedIn link for Chidi');
     await userEvent.type(field, 'example.com/chidi');
@@ -183,7 +183,7 @@ describe('the left column', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent("That doesn't look like a LinkedIn profile link.");
     await userEvent.clear(field);
     await userEvent.type(field, 'linkedin.com/in/chidi{Enter}');
-    await waitFor(() => expect(mocks.moveChannel).toHaveBeenLastCalledWith(1, 'linkedin', 'linkedin.com/in/chidi'));
+    await waitFor(() => expect(mocks.switchChannel).toHaveBeenLastCalledWith(1, 'linkedin', 'linkedin.com/in/chidi'));
     await waitFor(() => expect(screen.queryByLabelText('LinkedIn link for Chidi')).not.toBeInTheDocument());
   });
 

@@ -3,7 +3,6 @@ import { CHANNELS, type Channel } from '../../../shared/types.js';
 import type { Ctx } from '../../context.js';
 import { UserError } from '../../services/errors.js';
 import { moveTo, personDetail, restAgain, wakeEarly } from '../../services/person.js';
-import { moveToProject } from '../../services/projects.js';
 
 const BAD_REQUEST = "Callum couldn't read that request.";
 const BROKEN = 'Something went wrong. Callum kept everything as it was.';
@@ -34,7 +33,7 @@ function idOf(raw: string | undefined): number {
 }
 
 /**
- * The person page: the whole picture of one person, moving them to another channel or project, and waking a resting
+ * The person page: the whole picture of one person, switching their channel, and waking a resting
  * person early (with a 10 second way back). Paths are relative to `/api`.
  */
 export function personRoutes(ctx: Ctx): Hono {
@@ -47,15 +46,10 @@ export function personRoutes(ctx: Ctx): Hono {
 
   app.get('/people/:id', (c) => c.json(personDetail(ctx, idOf(c.req.param('id')))));
 
-  // One door for both kinds of move: `{ projectId }` moves to a project, `{ channel, handle? }` to another channel.
-  app.post('/people/:id/move', async (c) => {
+  // Another channel. (Moving to another project is `POST /people/:id/move { projectId }`, Task 11's.)
+  app.post('/people/:id/switch-channel', async (c) => {
     const id = idOf(c.req.param('id'));
     const body = await readBody(c);
-    if (body.projectId !== undefined) {
-      const projectId = wholeNumber(body.projectId);
-      if (projectId === null) throw new UserError("Callum can't find that project.", 404);
-      return c.json(moveToProject(ctx, id, projectId));
-    }
     const channel = CHANNELS.find((ch): ch is Channel => ch === body.channel);
     if (!channel) throw new UserError('Pick email, LinkedIn or X.');
     if (body.handle !== undefined && body.handle !== null && typeof body.handle !== 'string') throw new UserError(BAD_REQUEST, 400);
