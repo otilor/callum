@@ -95,3 +95,24 @@ export type AskAction =
   | { kind: 'switch_channel'; label: string; args: { personIds: number[]; channel: Channel } };
 export interface AskAnswer { text: string; personIds: number[]; action: AskAction | null }
 export type Scope = 'people' | 'outbox' | 'incidents' | 'settings' | 'channels' | 'projects';
+
+// Task 17: a person, in full
+export type PathState = 'done' | 'sun' | 'next' | 'later' | 'held' | 'stop' | 'rest';
+/** A step of the path with how it should look: done, a reply (sun), what comes next, later, on hold, stopped or resting. */
+export interface PersonPathStep extends PathStep { state: PathState }
+/** Whether a button can be used, and when not, why. */
+export interface Availability { ok: boolean; reason: string | null }
+/** Another channel the person could move to. `available` false means the move cannot happen now and `reason` says why; true with a `reason` is a heads-up (a gap to wait out, an address to add). */
+export interface Switchable { channel: Channel; at: string | null; reason: string | null; available: boolean }
+/** Another running project the person could move to. `reason` is why not, when not. */
+export interface ProjectMove { projectId: number; name: string; reason: string | null }
+export interface PersonFull {
+  person: Person; messages: Message[]; path: PersonPathStep[];
+  next: string | null; why: string | null;
+  switchable: Switchable[]; projectMoves: ProjectMove[];
+  nudge: Availability;
+  /** Set when the person is stopped or closed: the note the page shows in place of the actions. */
+  closedNote: string | null;
+  /** The name of the person's project. */
+  projectName: string;
+}

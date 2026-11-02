@@ -1,5 +1,5 @@
 import type {
-  AppState, AskAction, AskAnswer, Channel, ChannelAccount, Correction, Message, OutboxItem, PathStep, Person, Project, Settings, Tone,
+  AppState, AskAction, AskAnswer, Channel, ChannelAccount, Correction, Message, OutboxItem, PathStep, Person, PersonFull, Project, Settings, Tone,
 } from '../shared/types.js';
 import type { Skipped } from '../server/leads/parse.js';
 
@@ -145,4 +145,10 @@ export const api = {
   /** Download links; the browser follows them, so they are plain URLs. */
   exportJsonUrl: (projectId?: number) => `/api${withQuery('/export.json', { projectId })}`,
   exportCsvUrl: (projectId?: number) => `/api${withQuery('/export.csv', { projectId })}`,
+  // Task 17
+  /** The same route as `person`, with what the person page needs: next step, why this channel, what can be done. */
+  personFull: (id: number) => get<PersonFull>(`/people/${id}`),
+  moveChannel: (id: number, channel: Channel, handle?: string) => post<Person>(`/people/${id}/move`, handle === undefined ? { channel } : { channel, handle }),
+  wake: (id: number) => post<{ person: Person; undoUntil: string; helloAt: string }>(`/people/${id}/wake`),
+  rest: (id: number) => post<Person>(`/people/${id}/rest`),
 };
