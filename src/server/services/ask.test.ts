@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ApolloSource } from '../leads/apollo.js';
 import { act, ask } from './ask.js';
 import { harness, type Harness } from './testing.test-helpers.js';
@@ -294,6 +294,46 @@ describe('act find_more', () => {
     h.ctx.apollo = apollo([]).source;
     const p = h.person({ name: 'Kemi Eze', role: null });
     await expect(act(h.ctx, h.project.id, find(p.id, null))).rejects.toThrow("Kemi has no role on file, so Callum can't find people like them. Try describing who to find.");
-    await expect(act(h.ctx, h.project.id, find(null, '  '))).rejects.toThrow('Say who to look for.');
+    await expect(act(h.ctx, h.project.id, find(null, '  '))).rejects.toThrow("Callum can find people, pause a channel, change the tone, or tell you who's warming up.");
+  });
+
+  it('only looks for people like someone who is in this project and still there', async () => {
+    const h = harness();
+    h.ctx.apollo = apollo([]).source;
+    const other = h.ctx.repo.insertProject({ name: 'Payroll' });
+    const elsewhere = h.person({ projectId: other.id, role: 'CFO' });
+    const gone = h.person({ role: 'CFO', status: 'removed' });
+    for (const p of [elsewhere, gone, { id: 9999 }]) {
+      await expect(act(h.ctx, h.project.id, find(p.id, null))).rejects.toThrow("Callum can't find that person in this project.");
+    }
+  });
+
+  it('does not add people to a project that is wrapped up', async () => {
+    const h = harness();
+    const fake = apollo([{ id: 'a1', first: 'Tunde', last: 'Adeyemi', email: 'tunde@fieldnote.com' }]);
+    h.ctx.apollo = fake.source;
+    h.ctx.repo.updateProject(h.project.id, { state: 'wrapped' });
+    await expect(act(h.ctx, h.project.id, find(null, 'finance', 1))).rejects.toThrow('Reconciliation is wrapped up.');
+    expect(fake.lookups).toEqual([]);
+  });
+});
+
+describe('ask more', () => {
+  it('names a paused or signed-out channel before saying nothing is paused', async () => {
+    const h = harness({ connected: ['email', 'linkedin'] });
+    h.ctx.repo.updateChannel('linkedin', { status: 'paused' });
+    expect((await ask(h.ctx, h.project.id, 'why is nothing going out')).text).toBe('LinkedIn is paused. Resume it from Ask or Your Callum.');
+    h.ctx.repo.updateChannel('linkedin', { status: 'connected' });
+    h.ctx.repo.updateChannel('email', { status: 'error' });
+    expect((await ask(h.ctx, h.project.id, 'why is nothing going out')).text).toBe('Email needs to be connected again from Your Callum.');
+  });
+
+  it('does not offer a search with nobody to be like and nothing to look for', async () => {
+    const h = harness();
+    h.ctx.apollo = apollo([]).source;
+    vi.spyOn(h.ctx.writer, 'parseAsk').mockResolvedValue({ intent: 'find', likePersonId: null, query: null, count: 5 });
+    const res = await ask(h.ctx, h.project.id, 'find some');
+    expect(res.action).toBeNull();
+    expect(res.text).toBe("Callum can find people, pause a channel, change the tone, or tell you who's warming up.");
   });
 });

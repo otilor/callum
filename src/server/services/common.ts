@@ -54,3 +54,32 @@ export function parseWhen(iso: string): Date {
 export function canWriteBy(p: Person): boolean {
   return p.status === 'waiting' || (p.status === 'active' && p.stage === 'talking');
 }
+
+/** How many first hellos need the user's OK in a project. */
+export const FIRST_OKS = 10;
+
+/**
+ * Cancels what is waiting to go to a person. A hello the user already approved (and so spent an OK on) that is
+ * cancelled before it left gives the OK back to the project it was approved in. Returns how many were cancelled.
+ */
+export function cancelPendingRefunding(ctx: Ctx, person: Person, origins: ('auto' | 'user')[] = ['auto']): number {
+  const items = ctx.outbox.pendingFor(person.id).filter((i) => origins.includes(i.origin));
+  const refund = items.filter((i) => i.origin === 'auto' && i.state === 'scheduled' && i.approvalCounted).length;
+  const cancelled = ctx.repo.transaction(() => {
+    const n = ctx.outbox.cancelPending(person.id, origins);
+    const project = ctx.repo.getProject(person.projectId);
+    if (refund > 0 && project) ctx.repo.updateProject(project.id, { approvalsLeft: Math.min(FIRST_OKS, project.approvalsLeft + refund) });
+    return n;
+  });
+  if (refund > 0) ctx.bus.emit('projects');
+  return cancelled;
+}
+
+/** Runs a follow-on step whose failure must not undo or hide work that is already saved. */
+export async function afterSaved(ctx: Ctx, step: () => Promise<void>): Promise<void> {
+  try {
+    await step();
+  } catch (err) {
+    ctx.onError(err);
+  }
+}

@@ -40,7 +40,14 @@ export function wrapUp(ctx: Ctx, opts: { deleteData: boolean }): { cancelledFoll
       if (STARTING_KINDS.has(item.kind)) hellos++;
       else followUps++;
     }
-    ctx.repo.updateSettings({ pauseState: 'wrapped', pausedUntil: null });
+    // Every project that was still going is wrapped too, and remembered, so Start again brings back exactly those.
+    const wrapped: number[] = [];
+    for (const project of ctx.repo.listProjects()) {
+      if (project.state === 'wrapped') continue;
+      ctx.repo.updateProject(project.id, { state: 'wrapped', pausedUntil: null });
+      wrapped.push(project.id);
+    }
+    ctx.repo.updateSettings({ pauseState: 'wrapped', pausedUntil: null, wrappedByWrapUp: wrapped });
   });
   if (opts.deleteData) {
     ctx.repo.deleteAll();
@@ -53,6 +60,15 @@ export function wrapUp(ctx: Ctx, opts: { deleteData: boolean }): { cancelledFoll
     cancelledHellos: hellos,
     summary: `Nobody else hears from you. ${plural(followUps, 'follow-up', 'follow-ups')} and ${plural(hellos, 'first hello', 'first hellos')} are cancelled.`,
   };
+}
+
+/** Wrap up everything, the way the route does it: when the data is to be deleted, channels are signed out first. */
+export async function wrapUpEverything(
+  ctx: Ctx,
+  opts: { deleteData: boolean },
+): Promise<{ cancelledFollowUps: number; cancelledHellos: number; summary: string }> {
+  if (opts.deleteData) await forgetChannels(ctx);
+  return wrapUp(ctx, opts);
 }
 
 /** Signs every channel out and drops what Callum keeps for it on this computer (a saved LinkedIn session). Call before deleting data. */
@@ -113,9 +129,12 @@ export function wrapSummaryLine(ctx: Ctx): string {
 
 /** Back to the first run. Channels, people and their history stay. */
 export function startAgain(ctx: Ctx): void {
+  const wrappedByWrapUp = new Set(ctx.repo.getSettings().wrappedByWrapUp ?? []);
   ctx.repo.transaction(() => {
-    ctx.repo.updateSettings({ onboarded: false, pauseState: 'running', pausedUntil: null });
+    ctx.repo.updateSettings({ onboarded: false, pauseState: 'running', pausedUntil: null, wrappedByWrapUp: [] });
     for (const project of ctx.repo.listProjects()) {
+      // A project the user wrapped on its own stays wrapped.
+      if (project.state === 'wrapped' && !wrappedByWrapUp.has(project.id)) continue;
       ctx.repo.updateProject(project.id, { startedAt: null, approvalsLeft: 10, state: 'running', pausedUntil: null });
     }
   });

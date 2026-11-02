@@ -4,15 +4,12 @@ import type { Ctx } from '../context.js';
 import { chooseChannel, personTz } from '../engine/lifecycle.js';
 import { findPlaceholders } from '../engine/guard.js';
 import { X_DAILY_CAP, emailDailyCap, linkedinInviteCap } from '../engine/pacing.js';
-import { localParts } from '../engine/time.js';
+import { localParts, startOfLocalDay, zonedTime } from '../engine/time.js';
 import { firstSlotAfterStart, SEND_START_HOUR } from '../engine/windows.js';
 import { domainOf, fetchSiteText } from '../leads/site.js';
 import { planProjectNow } from '../runner/runner.js';
-import { CHANNEL_PHRASE, joinList, plural, requireProject, userTz, weekdayName } from './common.js';
+import { CHANNEL_NAME, CHANNEL_PHRASE, FIRST_OKS, afterSaved, joinList, plural, requireProject, userTz, weekdayName } from './common.js';
 import { UserError } from './errors.js';
-
-/** How many first hellos wait for the user's OK. */
-export const FIRST_OKS = 10;
 
 /** What the user's work email says about what they offer. Null when the address is free mail or nothing could be read. */
 export async function suggestOffer(ctx: Ctx): Promise<string | null> {
@@ -72,6 +69,24 @@ export interface PlanPreview {
   total: number;
   byChannel: Record<Channel, number>;
   line: string;
+  /** Strangers who can only be reached on a channel that is not connected yet. */
+  waiting: { count: number; line: string | null };
+}
+
+const orList = (items: string[]): string => (items.length <= 1 ? items[0] ?? '' : `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`);
+
+/** How many of this kind of message other projects already have lined up (or waiting for an OK) on a channel in the day starting at `from`. */
+function usedByOthers(ctx: Ctx, projectId: number, ch: Channel, from: Date, tz: string): number {
+  const day = localParts(from, tz);
+  const next = zonedTime(tz, day.year, day.month, day.day + 1, 0).getTime();
+  const ofProject = new Set(ctx.repo.listPeople({ projectId }).map((p) => p.id));
+  return ctx.repo
+    .listOutbox({ state: ['scheduled', 'awaiting_ok'] })
+    .filter((i) => {
+      const when = new Date(i.sendAfter).getTime();
+      const counts = i.origin === 'auto' && i.channel === ch && (ch !== 'linkedin' || i.kind === 'invite');
+      return counts && !ofProject.has(i.personId) && when >= from.getTime() && when < next;
+    }).length;
 }
 
 /** What the first day looks like, inside the daily limits. Nothing goes out on the day the user presses Start. */
@@ -80,12 +95,22 @@ export function planPreview(ctx: Ctx, projectId: number): PlanPreview {
   const tz = userTz(ctx);
   const now = ctx.clock.now();
   const first = firstSlotAfterStart(now, tz);
+  const dayStart = startOfLocalDay(first, tz);
   const connected = connectedChannels(ctx);
   const accounts = ctx.repo.listChannels();
   const wanted: Record<Channel, number> = { email: 0, linkedin: 0, x: 0 };
+  const missing = new Set<Channel>();
+  let waiting = 0;
   for (const p of ctx.repo.listPeople({ projectId }).filter(isStranger)) {
     const ch = channelFor(p, connected);
-    if (ch) wanted[ch]++;
+    if (ch) {
+      wanted[ch]++;
+      continue;
+    }
+    const via = CHANNELS.filter((c) => hasHandle(p, c));
+    if (via.length === 0) continue;
+    waiting++;
+    for (const c of via) missing.add(c);
   }
   const account = (ch: Channel) => accounts.find((a) => a.channel === ch);
   const cap: Record<Channel, number> = {
@@ -94,7 +119,8 @@ export function planPreview(ctx: Ctx, projectId: number): PlanPreview {
     x: X_DAILY_CAP,
   };
   const byChannel: Record<Channel, number> = { email: 0, linkedin: 0, x: 0 };
-  for (const ch of CHANNELS) byChannel[ch] = Math.min(wanted[ch], cap[ch]);
+  // The limits are shared: what another project already has lined up that day is not available again.
+  for (const ch of CHANNELS) byChannel[ch] = Math.min(wanted[ch], Math.max(0, cap[ch] - usedByOthers(ctx, projectId, ch, dayStart, tz)));
   const total = CHANNELS.reduce((sum, ch) => sum + byChannel[ch], 0);
 
   const tomorrow = localParts(new Date(now.getTime() + 86_400_000), tz);
@@ -104,15 +130,22 @@ export function planPreview(ctx: Ctx, projectId: number): PlanPreview {
   const line = total === 0
     ? 'Nobody is ready for a first hello yet. Nothing goes out today.'
     : `${day} from ${SEND_START_HOUR}:00 their time: ${plural(total, 'hello', 'hellos')}, ${joinList(parts)}. Nothing goes out today.`;
-  return { firstSendAt: first.toISOString(), total, byChannel, line };
+
+  const names = CHANNELS.filter((c) => missing.has(c)).map((c) => CHANNEL_NAME[c]);
+  const waitingLine = waiting === 0
+    ? null
+    : `${waiting === 1 ? '1 person waits' : `${waiting} people wait`} for ${orList(names)}. Connect ${names.length === 1 ? 'it' : 'one'} to reach them.`;
+  return { firstSendAt: first.toISOString(), total, byChannel, line, waiting: { count: waiting, line: waitingLine } };
 }
 
 /**
- * Presses Start for a project. Every stranger gets a channel (people Callum cannot reach on any connected channel are
- * removed), the first hellos are written and wait for the user's OK, and nothing goes out before the next sending slot.
+ * Presses Start for a project. Strangers get a channel, the first hellos are written and wait for the user's OK, and
+ * nothing goes out before the next sending slot. Someone Callum cannot reach yet stays as they are, and is planned
+ * as soon as a channel they can be reached on is connected.
  */
 export async function start(ctx: Ctx, projectId: number): Promise<{ firstSendAt: string }> {
   const project = requireProject(ctx, projectId);
+  if (ctx.repo.getSettings().pauseState === 'wrapped') throw new UserError('Callum is wrapped up. Start again first.');
   if (project.state === 'wrapped') throw new UserError(`${project.name} is wrapped up.`);
   if (project.startedAt !== null) throw new UserError(`${project.name} has already started.`);
   const connected = connectedChannels(ctx);
@@ -124,17 +157,10 @@ export async function start(ctx: Ctx, projectId: number): Promise<{ firstSendAt:
   const settings = ctx.repo.getSettings();
   ctx.repo.transaction(() => {
     ctx.repo.updateProject(projectId, { startedAt: now.toISOString(), approvalsLeft: FIRST_OKS, state: 'running', pausedUntil: null });
-    // A break the user took stays; only a wrapped-up Callum comes back.
-    ctx.repo.updateSettings({
-      onboarded: true, currentProjectId: projectId,
-      ...(settings.pauseState === 'wrapped' ? { pauseState: 'running' as const, pausedUntil: null } : {}),
-    });
+    ctx.repo.updateSettings({ onboarded: true, currentProjectId: projectId });
     for (const p of people.filter(isStranger)) {
       const channel = channelFor(p, connected);
-      if (!channel) {
-        ctx.repo.updatePerson(p.id, { status: 'removed', nextTouchAt: null });
-        continue;
-      }
+      if (!channel) continue;
       const slot = firstSlotAfterStart(now, personTz(p, settings.timezone));
       ctx.repo.updatePerson(p.id, { channel, nextTouchAt: slot.toISOString() });
     }
@@ -144,7 +170,8 @@ export async function start(ctx: Ctx, projectId: number): Promise<{ firstSendAt:
   ctx.bus.emit('people');
 
   // The same planning the runner does, a little early: the first hellos wait in the outbox for their slot.
-  await planProjectNow(ctx, projectId, { early: true });
+  // Start is saved by now, so a writer that fails here is reported, not thrown at the user.
+  await afterSaved(ctx, () => planProjectNow(ctx, projectId, { early: true }));
   ctx.bus.emit('outbox');
   return { firstSendAt: firstSlotAfterStart(now, userTz(ctx)).toISOString() };
 }

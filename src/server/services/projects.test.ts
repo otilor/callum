@@ -4,6 +4,8 @@ import { UserError } from './errors.js';
 import {
   createProject, moveToProject, pauseProject, renameProject, resumeProject, setCurrentProject, updateProject, wrapProject,
 } from './projects.js';
+import { approve } from './actions.js';
+import { start } from './onboarding.js';
 import { harness } from './testing.test-helpers.js';
 
 describe('createProject', () => {
@@ -75,7 +77,7 @@ describe('renameProject and updateProject', () => {
 
   it('refuses a calendar link that is not a web address', () => {
     const h = harness();
-    expect(() => updateProject(h.ctx, h.project.id, { calendarUrl: 'my calendar' })).toThrow('That calendar link needs to start with https://');
+    expect(() => updateProject(h.ctx, h.project.id, { calendarUrl: 'my calendar' })).toThrow('That calendar link needs to start with http:// or https://');
   });
 });
 
@@ -193,5 +195,29 @@ describe('moveToProject', () => {
     expect(() => moveToProject(h.ctx, p.id, 999)).toThrow("Callum can't find that project.");
     wrapProject(h.ctx, second.id);
     expect(() => moveToProject(h.ctx, p.id, second.id)).toThrow('Payroll is wrapped up.');
+  });
+
+  it('waits while an approved hello is still inside its undo window, then moves and gives the OK back', async () => {
+    const h = harness();
+    h.strangers(3);
+    await start(h.ctx, h.project.id);
+    const second = await createProject(h.ctx, { offer: 'You help teams with payroll', name: 'Payroll' });
+    const [item] = h.ctx.repo.listOutbox({ state: ['awaiting_ok'] });
+    approve(h.ctx, item!.id);
+    expect(() => moveToProject(h.ctx, item!.personId, second.id)).toThrow(
+      /^Person1's hello is about to go out\. Try again in a few seconds\.$/,
+    );
+    expect(h.ctx.repo.getPerson(item!.personId)?.projectId).toBe(h.project.id);
+    expect(h.ctx.repo.getOutbox(item!.id)?.state).toBe('scheduled');
+    expect(h.ctx.repo.getProject(h.project.id)?.approvalsLeft).toBe(9);
+
+    // The window closes; the hello has not left yet. Moving cancels it and gives the OK back to the project it was approved in.
+    h.clock.advance(11_000);
+    const moved = moveToProject(h.ctx, item!.personId, second.id);
+    expect(moved.projectId).toBe(second.id);
+    expect(h.ctx.repo.getOutbox(item!.id)?.state).toBe('cancelled');
+    expect(h.ctx.repo.getProject(h.project.id)?.approvalsLeft).toBe(10);
+    expect(h.ctx.repo.getProject(second.id)?.approvalsLeft).toBe(10);
+    expect(h.scopes).toContain('projects');
   });
 });

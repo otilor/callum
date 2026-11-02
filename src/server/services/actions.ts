@@ -7,7 +7,7 @@ import { nextMonday } from '../engine/windows.js';
 import type { WriteContext } from '../ai/writer.js';
 import { PlaceholderError } from '../outbox/outbox.js';
 import { planProjectNow } from '../runner/runner.js';
-import { canWriteBy, parseWhen, requirePerson, requireProject, userTz } from './common.js';
+import { afterSaved, canWriteBy, cancelPendingRefunding, parseWhen, requirePerson, requireProject, userTz } from './common.js';
 import { asUserError, UserError, userFacing } from './errors.js';
 
 /** A LinkedIn invitation note can be this long at most. */
@@ -59,7 +59,7 @@ function assertOnDock(person: Person): void {
 /** The user says yes to a hello (optionally with edited words). It leaves after the undo window. */
 export function approve(ctx: Ctx, outboxId: number, body?: string): OutboxItem {
   const item = requireItem(ctx, outboxId);
-  if (item.state !== 'awaiting_ok') throw new UserError('This message is not waiting for an OK');
+  if (item.state !== 'awaiting_ok') throw new UserError('This message is not waiting for an OK.');
   const text = body === undefined ? item.body : cleanBody(body);
   checkInvite(item.kind, text);
   const next = userFacing(() => ctx.outbox.approve(outboxId, body === undefined ? undefined : text));
@@ -78,15 +78,23 @@ export async function skip(ctx: Ctx, outboxId: number): Promise<void> {
   });
   ctx.bus.emit('people');
   ctx.bus.emit('outbox');
-  await planProjectNow(ctx, person.projectId, { early: true });
+  // The stop is saved; a replacement hello that cannot be written is reported, not thrown at the user.
+  await afterSaved(ctx, () => planProjectNow(ctx, person.projectId, { early: true }));
 }
 
 /** Takes an approved hello back while its undo window is open. */
 export function undo(ctx: Ctx, outboxId: number): OutboxItem {
-  requireItem(ctx, outboxId);
+  const item = requireItem(ctx, outboxId);
+  if (item.state === 'awaiting_ok') throw new UserError('Nothing to undo.');
   const next = userFacing(() => ctx.outbox.undo(outboxId));
   ctx.bus.emit('projects');
   return next;
+}
+
+/** A newer message the user queued for the same person: bringing an older one back would send two. */
+function assertNoNewerReply(ctx: Ctx, item: OutboxItem, first: string): void {
+  const newer = ctx.outbox.pendingFor(item.personId).some((i) => i.origin === 'user' && i.state === 'scheduled' && i.id > item.id);
+  if (newer) throw new UserError(`You already have a newer reply to ${first} waiting. Send or undo that one first.`);
 }
 
 // ---- messages the user wrote that did not go --------------------------------
@@ -115,6 +123,7 @@ export function retry(ctx: Ctx, outboxId: number): OutboxItem {
   if (item.state !== 'failed' || item.origin !== 'user') throw new UserError('Only a message that did not go out can be tried again.');
   const person = requirePerson(ctx, item.personId);
   assertCanWrite(person);
+  assertNoNewerReply(ctx, item, person.firstName);
   const kind = item.kind as HandKind;
   const next = userFacing(() => ctx.outbox.queueUserSend(item.personId, kind, item.body, item.subject));
   ctx.repo.updateOutbox(item.id, { state: 'cancelled' });
@@ -133,6 +142,7 @@ export function editBlocked(ctx: Ctx, outboxId: number, body: string, subject?: 
   checkNoBlanks(text, nextSubject);
   const person = requirePerson(ctx, item.personId);
   if (item.origin === 'user') {
+    assertNoNewerReply(ctx, item, person.firstName);
     const next = userFacing(() => ctx.outbox.queueUserSend(item.personId, item.kind as HandKind, text, nextSubject));
     ctx.repo.updateOutbox(item.id, { state: 'cancelled' });
     ctx.bus.emit('outbox');
@@ -216,10 +226,16 @@ export function snooze(ctx: Ctx, personId: number, until?: string): Person {
 /** Callum read the reply wrongly. */
 export function correct(ctx: Ctx, personId: number, kind: Correction): Person {
   const person = requirePerson(ctx, personId);
-  assertOnDock(person);
+  if (kind === 'never_contact') {
+    // From the person view as well as the dock: anyone who is not already stopped or removed.
+    if (person.status === 'stopped') throw new UserError(`${person.firstName} asked not to be contacted.`);
+    if (person.status === 'removed') throw new UserError(`${person.firstName} isn't on your list.`);
+  } else {
+    assertOnDock(person);
+  }
   const patch = life.correct(person, kind, ctx.clock.now(), personTz(person, userTz(ctx)));
   const next = ctx.repo.transaction(() => {
-    if (kind !== 'auto_reply') ctx.outbox.cancelPending(person.id, ['auto', 'user']);
+    if (kind !== 'auto_reply') cancelPendingRefunding(ctx, person, ['auto', 'user']);
     return ctx.repo.updatePerson(person.id, patch);
   });
   ctx.bus.emit('people');
@@ -245,7 +261,7 @@ export function hold(ctx: Ctx, personId: number): Person {
   if (person.status === 'held') throw new UserError(`${person.firstName} is already on hold.`);
   if (person.status !== 'active') throw new UserError(`Callum can't put ${person.firstName} on hold right now.`);
   const next = ctx.repo.transaction(() => {
-    ctx.outbox.cancelPending(person.id, ['auto']);
+    cancelPendingRefunding(ctx, person, ['auto']);
     return ctx.repo.updatePerson(person.id, life.hold(person));
   });
   ctx.bus.emit('people');
@@ -270,7 +286,7 @@ export function remove(ctx: Ctx, personId: number): Person {
     throw new UserError(`${person.firstName} has written back, so Callum keeps them.`);
   }
   const next = ctx.repo.transaction(() => {
-    ctx.outbox.cancelPending(person.id, ['auto']);
+    cancelPendingRefunding(ctx, person, ['auto']);
     return ctx.repo.updatePerson(person.id, { status: 'removed', nextTouchAt: null });
   });
   ctx.bus.emit('people');

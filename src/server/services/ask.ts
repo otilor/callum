@@ -5,7 +5,7 @@ import { switchChannel, personTz } from '../engine/lifecycle.js';
 import { ApolloError, type ApolloEnrichment, type ApolloQuery } from '../leads/apollo.js';
 import { importPeople } from '../leads/import.js';
 import { resumeChannel } from '../runner/incidents.js';
-import { CHANNEL_NAME, joinList, plural, requireProject, userTz, whenText } from './common.js';
+import { CHANNEL_NAME, cancelPendingRefunding, joinList, plural, requireProject, userTz, whenText } from './common.js';
 import { UserError } from './errors.js';
 
 const NEEDS_LIST = 'Callum needs a list for that. Bring a CSV or a LinkedIn search link.';
@@ -50,6 +50,10 @@ function whyText(ctx: Ctx): string {
       ? `${paused.name} is paused until ${whenText(new Date(paused.pausedUntil), tz, now)}. Nothing goes out on its own there until then.`
       : `${paused.name} is paused. Nothing goes out on its own there until you resume.`;
   }
+  for (const account of ctx.repo.listChannels()) {
+    if (account.status === 'paused') return `${Cap(account.channel)} is paused. Resume it from Ask or Your Callum.`;
+    if (account.status === 'error') return `${Cap(account.channel)} needs to be connected again from Your Callum.`;
+  }
   return 'Nothing is paused. Callum is running.';
 }
 
@@ -73,6 +77,8 @@ export async function ask(ctx: Ctx, projectId: number, text: string): Promise<As
       if (!ctx.apollo) return answer(NEEDS_LIST);
       const count = clampCount(intent.count);
       const like = intent.likePersonId === null ? null : byId.get(intent.likePersonId) ?? null;
+      const query = typeof intent.query === 'string' ? intent.query.trim() : '';
+      if (!like && query === '') return answer(UNKNOWN);
       if (like && !like.role?.trim()) {
         return answer(`Callum doesn't know what ${like.firstName} does, so it can't look for more like them. Tell it who to find instead.`, [like.id]);
       }
@@ -80,7 +86,7 @@ export async function ask(ctx: Ctx, projectId: number, text: string): Promise<As
       const action: AskAction = {
         kind: 'find_more',
         label: like ? `Find ${count} more like ${like.firstName}` : `Find ${count} people`,
-        args: { likePersonId: like?.id ?? null, query: like ? null : intent.query, count },
+        args: { likePersonId: like?.id ?? null, query: like ? null : query, count },
       };
       const what = like ? `${count} more like ${like.firstName}` : `${count} people`;
       return answer(`Callum can look for ${what}. ${credits}`, like ? [like.id] : [], action);
@@ -150,8 +156,13 @@ async function knownEmails(ctx: Ctx): Promise<Set<string>> {
 async function findMore(ctx: Ctx, projectId: number, args: { likePersonId: number | null; query: string | null; count: number }): Promise<AskAnswer> {
   const apollo = ctx.apollo;
   if (!apollo) throw new UserError(NEEDS_LIST);
+  const project = requireProject(ctx, projectId);
+  if (project.state === 'wrapped') throw new UserError(`${project.name} is wrapped up.`);
   const count = clampCount(args.count);
   const like = args.likePersonId === null || args.likePersonId === undefined ? null : ctx.repo.getPerson(args.likePersonId);
+  if (args.likePersonId !== null && args.likePersonId !== undefined && (!like || like.projectId !== projectId || like.status === 'removed')) {
+    throw new UserError("Callum can't find that person in this project.");
+  }
   let query: ApolloQuery;
   if (like) {
     const role = like.role?.trim();
@@ -159,7 +170,7 @@ async function findMore(ctx: Ctx, projectId: number, args: { likePersonId: numbe
     query = { query: null, titles: [role], count };
   } else {
     const words = typeof args.query === 'string' ? args.query.trim() : '';
-    if (words === '') throw new UserError('Say who to look for.');
+    if (words === '') throw new UserError(UNKNOWN);
     query = { query: words, titles: [], count };
   }
 
@@ -217,7 +228,7 @@ function switchPeople(ctx: Ctx, projectId: number, ch: Channel, ids: number[]): 
         stayed.push(p);
         continue;
       }
-      ctx.outbox.cancelPending(p.id, ['auto']);
+      cancelPendingRefunding(ctx, p, ['auto']);
       moved.push(ctx.repo.updatePerson(p.id, switchChannel(p, ch, now, personTz(p, settings.timezone))));
     }
   });

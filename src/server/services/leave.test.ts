@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { exportCsv, exportJson, forgetChannels, pauseUntil, resumeAll, startAgain, wrapSummaryLine, wrapUp } from './leave.js';
+import { exportCsv, exportJson, forgetChannels, pauseUntil, resumeAll, startAgain, wrapSummaryLine, wrapUp, wrapUpEverything } from './leave.js';
 import { start } from './onboarding.js';
-import { createProject } from './projects.js';
+import { createProject, wrapProject } from './projects.js';
 import { harness, type Harness } from './testing.test-helpers.js';
 
 const msg = (h: Harness, personId: number, over: Partial<Parameters<Harness['ctx']['repo']['insertMessage']>[0]> = {}) =>
@@ -181,5 +181,48 @@ describe('startAgain', () => {
     expect(h.ctx.repo.getChannel('email').status).toBe('connected');
     // and Start works again
     await expect(start(h.ctx, h.project.id)).resolves.toMatchObject({ firstSendAt: '2026-11-03T08:00:00.000Z' });
+  });
+});
+
+describe('a wrap-up sticks', () => {
+  it('wraps every project that was going, so starting another project cannot bring it back', async () => {
+    const h = harness();
+    h.strangers(2, { channel: 'email' });
+    await start(h.ctx, h.project.id);
+    const payroll = await createProject(h.ctx, { offer: 'You help teams with payroll', name: 'Payroll' });
+    h.person({ projectId: payroll.id });
+    wrapUp(h.ctx, { deleteData: false });
+    expect(h.ctx.repo.listProjects().map((p) => p.state)).toEqual(['wrapped', 'wrapped']);
+    await expect(start(h.ctx, payroll.id)).rejects.toThrow('Callum is wrapped up. Start again first.');
+    expect(h.ctx.repo.getSettings().pauseState).toBe('wrapped');
+    expect(h.ctx.repo.listOutbox({ state: ['awaiting_ok', 'scheduled'] })).toEqual([]);
+  });
+
+  it('Start again brings back the projects the wrap-up wrapped, and not one the user wrapped on its own', async () => {
+    const h = harness();
+    h.person();
+    const payroll = await createProject(h.ctx, { offer: 'You help teams with payroll', name: 'Payroll' });
+    const old = await createProject(h.ctx, { offer: 'You help teams with invoices', name: 'Invoices' });
+    wrapProject(h.ctx, old.id);
+    wrapUp(h.ctx, { deleteData: false });
+    expect(h.ctx.repo.getSettings().wrappedByWrapUp).toEqual([h.project.id, payroll.id]);
+    startAgain(h.ctx);
+    expect(h.ctx.repo.listProjects().map((p) => [p.name, p.state])).toEqual([['Reconciliation', 'running'], ['Payroll', 'running'], ['Invoices', 'wrapped']]);
+    expect(h.ctx.repo.getSettings().wrappedByWrapUp).toEqual([]);
+    await expect(start(h.ctx, payroll.id)).rejects.toThrow('Add some people first');
+    await expect(start(h.ctx, h.project.id)).resolves.toBeDefined();
+  });
+
+  it('wrapUpEverything signs channels out first when the data is to be deleted', async () => {
+    const h = harness();
+    h.ctx.repo.setChannelSecret('email', { password: 'hunter2' });
+    const kept = await wrapUpEverything(h.ctx, { deleteData: false });
+    expect(kept.summary).toBe('Nobody else hears from you. 0 follow-ups and 0 first hellos are cancelled.');
+    expect(h.ctx.repo.getChannel('email').status).toBe('connected');
+    startAgain(h.ctx);
+    await wrapUpEverything(h.ctx, { deleteData: true });
+    expect(h.ctx.repo.getChannelSecret('email')).toBeNull();
+    expect(h.ctx.repo.listPeople()).toEqual([]);
+    expect(h.ctx.repo.getSettings().pauseState).toBe('wrapped');
   });
 });

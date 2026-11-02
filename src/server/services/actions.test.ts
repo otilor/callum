@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Person } from '../../shared/types.js';
 import {
   approve, book, close, correct, draft, editBlocked, hold, nudge, personDetail, remove, reply, resume, retry, skip, snooze, undo,
@@ -60,7 +60,7 @@ describe('approve, skip and undo', () => {
     expect(() => approve(h.ctx, item!.id, '   ')).toThrow('Write something first.');
     expect(() => approve(h.ctx, 9999)).toThrow("Callum can't find that message.");
     approve(h.ctx, item!.id);
-    expect(() => approve(h.ctx, item!.id)).toThrow('This message is not waiting for an OK');
+    expect(() => approve(h.ctx, item!.id)).toThrow(/^This message is not waiting for an OK\.$/);
   });
 
   it('refuses an invite note over 280 characters', async () => {
@@ -360,3 +360,78 @@ describe('personDetail', () => {
     expect(() => personDetail(h.ctx, 9999)).toThrow("Callum can't find that person.");
   });
 });
+
+describe('never contact', () => {
+  it('works for anyone who is not already stopped or removed, and drops what was queued', () => {
+    const h = harness();
+    const active = h.person({ channel: 'email', stage: 'hello', touches: 1 });
+    const queued = h.ctx.outbox.queueAuto(active.id, 'follow_up', 'Hi again', 'Re', h.clock.now(), false);
+    expect(correct(h.ctx, active.id, 'never_contact')).toMatchObject({ status: 'stopped', nextTouchAt: null });
+    expect(h.ctx.repo.getOutbox(queued.id)?.state).toBe('cancelled');
+    for (const status of ['held', 'resting', 'snoozed', 'closed'] as const) {
+      const p = h.person({ channel: 'email', status });
+      expect(correct(h.ctx, p.id, 'never_contact').status).toBe('stopped');
+    }
+    const talking = h.person({ channel: 'email', stage: 'talking' });
+    expect(correct(h.ctx, talking.id, 'never_contact').status).toBe('stopped');
+  });
+
+  it('refuses someone already stopped or removed, and the other corrections still need the dock', () => {
+    const h = harness();
+    const stopped = h.person({ status: 'stopped' });
+    const removed = h.person({ status: 'removed' });
+    expect(() => correct(h.ctx, stopped.id, 'never_contact')).toThrow('Person1 asked not to be contacted.');
+    expect(() => correct(h.ctx, removed.id, 'never_contact')).toThrow("Person2 isn't on your list.");
+    const active = h.person({ channel: 'email' });
+    expect(() => correct(h.ctx, active.id, 'wrong_person')).toThrow("Person3 isn't on the dock.");
+    expect(() => correct(h.ctx, active.id, 'auto_reply')).toThrow("Person3 isn't on the dock.");
+  });
+});
+
+describe('fix round 1 behaviour', () => {
+  it('undo on a hello that was never approved says there is nothing to undo', async () => {
+    const h = await started();
+    const [item] = awaiting(h);
+    expect(() => undo(h.ctx, item!.id)).toThrow(/^Nothing to undo\.$/);
+  });
+
+  it('skip succeeds and reports it when the replacement hello cannot be written', async () => {
+    const h = await started();
+    const problems: unknown[] = [];
+    h.ctx.onError = (e) => problems.push(e);
+    vi.spyOn(h.ctx.writer, 'write').mockRejectedValue(new Error('Claude is busy'));
+    const [first] = awaiting(h);
+    await expect(skip(h.ctx, first!.id)).resolves.toBeUndefined();
+    expect(h.ctx.repo.getPerson(first!.personId)?.status).toBe('stopped');
+    expect(h.ctx.repo.getOutbox(first!.id)?.state).toBe('cancelled');
+    expect(problems.map((e) => (e as Error).message)).toEqual(['Claude is busy']);
+  });
+
+  it('holding or removing someone whose approved hello has not left gives the OK back', async () => {
+    const h = await started();
+    const [a, b] = awaiting(h);
+    approve(h.ctx, a!.id);
+    approve(h.ctx, b!.id);
+    expect(h.ctx.repo.getProject(h.project.id)?.approvalsLeft).toBe(8);
+    hold(h.ctx, a!.personId);
+    expect(h.ctx.repo.getProject(h.project.id)?.approvalsLeft).toBe(9);
+    remove(h.ctx, b!.personId);
+    expect(h.ctx.repo.getProject(h.project.id)?.approvalsLeft).toBe(10);
+    expect(h.scopes).toContain('projects');
+  });
+
+  it('retry and editBlocked refuse while a newer reply to the same person waits', () => {
+    const h = harness();
+    const kemi = waiting(h);
+    const failed = h.ctx.repo.insertOutbox({ personId: kemi.id, channel: 'email', kind: 'reply', body: 'Thanks Kemi', state: 'failed', origin: 'user', sendAfter: '2026-11-02T09:00:00.000Z', error: 'Mailbox full' });
+    const blockedUser = h.ctx.repo.insertOutbox({ personId: kemi.id, channel: 'email', kind: 'reply', body: 'It is [YOUR PRICE]', state: 'blocked', origin: 'user', sendAfter: '2026-11-02T09:00:00.000Z' });
+    const newer = reply(h.ctx, kemi.id, 'A newer reply');
+    const message = 'You already have a newer reply to Kemi waiting. Send or undo that one first.';
+    expect(() => retry(h.ctx, failed.id)).toThrow(message);
+    expect(() => editBlocked(h.ctx, blockedUser.id, 'Fixed')).toThrow(message);
+    expect(h.ctx.repo.getOutbox(failed.id)?.state).toBe('failed');
+    undo(h.ctx, newer.id);
+    expect(retry(h.ctx, failed.id).state).toBe('scheduled');
+  });
+});
+

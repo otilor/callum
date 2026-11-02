@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { importPeople } from '../leads/import.js';
+import { planProjectNow } from '../runner/runner.js';
 import { createProject } from './projects.js';
 import { planPreview, sample, start, suggestOffer } from './onboarding.js';
 import { harness } from './testing.test-helpers.js';
@@ -157,14 +159,57 @@ describe('start', () => {
     expect(planPreview(h.ctx, h.project.id).line).toBe('Tomorrow from 9:00 their time: 12 hellos, 12 by email. Nothing goes out today.');
   });
 
-  it('removes people it cannot reach on any connected channel', async () => {
+  it('never removes people it cannot reach yet: they wait, and are planned once their channel is connected', async () => {
     const h = harness();
     const reachable = h.person();
-    const stuck = h.person({ email: null, linkedinUrl: 'https://www.linkedin.com/in/stuck' });
+    const stuck = h.person({ name: 'Tunde Ade', email: null, linkedinUrl: 'https://www.linkedin.com/in/stuck' });
+    expect(planPreview(h.ctx, h.project.id).waiting).toEqual({ count: 1, line: '1 person waits for LinkedIn. Connect it to reach them.' });
     await start(h.ctx, h.project.id);
-    expect(h.ctx.repo.getPerson(stuck.id)?.status).toBe('removed');
+    expect(h.ctx.repo.getPerson(stuck.id)).toMatchObject({ status: 'active', channel: null });
     expect(h.ctx.repo.getPerson(reachable.id)?.status).toBe('active');
     expect(h.ctx.repo.listOutbox().map((i) => i.personId)).toEqual([reachable.id]);
+
+    // Re-importing the same person adds nobody, and the person is still there and still active.
+    const again = importPeople(h.ctx.repo, h.project.id, [{ name: 'Tunde Ade', source: 'csv', linkedinUrl: 'https://www.linkedin.com/in/stuck' }]);
+    expect(again.added).toEqual([]);
+    expect(h.ctx.repo.listPeople()).toHaveLength(2);
+
+    // LinkedIn gets connected. The next planning gives the person a channel, and their invite is queued at its slot.
+    h.ctx.repo.updateChannel('linkedin', { status: 'connected', connectedAt: '2026-11-02T08:00:00.000Z' });
+    await planProjectNow(h.ctx, h.project.id);
+    expect(h.ctx.repo.getPerson(stuck.id)).toMatchObject({ status: 'active', channel: 'linkedin' });
+    h.clock.set('2026-11-03T08:30:00.000Z');
+    await planProjectNow(h.ctx, h.project.id);
+    expect(h.ctx.repo.listOutbox({ personId: stuck.id })).toMatchObject([{ kind: 'invite', channel: 'linkedin', state: 'awaiting_ok' }]);
+  });
+
+  it('says which channels the waiting people need', () => {
+    const h = harness();
+    h.person({ email: null, linkedinUrl: 'https://www.linkedin.com/in/a' });
+    h.person({ email: null, xHandle: 'someone' });
+    h.person();
+    expect(planPreview(h.ctx, h.project.id).waiting).toEqual({ count: 2, line: '2 people wait for LinkedIn or X. Connect one to reach them.' });
+    h.ctx.repo.updateChannel('linkedin', { status: 'connected' });
+    expect(planPreview(h.ctx, h.project.id).waiting).toEqual({ count: 1, line: '1 person waits for X. Connect it to reach them.' });
+    h.ctx.repo.updateChannel('x', { status: 'connected' });
+    expect(planPreview(h.ctx, h.project.id).waiting).toEqual({ count: 0, line: null });
+  });
+
+  it('does not offer the limits another project has already taken that day', async () => {
+    const h = harness();
+    const other = await createProject(h.ctx, { offer: 'You help teams with payroll', name: 'Payroll' });
+    const firstDay = new Date('2026-11-03T08:00:00.000Z');
+    for (let i = 0; i < 15; i++) {
+      const p = h.person({ projectId: other.id, channel: 'email' });
+      h.ctx.outbox.queueAuto(p.id, 'hello', 'Hi', 'Hello', firstDay, i % 2 === 0);
+    }
+    // Yesterday's leftovers and a user reply do not count.
+    const old = h.person({ projectId: other.id, channel: 'email' });
+    h.ctx.outbox.queueAuto(old.id, 'hello', 'Hi', 'Hello', new Date('2026-11-02T12:00:00.000Z'), false);
+    h.strangers(12);
+    const preview = planPreview(h.ctx, h.project.id);
+    expect(preview.byChannel.email).toBe(5);
+    expect(preview.line).toBe('Tomorrow from 9:00 their time: 5 hellos, 5 by email. Nothing goes out today.');
   });
 
   it('writes an invite for a LinkedIn person and uses each person\'s own time zone', async () => {
@@ -197,6 +242,7 @@ describe('start', () => {
     await start(h.ctx, h.project.id);
     expect(h.ctx.repo.getSettings().pauseState).toBe('paused');
     await expect(start(h.ctx, h.project.id)).rejects.toThrow('Reconciliation has already started.');
+    h.ctx.repo.updateProject(h.project.id, { startedAt: null });
     h.ctx.repo.updateProject(h.project.id, { state: 'wrapped', startedAt: null });
     await expect(start(h.ctx, h.project.id)).rejects.toThrow('Reconciliation is wrapped up.');
   });
@@ -207,5 +253,25 @@ describe('start', () => {
     await start(h.ctx, h.project.id);
     const [item] = h.ctx.repo.listOutbox();
     expect(item?.state).toBe('awaiting_ok');
+  });
+
+  it('does not start anything after Callum was wrapped up', async () => {
+    const h = harness();
+    h.person();
+    h.ctx.repo.updateSettings({ pauseState: 'wrapped' });
+    await expect(start(h.ctx, h.project.id)).rejects.toThrow('Callum is wrapped up. Start again first.');
+    expect(h.ctx.repo.getProject(h.project.id)?.startedAt).toBeNull();
+    expect(h.ctx.repo.getSettings().pauseState).toBe('wrapped');
+  });
+
+  it('is saved and succeeds even when writing the first hellos fails, and says what went wrong', async () => {
+    const h = harness();
+    h.strangers(3);
+    const problems: unknown[] = [];
+    h.ctx.onError = (e) => problems.push(e);
+    vi.spyOn(h.ctx.writer, 'write').mockRejectedValue(new Error('Claude is busy'));
+    await expect(start(h.ctx, h.project.id)).resolves.toEqual({ firstSendAt: '2026-11-03T08:00:00.000Z' });
+    expect(h.ctx.repo.getProject(h.project.id)?.startedAt).toBe('2026-11-02T10:00:00.000Z');
+    expect(problems.map((e) => (e as Error).message)).toEqual(['Claude is busy']);
   });
 });

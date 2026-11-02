@@ -2,7 +2,7 @@ import type { Person, Project, Tone } from '../../shared/types.js';
 import type { Ctx } from '../context.js';
 import { DuplicateProjectName } from '../db/repo.js';
 import { canMoveProject, moveProject } from '../engine/lifecycle.js';
-import { parseWhen, plural, requirePerson, requireProject } from './common.js';
+import { cancelPendingRefunding, parseWhen, plural, requirePerson, requireProject } from './common.js';
 import { UserError } from './errors.js';
 
 const TONES: readonly Tone[] = ['warm', 'direct', 'playful'];
@@ -33,7 +33,7 @@ function cleanCalendar(raw: string | null): string | null {
   } catch {
     ok = false;
   }
-  if (!ok) throw new UserError('That calendar link needs to start with https://');
+  if (!ok) throw new UserError('That calendar link needs to start with http:// or https://');
   return url;
 }
 
@@ -202,8 +202,13 @@ export function moveToProject(ctx: Ctx, personId: number, projectId: number): Pe
         throw new UserError(`${person.firstName}'s conversation is closed.`);
     }
   }
+  // A hello the user just approved is still inside its undo window: let it settle (or be undone) first.
+  const now = ctx.clock.now().getTime();
+  if (ctx.outbox.pendingFor(person.id).some((i) => i.state === 'scheduled' && i.undoUntil !== null && new Date(i.undoUntil).getTime() > now)) {
+    throw new UserError(`${person.firstName}'s hello is about to go out. Try again in a few seconds.`);
+  }
   const moved = ctx.repo.transaction(() => {
-    ctx.outbox.cancelPending(person.id, ['auto']);
+    cancelPendingRefunding(ctx, person, ['auto']);
     return ctx.repo.updatePerson(person.id, moveProject(person, projectId));
   });
   ctx.bus.emit('people');
