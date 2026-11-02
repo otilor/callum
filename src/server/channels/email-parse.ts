@@ -17,11 +17,17 @@ export const PROVIDER_PRESETS: Record<'google', ProviderPreset> = {
 export const MICROSOFT_HOSTS: ProviderPreset = { smtpHost: 'smtp.office365.com', smtpPort: 587, smtpSecure: false, imapHost: 'outlook.office365.com', imapPort: 993 };
 
 const ORIGINAL_MESSAGE = /^\s*-{2,}\s*Original Message\s*-{2,}\s*$/i;
-// "On ... wrote:" and its French, German, Spanish and Portuguese forms.
-const WROTE = '(?:wrote|a écrit|à écrit|schrieb|escribió|escreveu)';
-const QUOTE_HEADER = new RegExp(`^(?:On|Le|Am|El|Em)\\s.*${WROTE}[^\\n]*:\\s*$`);
+// Quote headers: "On <date> <name> wrote:" and its French, Spanish and Portuguese forms, where the verb is the
+// last thing before the colon, and German "Am <date> schrieb <name>:", where the name follows the verb.
+// A sentence such as "On Friday I wrote up three options:" has more words after the verb, so it never matches.
+const VERB_LAST = '(?:wrote|a écrit|à écrit|escribió|escreveu)\\s?:';
+const HEADER_OPENER = '(?:On|Le|Am|El|Em)\\s';
+const QUOTE_HEADER = new RegExp(`^${HEADER_OPENER}[^\\n]{0,250}?(?<!\\b(?:I|we|We))\\s${VERB_LAST}\\s*$`);
+// German: a date or address, then "schrieb", then the sender (an address, or a short capitalised name).
+const QUOTE_HEADER_DE = /^Am\s(?=[^\n]*(?:\d|@))[^\n]{0,200}?\sschrieb\s+(?:[^\n]{0,120}<[^\n<>]+>|[A-ZÄÖÜ][^\s:]*(?:\s+[A-ZÄÖÜ][^\s:]*){0,3})\s*:\s*$/;
 const QUOTE_HEADER_START = /^(?:On|Le|Am|El|Em)\s.*(\d|@)/;
-const QUOTE_HEADER_END = new RegExp(`^(?:\\S.*\\s)?${WROTE}[^\\n]*:$`);
+// The second line of a wrapped header: the verb alone, or an address and then the verb, or German "schrieb <name>:".
+const QUOTE_HEADER_END = new RegExp(`^(?:${VERB_LAST}|(?:[^\\n]*[<@][^\\n]*\\s)?${VERB_LAST})$|^schrieb\\s+[^\\n]{1,120}:$`);
 const OUTLOOK_FROM = /^From:\s/i;
 const OUTLOOK_SENT = /^(Sent|Date):\s/i;
 const SEPARATOR = /^\s*_{3,}\s*$/;
@@ -40,6 +46,7 @@ export function stripQuoted(text: string): string {
     const startsQuote =
       ORIGINAL_MESSAGE.test(line) ||
       QUOTE_HEADER.test(line.trim()) ||
+      QUOTE_HEADER_DE.test(line.trim()) ||
       (QUOTE_HEADER_START.test(line.trim()) && QUOTE_HEADER_END.test(next)) ||
       (OUTLOOK_FROM.test(line) && [1, 2, 3].some((n) => OUTLOOK_SENT.test(lines[i + n] ?? '')));
     if (startsQuote) break;

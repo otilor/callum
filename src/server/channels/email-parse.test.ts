@@ -76,6 +76,41 @@ describe('stripQuoted', () => {
     expect(stripQuoted(text)).toBe(text);
   });
 
+  it.each([
+    'On Friday I wrote up three options:',
+    'On Friday I wrote up three options for the Lagos launch:\n1. Start small\n2. Start wide',
+    'On Thursday at 9:00 we wrote the plan down, and it was:',
+    'Am Freitag schrieb ich drei Optionen auf:',
+    'El viernes escribió un resumen largo:',
+    'Le vendredi il a écrit trois options :',
+    'On Monday I wrote:',
+  ])('keeps the whole body when a sentence only looks like a quote header: %s', (body) => {
+    const text = `Hello Gabriel,\n\n${body}\n- one\n- two\n\nThanks`;
+    expect(stripQuoted(text)).toBe(text);
+  });
+
+  it.each([
+    ['Gmail', 'On Mon, Nov 2, 2026 at 9:03 AM Gabriel <you@yourcompany.com> wrote:'],
+    ['Apple Mail', 'On Nov 2, 2026, at 9:03 AM, Gabriel Femi <you@yourcompany.com> wrote:'],
+    ['Outlook on the web', 'On Mon, Nov 2, 2026 at 9:03 AM Gabriel Femi (via Outlook) wrote:'],
+    ['Yahoo', 'On Monday, November 2, 2026, 9:03 AM, Gabriel <you@yourcompany.com> wrote:'],
+    ['French with a space before the colon', 'Le lun. 2 nov. 2026 à 09:03, Gabriel <you@yourcompany.com> a écrit :'],
+    ['French without a space', 'Le 2 nov. 2026 à 09:03, Gabriel <you@yourcompany.com> a écrit:'],
+    ['Spanish', 'El lun, 2 nov 2026 a las 9:03, Gabriel <you@yourcompany.com> escribió:'],
+    ['Portuguese', 'Em seg., 2 de nov. de 2026 às 09:03, Gabriel <you@yourcompany.com> escreveu:'],
+    ['German Gmail', 'Am Mo., 2. Nov. 2026 um 09:03 Uhr schrieb Gabriel <you@yourcompany.com>:'],
+    ['German Apple Mail', 'Am 02.11.2026 um 09:03 schrieb Gabriel Femi <you@yourcompany.com>:'],
+    ['German with a name only', 'Am 02.11.2026 um 09:03 schrieb Gabriel Femi:'],
+  ])('cuts at a real %s quote header after a reply that has its own colon line', (_client, header) => {
+    const reply = 'Three options, in order:\nStart Thursday at 9:00.';
+    expect(stripQuoted([reply, '', header, '> Hi Kemi', '> Are you free?'].join('\n'))).toBe(reply);
+  });
+
+  it('cuts a header whose verb wraps onto the next line after an address', () => {
+    const text = ['Passt.', '', 'On Mon, Nov 2, 2026 at 9:03 AM Gabriel Femi Adeyemi', '<you@yourcompany.com> wrote:', '> Hi'].join('\n');
+    expect(stripQuoted(text)).toBe('Passt.');
+  });
+
   it('returns an empty string when everything is quoted', () => {
     expect(stripQuoted('> only a quote')).toBe('');
   });
