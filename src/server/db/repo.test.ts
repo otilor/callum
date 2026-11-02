@@ -81,6 +81,18 @@ describe('people', () => {
     expect(u.updatedAt).not.toBe(p.updatedAt);
   });
 
+  it('keeps stored handles when a patch value is undefined', () => {
+    const p = repo.insertPerson({
+      name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', linkedinUrl: 'https://linkedin.com/in/kemi-eze', xHandle: '@kemieze',
+    });
+    const u = repo.updatePerson(p.id, { email: undefined, linkedinUrl: undefined, xHandle: undefined, stage: 'hello' });
+    expect(u.stage).toBe('hello');
+    expect(u.email).toBe('kemi@okopay.com');
+    expect(u.linkedinUrl).toBe('https://www.linkedin.com/in/kemi-eze');
+    expect(u.xHandle).toBe('kemieze');
+    expect(repo.updatePerson(p.id, { email: null }).email).toBeNull();
+  });
+
   it('matches handles regardless of formatting (Review Focus 3)', () => {
     const kemi = repo.insertPerson({
       name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', linkedinUrl: 'https://linkedin.com/in/Kemi-Eze', xHandle: '@kemieze',

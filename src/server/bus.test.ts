@@ -21,4 +21,13 @@ describe('Bus', () => {
     bus.emit('settings');
     expect(seen).toEqual(['people']);
   });
+
+  it('keeps delivering when a listener throws, without throwing to the emitter', () => {
+    const bus = new Bus();
+    const seen: Scope[] = [];
+    bus.on(() => { throw new Error('boom'); });
+    bus.on((s) => seen.push(s));
+    expect(() => bus.emit('people')).not.toThrow();
+    expect(seen).toEqual(['people']);
+  });
 });

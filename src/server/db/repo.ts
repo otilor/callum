@@ -48,9 +48,9 @@ function defaultChannel(channel: Channel): ChannelAccount {
 
 function normalizeHandles<T extends { email?: string | null; linkedinUrl?: string | null; xHandle?: string | null }>(p: T): T {
   const out = { ...p };
-  if ('email' in out) out.email = normalizeEmail(out.email);
-  if ('linkedinUrl' in out) out.linkedinUrl = normalizeLinkedinUrl(out.linkedinUrl);
-  if ('xHandle' in out) out.xHandle = normalizeXHandle(out.xHandle);
+  if (out.email !== undefined) out.email = normalizeEmail(out.email);
+  if (out.linkedinUrl !== undefined) out.linkedinUrl = normalizeLinkedinUrl(out.linkedinUrl);
+  if (out.xHandle !== undefined) out.xHandle = normalizeXHandle(out.xHandle);
   return out;
 }
 

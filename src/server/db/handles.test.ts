@@ -24,6 +24,14 @@ describe('normalizeLinkedinUrl', () => {
     expect(normalizeLinkedinUrl('')).toBeNull();
     expect(normalizeLinkedinUrl(null)).toBeNull();
   });
+  it('requires linkedin.com when the input has a host', () => {
+    expect(normalizeLinkedinUrl('https://okopay.com/in/careers')).toBeNull();
+    expect(normalizeLinkedinUrl('okopay.com/in/careers')).toBeNull();
+    expect(normalizeLinkedinUrl('https://notlinkedin.com/in/kemi')).toBeNull();
+    expect(normalizeLinkedinUrl('https://linkedin.com.evil.io/in/kemi')).toBeNull();
+    expect(normalizeLinkedinUrl('https://uk.linkedin.com/in/Kemi')).toBe('https://www.linkedin.com/in/kemi');
+    expect(normalizeLinkedinUrl('/in/Kemi')).toBe('https://www.linkedin.com/in/kemi');
+  });
 });
 
 describe('normalizeXHandle', () => {
@@ -31,6 +39,10 @@ describe('normalizeXHandle', () => {
     expect(normalizeXHandle('@KemiEze')).toBe('kemieze');
     expect(normalizeXHandle('https://x.com/kemieze')).toBe('kemieze');
     expect(normalizeXHandle('twitter.com/KemiEze/')).toBe('kemieze');
+  });
+  it('keeps only the first path segment', () => {
+    expect(normalizeXHandle('https://x.com/kemieze/status/1')).toBe('kemieze');
+    expect(normalizeXHandle('https://x.com/KemiEze?s=20')).toBe('kemieze');
   });
   it('returns null for empty input', () => {
     expect(normalizeXHandle(' ')).toBeNull();
