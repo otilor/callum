@@ -1,27 +1,19 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { TemplateWriter } from '../ai/templates.js';
+import { createCtx, type Ctx } from '../context.js';
+import { openDb } from '../db/db.js';
+import { fixedClock } from '../engine/clock.js';
 import type { Writer } from '../ai/writer.js';
-import type { Ctx } from '../context.js';
 import { ConnectError } from '../channels/types.js';
-import { Runner } from './runner.js';
-import { harness, NOW, type Harness } from './testing.test-helpers.js';
+import { Runner, planDue, planProjectNow } from './runner.js';
+import { ctxWith, fakeAdapter, harness, NOW, type FakeAdapter, type Harness } from './testing.test-helpers.js';
 
 const MIN = 60_000;
 const DAY = 86_400_000;
 const FOLLOW_UP = { touches: 1, stage: 'hello' as const, lastTouchAt: '2026-10-29T09:00:00.000Z', nextTouchAt: '2026-11-03T08:00:00.000Z' };
-
-/** The harness's ctx with some of the writer's answers replaced. */
-function ctxWith(h: Harness, over: Partial<Writer>): Ctx {
-  const real = h.ctx.writer;
-  const writer: Writer = {
-    write: (k, c) => real.write(k, c),
-    classify: (t, c) => real.classify(t, c),
-    offerLine: (a, b) => real.offerLine(a, b),
-    parseAsk: (a, b) => real.parseAsk(a, b),
-    projectName: (a) => real.projectName(a),
-    ...over,
-  };
-  return { ...h.ctx, writer };
-}
 
 function runnerFor(h: Harness, opts: ConstructorParameters<typeof Runner>[1] = {}): { runner: Runner; errors: unknown[] } {
   const errors: unknown[] = [];
@@ -144,18 +136,28 @@ describe('Runner.tick: sending', () => {
     expect(h.ctx.repo.getPerson(b.id)?.touches).toBe(1);
   });
 
-  it('shares the email cap across projects', async () => {
+  it('shares the email cap across projects, earliest due first', async () => {
     const h = harness();
     const second = h.ctx.repo.insertProject({ name: 'Payroll', offer: 'Payroll for small teams' });
     h.ctx.repo.updateProject(second.id, { startedAt: '2026-11-02T10:00:00.000Z', approvalsLeft: 0 });
+    const project = new Map<string, number>();
     for (let i = 0; i < 15; i++) {
-      h.person({ ...FOLLOW_UP, nextTouchAt: new Date(Date.parse(NOW) - (60 - i * 2) * MIN).toISOString() });
-      h.person({ projectId: second.id, ...FOLLOW_UP, nextTouchAt: new Date(Date.parse(NOW) - (59 - i * 2) * MIN).toISOString() });
+      const a = h.person({ ...FOLLOW_UP, nextTouchAt: new Date(Date.parse(NOW) - (60 - i * 2) * MIN).toISOString() });
+      const b = h.person({ projectId: second.id, ...FOLLOW_UP, nextTouchAt: new Date(Date.parse(NOW) - (59 - i * 2) * MIN).toISOString() });
+      project.set(a.email ?? '', h.project.id);
+      project.set(b.email ?? '', second.id);
     }
+    // 30 people, interleaved by when they became due: the first 20 are ten from each project, in that order.
+    const dueOrder = h.ctx.repo.listPeople().sort((x, y) => (x.nextTouchAt ?? '').localeCompare(y.nextTouchAt ?? '')).slice(0, 20).map((p) => p.email);
     const { runner } = runnerFor(h);
     await runner.tick();
-    expect(h.adapters.email.sent).toHaveLength(20);
-    expect(h.ctx.repo.listOutbox({ state: ['scheduled'] })).toMatchObject(Array.from({ length: 10 }, () => ({ sendAfter: '2026-11-04T08:00:00.000Z' })));
+    const sent = h.adapters.email.sent.map((m) => m.to.email ?? '');
+    expect(sent).toHaveLength(20);
+    expect(sent).toEqual(dueOrder);
+    expect(sent.filter((e) => project.get(e) === h.project.id)).toHaveLength(10);
+    expect(sent.filter((e) => project.get(e) === second.id)).toHaveLength(10);
+    // The other ten were not even written: the mailbox has no room for them today.
+    expect(h.ctx.repo.listOutbox({ state: ['scheduled', 'awaiting_ok'] })).toEqual([]);
   });
 });
 
@@ -500,7 +502,7 @@ describe('Runner.tick: polling', () => {
     h.adapters.x.pollError = new ConnectError('X signed Callum out. Connect X again from Your Callum.', 'auth');
     await runnerFor(h).runner.tick();
     expect(h.ctx.repo.getChannel('x').status).toBe('error');
-    expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([{ channel: 'x', message: 'X signed Callum out. Connect X again from Your Callum.' }]);
+    expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([{ channel: 'x', kind: 'x_signed_out', message: 'X signed Callum out. No messages are waiting and nothing was lost.' }]);
   });
 
   it('reports another poll failure, keeps the old since, and tries again after the interval', async () => {
@@ -530,31 +532,217 @@ describe('Runner.tick: polling', () => {
     expect(h.adapters.email.polls).toHaveLength(1);
   });
 
-  it('leaves the poll for next time when an event could not be handled, and handles it then', async () => {
+  it('keeps an event it could not handle, handles the others, holds the person, and tries it again later', async () => {
     const h = harness();
-    const p = h.person({ email: 'kemi@okopay.com', stage: 'talking' });
+    const p = h.person({ email: 'kemi@okopay.com', ...FOLLOW_UP });
+    const other = h.person({ email: 'ola@okopay.com', stage: 'talking' });
+    h.ctx.outbox.queueAuto(p.id, 'follow_up', 'Following up', 'S', new Date(NOW), false);
     let fail = true;
     const real = h.ctx.writer;
     const ctx = ctxWith(h, {
       classify: async (t, c) => {
-        if (fail) throw new Error('model down');
+        if (fail && c.person.id === p.id) throw new Error('model down');
         return real.classify(t, c);
       },
     });
-    const event = { type: 'reply' as const, from: { email: 'kemi@okopay.com' }, text: 'Tell me more about pricing', at: NOW, externalId: '<a@x>' };
-    h.adapters.email.inbox.push([event], [event]);
+    const stop = { type: 'reply' as const, from: { email: 'kemi@okopay.com' }, text: 'Please stop emailing me', at: NOW, externalId: '<stop@x>' };
+    const hello = { type: 'reply' as const, from: { email: 'ola@okopay.com' }, text: 'Tell me more about pricing', at: NOW, externalId: '<ola@x>' };
+    h.adapters.email.inbox.push([stop, hello]);
     const errors: unknown[] = [];
     const runner = new Runner(ctx, { onError: (e) => errors.push(e) });
     await runner.tick();
-    expect(errors).toHaveLength(1);
-    expect(h.ctx.repo.getChannel('email').lastPolledAt).toBeNull();
-    expect(h.ctx.repo.listMessages(p.id)).toEqual([]);
+
+    expect(errors.map((e) => (e as Error).message)).toEqual(['model down']);
+    expect(h.ctx.repo.getPerson(other.id)?.status).toBe('waiting'); // the rest of the batch went through
+    expect(h.ctx.repo.getChannel('email').lastPolledAt).toBe(NOW); // and the poll is done: the event is kept, not re-fetched
+    expect(h.ctx.repo.listInboundFailures()).toMatchObject([{ channel: 'email', externalId: '<stop@x>', attempts: 1, personId: p.id }]);
+    // Until the stop has been read, nothing automatic goes to that person.
+    expect(h.adapters.email.sent).toEqual([]);
+
     fail = false;
+    h.clock.advance(61_000);
+    await runner.tick();
+    expect(h.ctx.repo.listInboundFailures()).toEqual([]);
+    expect(h.ctx.repo.getPerson(p.id)?.status).toBe('stopped');
+    expect(h.ctx.repo.listMessages(p.id)).toHaveLength(1);
+    expect(h.adapters.email.sent).toEqual([]);
+  });
+
+  it('handles a poll that finishes after the tick gave up on it, exactly once', async () => {
+    const h = harness();
+    const p = h.person({ email: 'kemi@okopay.com', stage: 'talking' });
+    const stop = { type: 'reply' as const, from: { email: 'kemi@okopay.com' }, text: 'Please stop emailing me', at: NOW, externalId: '<stop@x>' };
+    h.adapters.email.inbox.push([stop], [stop]);
+    h.adapters.email.delayMs = 60;
+    const { runner, errors } = runnerFor(h, { pollTimeoutMs: 10 });
+    await runner.tick();
+    expect((errors[0] as Error).message).toMatch(/too long/);
+    expect(h.ctx.repo.getPerson(p.id)?.status).toBe('active'); // not yet
+    // While it is still out, the channel is not asked again.
     h.clock.advance(3 * MIN);
     await runner.tick();
+    expect(h.adapters.email.polls).toHaveLength(1);
+
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(h.ctx.repo.getPerson(p.id)?.status).toBe('stopped');
+    expect(h.ctx.repo.listMessages(p.id).filter((m) => m.direction === 'in')).toHaveLength(1);
+    expect(h.ctx.repo.getChannel('email').lastPolledAt).toBe(NOW);
+    h.clock.advance(3 * MIN);
+    await runner.tick();
+    expect(h.adapters.email.polls).toHaveLength(2);
+    expect(h.ctx.repo.listMessages(p.id).filter((m) => m.direction === 'in')).toHaveLength(1);
+    expect(h.adapters.email.sent).toEqual([]);
+  });
+
+  it('waits for a poll under way when asked to stop', async () => {
+    const h = harness();
+    const p = h.person({ email: 'kemi@okopay.com', stage: 'talking' });
+    h.adapters.email.inbox.push([{ type: 'reply', from: { email: 'kemi@okopay.com' }, text: 'Tell me more about pricing', at: NOW, externalId: '<a@x>' }]);
+    h.adapters.email.delayMs = 40;
+    const { runner } = runnerFor(h, { pollTimeoutMs: 5000 });
+    runner.start(100_000);
+    const slow = runner.tick();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await runner.stop();
+    await slow;
     expect(h.ctx.repo.listMessages(p.id)).toHaveLength(1);
-    expect(h.ctx.repo.getPerson(p.id)?.status).toBe('waiting');
-    expect(h.ctx.repo.getChannel('email').lastPolledAt).toBe(h.clock.now().toISOString());
+  });
+
+  it('does not wait for ever on a poll that never answers when stopping', async () => {
+    const h = harness();
+    h.adapters.x.poll = () => new Promise(() => undefined);
+    const { runner } = runnerFor(h, { pollTimeoutMs: 20 });
+    await runner.tick();
+    await expect(runner.stop()).resolves.toBeUndefined();
+  });
+});
+
+describe('Runner: planning limits', () => {
+  it('writes no more than the channel can send today, less what is already lined up', async () => {
+    const h = harness();
+    for (let i = 0; i < 5; i++) {
+      const lined = h.person({ ...FOLLOW_UP, nextTouchAt: '2026-11-10T08:00:00.000Z' });
+      h.ctx.outbox.queueAuto(lined.id, 'follow_up', 'Later today', 'S', new Date('2026-11-03T14:00:00Z'), false);
+    }
+    for (let i = 0; i < 30; i++) h.person({ ...FOLLOW_UP });
+    const queued = await planDue(h.ctx);
+    expect(queued).toBe(15); // 20 a day, 5 already lined up
+    expect(h.ctx.repo.listOutbox({ state: ['scheduled'] })).toHaveLength(20);
+  });
+
+  it('counts what already went out today, and picks the rest up the next day', async () => {
+    const h = harness();
+    const done = h.person({ stage: 'talking' });
+    for (let i = 0; i < 18; i++) {
+      h.ctx.repo.insertMessage({ personId: done.id, channel: 'email', direction: 'out', kind: 'follow_up', subject: null, body: 'x', at: '2026-11-03T07:00:00.000Z', externalId: null });
+    }
+    for (let i = 0; i < 5; i++) h.person({ ...FOLLOW_UP });
+    expect(await planDue(h.ctx)).toBe(2);
+    h.clock.set('2026-11-04T08:00:00Z');
+    expect(await planDue(h.ctx)).toBe(3);
+  });
+
+  it('stops writing when its time is up and leaves the rest for the next tick', async () => {
+    const h = harness();
+    let wall = 0;
+    const ctx = ctxWith(h, {
+      write: async (kind, c) => {
+        wall += 10_000;
+        return h.ctx.writer.write(kind, c);
+      },
+    });
+    for (let i = 0; i < 8; i++) h.person({ ...FOLLOW_UP });
+    expect(await planDue(ctx, { budgetMs: 25_000, wallNow: () => wall })).toBe(3);
+    wall = 0;
+    expect(await planDue(ctx, { budgetMs: 25_000, wallNow: () => wall })).toBe(3);
+    expect(h.ctx.repo.listOutbox({ state: ['scheduled'] })).toHaveLength(6);
+  });
+
+  it('sends the user reply before a slow writer is even asked', async () => {
+    const h = harness();
+    const talker = h.person({ status: 'waiting', stage: 'talking' });
+    h.ctx.outbox.queueUserSend(talker.id, 'reply', 'Thursday at 9:00 works.');
+    h.clock.advance(11_000);
+    h.person({ ...FOLLOW_UP });
+    let userSentWhenWriting: boolean | null = null;
+    const ctx = ctxWith(h, {
+      write: async (kind, c) => {
+        userSentWhenWriting = h.adapters.email.sent.some((m) => m.kind === 'reply');
+        return h.ctx.writer.write(kind, c);
+      },
+    });
+    await new Runner(ctx).tick();
+    expect(userSentWhenWriting).toBe(true);
+  });
+
+  it('fills Day one ahead of the slot for the start button, without the time budget or the daily room', async () => {
+    const h = harness({ approvalsLeft: 3 });
+    h.ctx.repo.updateProject(h.project.id, { startedAt: NOW });
+    for (let i = 0; i < 5; i++) h.person();
+    expect(await planDue(h.ctx)).toBe(0); // not due until the next weekday 9:00
+    let wall = 0;
+    const slow = ctxWith(h, { write: async (kind, c) => { wall += 60_000; return h.ctx.writer.write(kind, c); } });
+    await planProjectNow(slow, h.project.id, { early: true });
+    const waiting = h.ctx.repo.listOutbox({ state: ['awaiting_ok'] });
+    expect(waiting).toHaveLength(3);
+    expect(waiting.every((i) => i.sendAfter === '2026-11-04T08:00:00.000Z')).toBe(true);
+    expect(wall).toBe(180_000);
+    expect(h.adapters.email.sent).toEqual([]);
+  });
+
+  it('plans one project through the runner', async () => {
+    const h = harness({ approvalsLeft: 2 });
+    h.ctx.repo.updateProject(h.project.id, { startedAt: NOW });
+    h.ctx.repo.updateSettings({ pauseState: 'paused', pausedUntil: null });
+    h.person();
+    h.person();
+    h.person();
+    await new Runner(h.ctx).planProject(h.project.id, { early: true });
+    expect(h.ctx.repo.listOutbox({ state: ['awaiting_ok'] })).toHaveLength(2);
+  });
+
+  it('is still there for the start button to call', async () => {
+    const h = harness();
+    h.person({ ...FOLLOW_UP });
+    expect(await planDue(h.ctx)).toBe(1);
+  });
+});
+
+describe('Runner: a real restart', () => {
+  it('records a reply once when a fresh adapter brings it again after a restart', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'callum-restart-'));
+    try {
+      const file = join(dir, 'callum.db');
+      const clock = fixedClock(NOW);
+      const event = { type: 'reply' as const, from: { email: 'kemi@okopay.com' }, text: 'Tell me more about pricing', at: NOW, externalId: '<same@x>' };
+      const boot = (): { ctx: Ctx; adapter: FakeAdapter } => {
+        const adapter = fakeAdapter('email');
+        const ctx = createCtx({ db: openDb(file), clock, writer: new TemplateWriter(clock), factory: () => adapter, env: {}, dataDir: dir });
+        ctx.repo.updateChannel('email', { status: 'connected', identity: 'ada@example.com', connectedAt: '2026-11-02T08:00:00.000Z' });
+        return { ctx, adapter };
+      };
+      const first = boot();
+      first.ctx.repo.updateSettings({ timezone: 'Africa/Lagos', senderName: 'Ada Obi', senderEmail: 'ada@example.com' });
+      const project = first.ctx.repo.insertProject({ name: 'One', offer: 'You help fintech teams take reconciliation off their ops team' });
+      const person = first.ctx.repo.insertPerson({ projectId: project.id, name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', channel: 'email', stage: 'talking' });
+      first.adapter.inbox.push([event]);
+      const one = new Runner(first.ctx, { onError: () => undefined });
+      await one.tick();
+      await one.stop();
+      expect(first.ctx.repo.listMessages(person.id)).toHaveLength(1);
+
+      // Restart: a new process, a new adapter that has seen nothing, and the same mailbox still showing the message.
+      const second = boot();
+      second.adapter.inbox.push([event]);
+      second.ctx.repo.updateChannel('email', { lastPolledAt: null });
+      const two = new Runner(second.ctx, { onError: () => undefined });
+      await two.tick();
+      await two.stop();
+      expect(second.adapter.polls).toHaveLength(1);
+      expect(second.ctx.repo.listMessages(person.id)).toHaveLength(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -216,6 +216,32 @@ describe('incidents', () => {
   });
 });
 
+describe('inbound failures', () => {
+  it('keeps, updates and drops events that could not be handled', () => {
+    const f = repo.insertInboundFailure({ channel: 'email', externalId: '<a@x>', personId: null, event: '{"type":"reply"}', error: 'down' });
+    expect(f).toMatchObject({ channel: 'email', externalId: '<a@x>', attempts: 1, error: 'down' });
+    repo.updateInboundFailure(f.id, { attempts: 2, error: 'still down' });
+    expect(repo.listInboundFailures()).toMatchObject([{ id: f.id, attempts: 2, error: 'still down' }]);
+    repo.deleteInboundFailure(f.id);
+    expect(repo.listInboundFailures()).toEqual([]);
+  });
+  it('are cleared with everything else', () => {
+    repo.insertInboundFailure({ channel: 'x', externalId: null, personId: null, event: '{}', error: 'e' });
+    repo.deleteAll();
+    expect(repo.listInboundFailures()).toEqual([]);
+  });
+});
+
+describe('outbox claims', () => {
+  it('stores the claim time and the detail', () => {
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv', email: 'k@x.com', channel: 'email' });
+    const item = repo.insertOutbox({ personId: p.id, channel: 'email', kind: 'hello', body: 'x', state: 'scheduled', origin: 'auto', sendAfter: '2026-01-01T00:00:00.000Z' });
+    expect(item).toMatchObject({ claimedAt: null, detail: null });
+    expect(repo.updateOutbox(item.id, { state: 'sending', claimedAt: '2026-01-01T00:00:01.000Z', detail: '{"maybeSent":true}' }))
+      .toMatchObject({ state: 'sending', claimedAt: '2026-01-01T00:00:01.000Z', detail: '{"maybeSent":true}' });
+  });
+});
+
 describe('deleteAll', () => {
   it('empties people and resets settings and channels', () => {
     const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });

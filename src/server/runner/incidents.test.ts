@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INCIDENT_COPY, channelRateLimited, openIncident, resumeChannel } from './incidents.js';
+import { INCIDENT_COPY, channelRateLimited, channelSignedOut, formatSlot, openIncident, refreshSignedOutCount, resumeChannel } from './incidents.js';
 import { harness } from './testing.test-helpers.js';
 
 describe('INCIDENT_COPY', () => {
@@ -95,5 +95,30 @@ describe('channelRateLimited', () => {
     const words = "X stopped accepting Callum's messages because your X developer account is out of credits. Add credits in the X developer portal.";
     channelRateLimited(h.ctx, 'x', words);
     expect(h.ctx.repo.listIncidents()[0]?.message).toBe(words);
+  });
+});
+
+describe('signed out', () => {
+  it('has copy of its own for X and LinkedIn', () => {
+    expect(INCIDENT_COPY.x_signed_out(3)).toBe('X signed Callum out. 3 messages are waiting and nothing was lost.');
+    expect(INCIDENT_COPY.linkedin_signed_out(1)).toBe('LinkedIn signed Callum out. 1 message is waiting and nothing was lost.');
+    expect(INCIDENT_COPY.linkedin_signed_out(0)).toBe('LinkedIn signed Callum out. No messages are waiting and nothing was lost.');
+  });
+
+  it('uses a kind per channel, and keeps the count true as messages arrive', () => {
+    const h = harness();
+    const x = channelSignedOut(h.ctx, 'x');
+    const li = channelSignedOut(h.ctx, 'linkedin');
+    expect([x.kind, li.kind]).toEqual(['x_signed_out', 'linkedin_signed_out']);
+    expect(h.ctx.repo.getChannel('x').status).toBe('error');
+    const p = h.person({ channel: 'x', xHandle: 'a', email: null });
+    h.due(p.id, 'hello');
+    refreshSignedOutCount(h.ctx);
+    expect(h.ctx.repo.listIncidents().find((i) => i.kind === 'x_signed_out')?.message).toBe('X signed Callum out. 1 message is waiting and nothing was lost.');
+  });
+
+  it('formats a time as a weekday and a clock time in the user zone', () => {
+    expect(formatSlot(new Date('2026-11-04T08:00:00Z'), 'Africa/Lagos')).toBe('Wednesday at 9:00');
+    expect(formatSlot(new Date('2026-11-05T13:30:00Z'), 'Africa/Lagos')).toBe('Thursday at 14:30');
   });
 });

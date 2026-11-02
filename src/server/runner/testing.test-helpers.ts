@@ -1,4 +1,5 @@
 import type { Channel, NewPerson, OutKind, Person, Project, Scope } from '../../shared/types.js';
+import type { Writer } from '../ai/writer.js';
 import { TemplateWriter } from '../ai/templates.js';
 import type { AdapterFactory, ChannelAdapter, InboundEvent, OutboundMessage, SendResult } from '../channels/types.js';
 import { createCtx, type Ctx } from '../context.js';
@@ -14,6 +15,10 @@ export interface FakeAdapter extends ChannelAdapter {
   results: SendResult[];
   /** Events for the next polls, in order; once empty polls return nothing. */
   inbox: InboundEvent[][];
+  /** Provider ids it has already returned, like the real adapters: an event comes back at most once per process. */
+  seen: Set<string>;
+  /** Real milliseconds the next poll takes before it answers (and marks its events seen). */
+  delayMs: number;
   /** Throw this from the next poll. */
   pollError: Error | null;
   /** Runs inside `send`, before it answers. */
@@ -28,6 +33,8 @@ export function fakeAdapter(channel: Channel): FakeAdapter {
     results: [],
     inbox: [],
     pollError: null,
+    seen: new Set(),
+    delayMs: 0,
     onSend: null,
     async connect() {
       return { identity: 'fake', secret: {} };
@@ -44,7 +51,17 @@ export function fakeAdapter(channel: Channel): FakeAdapter {
         a.pollError = null;
         throw err;
       }
-      return a.inbox.shift() ?? [];
+      const fresh = (a.inbox.shift() ?? []).filter((e) => {
+        const id = 'externalId' in e ? e.externalId : null;
+        return id === null || !a.seen.has(id);
+      });
+      if (a.delayMs > 0) {
+        const wait = a.delayMs;
+        a.delayMs = 0;
+        await new Promise((resolve) => setTimeout(resolve, wait));
+      }
+      for (const e of fresh) if ('externalId' in e && e.externalId !== null) a.seen.add(e.externalId);
+      return fresh;
     },
     async close() {},
   };
@@ -96,4 +113,18 @@ export function harness(opts: { now?: string; timezone?: string; connected?: Cha
       return ctx.outbox.queueAuto(personId, kind, body, subject, clock.now(), false).id;
     },
   };
+}
+
+/** The harness's ctx with some of the writer's answers replaced. */
+export function ctxWith(h: Harness, over: Partial<Writer>): Ctx {
+  const real = h.ctx.writer;
+  const writer: Writer = {
+    write: (k, c) => real.write(k, c),
+    classify: (t, c) => real.classify(t, c),
+    offerLine: (a, b) => real.offerLine(a, b),
+    parseAsk: (a, b) => real.parseAsk(a, b),
+    projectName: (a) => real.projectName(a),
+    ...over,
+  };
+  return { ...h.ctx, writer };
 }

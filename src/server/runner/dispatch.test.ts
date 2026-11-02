@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { OPT_OUT_LINE, placeholderMessage } from '../engine/guard.js';
-import { dispatchDue } from './dispatch.js';
+import { createCtx } from '../context.js';
+import { COULD_NOT_RECORD, CLOSED_WHILE_SENDING, dispatchDue, recoverSending } from './dispatch.js';
 import { INCIDENT_COPY } from './incidents.js';
+import { openDb } from '../db/db.js';
 import { harness, NOW } from './testing.test-helpers.js';
 
 const at = (iso: string) => new Date(iso).toISOString();
@@ -555,5 +557,185 @@ describe('dispatchDue: user messages that fail', () => {
     h.clock.advance(11_000);
     await dispatchDue(h.ctx);
     expect(h.ctx.repo.getOutbox(later.id)?.state).toBe('cancelled');
+  });
+});
+
+describe('dispatchDue: a send is never repeated', () => {
+  it('claims the item before the channel is asked', async () => {
+    const h = harness();
+    const id = h.due(h.person().id, 'hello');
+    let during: unknown = null;
+    h.adapters.email.onSend = () => {
+      during = h.ctx.repo.getOutbox(id);
+    };
+    await dispatchDue(h.ctx);
+    expect(during).toMatchObject({ state: 'sending', claimedAt: NOW });
+    expect(h.ctx.repo.getOutbox(id)?.state).toBe('sent');
+  });
+
+  it('puts the claim back when the channel says no', async () => {
+    const h = harness();
+    const id = h.due(h.person().id, 'hello');
+    h.adapters.email.results.push({ ok: false, error: { code: 'temporary', message: 'timeout' } });
+    await dispatchDue(h.ctx);
+    expect(h.ctx.repo.getOutbox(id)).toMatchObject({ state: 'scheduled', claimedAt: null });
+  });
+
+  it('records a send again when writing it down failed once, and sends it once', async () => {
+    const h = harness();
+    const p = h.person();
+    const id = h.due(p.id, 'hello');
+    const real = h.ctx.repo.insertMessage.bind(h.ctx.repo);
+    let fail = true;
+    h.ctx.repo.insertMessage = (m) => {
+      if (fail) { fail = false; throw new Error('database is locked'); }
+      return real(m);
+    };
+    expect(await dispatchDue(h.ctx)).toBe(1);
+    expect(await dispatchDue(h.ctx)).toBe(0);
+    expect(h.adapters.email.sent).toHaveLength(1);
+    expect(h.ctx.repo.getOutbox(id)?.state).toBe('sent');
+    expect(h.ctx.repo.listMessages(p.id)).toHaveLength(1);
+    expect(h.ctx.repo.getPerson(p.id)?.touches).toBe(1);
+  });
+
+  it('fails an item that went out but could not be written down, and never sends it again', async () => {
+    const h = harness();
+    const p = h.person();
+    const id = h.due(p.id, 'hello');
+    h.ctx.repo.insertMessage = () => { throw new Error('disk full'); };
+    const errors: unknown[] = [];
+    expect(await dispatchDue(h.ctx, { onError: (e) => errors.push(e) })).toBe(0);
+    expect(errors).toHaveLength(1);
+    expect(h.ctx.repo.getOutbox(id)).toMatchObject({ state: 'failed', error: COULD_NOT_RECORD, detail: '{"maybeSent":true,"unrecorded":true}' });
+    await dispatchDue(h.ctx);
+    await dispatchDue(h.ctx);
+    expect(h.adapters.email.sent).toHaveLength(1);
+  });
+
+  it('lets one bad item go without stopping the rest', async () => {
+    const h = harness();
+    const bad = h.person();
+    const good = h.person();
+    h.ctx.outbox.queueAuto(bad.id, 'hello', 'x', 'B', new Date('2026-11-03T08:00:00Z'), false);
+    h.ctx.outbox.queueAuto(good.id, 'hello', 'y', 'G', new Date('2026-11-03T08:10:00Z'), false);
+    const real = h.ctx.repo.listMessages.bind(h.ctx.repo);
+    h.ctx.repo.listMessages = (id) => {
+      if (id === bad.id) throw new Error('boom');
+      return real(id);
+    };
+    const errors: unknown[] = [];
+    expect(await dispatchDue(h.ctx, { onError: (e) => errors.push(e) })).toBe(1);
+    expect(errors).toHaveLength(1);
+    expect(h.adapters.email.sent.map((m) => m.subject)).toEqual(['G']);
+  });
+
+  it('keeps an adapter that throws apart from one that reports a failure', async () => {
+    const h = harness();
+    const id = h.due(h.person().id, 'hello');
+    h.adapters.email.onSend = () => { throw new Error('socket closed'); };
+    await dispatchDue(h.ctx);
+    expect(h.ctx.repo.getOutbox(id)).toMatchObject({ state: 'failed', error: 'socket closed', detail: '{"thrown":true}', claimedAt: null });
+    const reported = harness();
+    const other = reported.due(reported.person().id, 'hello');
+    reported.adapters.email.results.push({ ok: false, error: { code: 'unknown', message: 'Something odd' } });
+    await dispatchDue(reported.ctx);
+    expect(reported.ctx.repo.getOutbox(other)).toMatchObject({ state: 'failed', detail: null });
+  });
+
+  it('turns a claim left by a run that never finished into a failure marked maybe sent, on the next start', () => {
+    const h = harness();
+    const auto = h.person();
+    const talker = h.person({ firstName: 'Kemi', status: 'waiting', stage: 'talking' });
+    const a = h.ctx.repo.insertOutbox({ personId: auto.id, channel: 'email', kind: 'hello', body: 'x', state: 'sending', origin: 'auto', sendAfter: NOW, claimedAt: NOW });
+    const u = h.ctx.repo.insertOutbox({ personId: talker.id, channel: 'email', kind: 'reply', body: 'x', state: 'sending', origin: 'user', sendAfter: NOW, claimedAt: NOW });
+    expect(recoverSending(h.ctx)).toBe(2);
+    expect(h.ctx.repo.getOutbox(a.id)).toMatchObject({ state: 'failed', error: CLOSED_WHILE_SENDING, detail: '{"maybeSent":true}' });
+    expect(h.ctx.repo.getOutbox(u.id)?.detail).toBe('{"maybeSent":true}');
+    expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([{
+      kind: 'send_failed', personId: talker.id,
+      message: 'Callum was closed while your reply to Kemi was going out. It may have gone, so check your Sent folder before you try again.',
+    }]);
+    expect(recoverSending(h.ctx)).toBe(0);
+  });
+
+  it('does this when Callum starts, and never sends the item on its own afterwards', async () => {
+    const db = openDb(':memory:');
+    const first = createCtx({ db, env: {}, factory: () => harness().adapters.email });
+    const project = first.repo.insertProject({ name: 'One' });
+    const p = first.repo.insertPerson({ projectId: project.id, name: 'Kemi Eze', source: 'csv', email: 'k@x.com', channel: 'email' });
+    const item = first.repo.insertOutbox({ personId: p.id, channel: 'email', kind: 'hello', body: 'x', state: 'sending', origin: 'auto', sendAfter: '2020-01-01T00:00:00.000Z' });
+    const second = createCtx({ db, env: {}, factory: () => harness().adapters.email });
+    expect(second.repo.getOutbox(item.id)).toMatchObject({ state: 'failed', detail: '{"maybeSent":true}' });
+    expect(second.outbox.due()).toEqual([]);
+  });
+});
+
+describe('dispatchDue: ordering and holding', () => {
+  it('sends the user\'s messages first when asked to, and Callum\'s only after', async () => {
+    const h = harness();
+    const talker = h.person({ status: 'waiting', stage: 'talking' });
+    h.due(h.person().id, 'hello');
+    h.ctx.outbox.queueUserSend(talker.id, 'reply', 'Yes.');
+    h.clock.advance(11_000);
+    expect(await dispatchDue(h.ctx, { origin: 'user' })).toBe(1);
+    expect(h.adapters.email.sent.map((m) => m.kind)).toEqual(['reply']);
+    expect(await dispatchDue(h.ctx, { origin: 'auto' })).toBe(1);
+  });
+
+  it('keeps automatic messages for someone whose reply has not been read yet', async () => {
+    const h = harness();
+    const p = h.person();
+    const id = h.due(p.id, 'follow_up');
+    h.ctx.repo.insertInboundFailure({ channel: 'email', externalId: '<a@x>', personId: p.id, event: '{}', error: 'down' });
+    expect(await dispatchDue(h.ctx)).toBe(0);
+    expect(h.ctx.repo.getOutbox(id)?.state).toBe('scheduled');
+  });
+
+  it('records the subject that went out, and the thread it was in', async () => {
+    const h = harness();
+    const p = h.person({ stage: 'talking' });
+    h.ctx.repo.insertMessage({ personId: p.id, channel: 'email', direction: 'out', kind: 'hello', subject: 'Quick question', body: 'Hi', at: '2026-11-02T10:00:00.000Z', externalId: '<ours@x>' });
+    h.ctx.outbox.queueUserSend(p.id, 'reply', 'Yes.');
+    h.clock.advance(11_000);
+    await dispatchDue(h.ctx);
+    expect(h.adapters.email.sent[0]).toMatchObject({ subject: 'Re: Quick question', inReplyTo: '<ours@x>' });
+    expect(h.ctx.repo.listMessages(p.id).at(-1)).toMatchObject({ subject: 'Re: Quick question', kind: 'reply' });
+  });
+});
+
+describe('dispatchDue: a mailbox at its own limit', () => {
+  it('holds a reply to the next slot and tells the user when it goes, then settles the notice', async () => {
+    const h = harness();
+    const p = h.person({ firstName: 'Kemi', status: 'waiting', stage: 'talking' });
+    const item = h.ctx.outbox.queueUserSend(p.id, 'reply', 'Yes.');
+    h.clock.advance(11_000);
+    h.adapters.email.results.push({ ok: false, error: { code: 'rate_limit', message: 'Daily user sending quota exceeded' } });
+    await dispatchDue(h.ctx);
+    expect(h.ctx.repo.getOutbox(item.id)).toMatchObject({ state: 'scheduled', sendAfter: at('2026-11-04T08:00:00Z') });
+    expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([{
+      kind: 'send_failed', personId: p.id,
+      message: "Your reply to Kemi goes Wednesday at 9:00. Your mailbox reached today's limit.",
+    }]);
+    h.clock.set('2026-11-04T08:00:00Z');
+    expect(await dispatchDue(h.ctx)).toBe(1);
+    expect(h.ctx.repo.listIncidents({ open: true })).toEqual([]);
+  });
+});
+
+describe('dispatchDue: signed out of X or LinkedIn', () => {
+  it('uses a notice of its own for each', async () => {
+    const h = harness();
+    const x = h.person({ channel: 'x', xHandle: 'a', email: null });
+    const li = h.person({ channel: 'linkedin', linkedinUrl: 'https://www.linkedin.com/in/a', email: null });
+    h.due(x.id, 'hello');
+    h.due(li.id, 'invite', 'Hi', null);
+    h.adapters.x.results.push({ ok: false, error: { code: 'auth', message: 'no' } });
+    h.adapters.linkedin.results.push({ ok: false, error: { code: 'auth', message: 'no' } });
+    await dispatchDue(h.ctx);
+    expect(h.ctx.repo.listIncidents({ open: true }).map((i) => [i.channel, i.kind, i.message])).toEqual([
+      ['x', 'x_signed_out', 'X signed Callum out. 1 message is waiting and nothing was lost.'],
+      ['linkedin', 'linkedin_signed_out', 'LinkedIn signed Callum out. 1 message is waiting and nothing was lost.'],
+    ]);
   });
 });

@@ -7,6 +7,7 @@ import { Repo } from './db/repo.js';
 import { systemClock, type Clock } from './engine/clock.js';
 import { ApolloSource } from './leads/apollo.js';
 import { Outbox } from './outbox/outbox.js';
+import { recoverSending } from './runner/dispatch.js';
 
 /** Everything the server's parts share. Built once at start-up. */
 export interface Ctx {
@@ -40,7 +41,7 @@ export function createCtx(opts: CtxOptions): Ctx {
   const repo = new Repo(opts.db, () => clock.now().toISOString());
   const bus = new Bus();
   const apolloKey = env.APOLLO_API_KEY?.trim();
-  return {
+  const ctx: Ctx = {
     repo,
     clock,
     bus,
@@ -52,4 +53,7 @@ export function createCtx(opts: CtxOptions): Ctx {
     demo,
     dataDir,
   };
+  // A message claimed by a run that never finished may have gone out: it is failed for the user to look at, never sent again.
+  recoverSending(ctx);
+  return ctx;
 }

@@ -1,24 +1,29 @@
 import type { Channel, Message, OutboxItem, OutKind, Person } from '../../shared/types.js';
-import type { ChannelAdapter, ChannelError, OutboundMessage, SendResult } from '../channels/types.js';
+import type { ChannelError, OutboundMessage, SendResult } from '../channels/types.js';
 import type { Ctx } from '../context.js';
-import { capFor } from '../engine/pacing.js';
 import { findPlaceholders, placeholderMessage, withOptOut } from '../engine/guard.js';
 import { afterSent, afterUserSent, personTz } from '../engine/lifecycle.js';
+import { capFor } from '../engine/pacing.js';
 import { addLocalDays, startOfLocalDay } from '../engine/time.js';
 import { isSendingTime, nextSendingTime } from '../engine/windows.js';
+import { heldBackPeople } from './inbound.js';
 import {
-  channelCheckpoint, channelRateLimited, channelSignedOut, handleBounce, sendFailed, weeklyInviteLimit,
+  channelCheckpoint, channelRateLimited, channelSignedOut, handleBounce, replyDeferred, resolveSendFailed, sendFailed, sendUnsure,
+  weeklyInviteLimit,
 } from './incidents.js';
 
 const RETRY_AFTER_MS = 15 * 60_000;
+export const COULD_NOT_RECORD = 'Sent, but Callum could not record it. Check your Sent folder before trying again.';
+export const CLOSED_WHILE_SENDING = 'Callum was closed while this was going out. It may have been sent, so check before trying again.';
 
-// Items whose send is in flight. Two overlapping runs must never send the same item twice.
-const inFlight = new WeakMap<Ctx, Set<number>>();
+// Items whose send is in flight. Two overlapping runs must never send the same item twice. Keyed on the outbox
+// because the ctx object is copied around (spread) while the outbox is the one shared thing.
+const inFlight = new WeakMap<object, Set<number>>();
 function sendingSet(ctx: Ctx): Set<number> {
-  let set = inFlight.get(ctx);
+  let set = inFlight.get(ctx.outbox);
   if (!set) {
     set = new Set();
-    inFlight.set(ctx, set);
+    inFlight.set(ctx.outbox, set);
   }
   return set;
 }
@@ -26,7 +31,7 @@ function sendingSet(ctx: Ctx): Set<number> {
 const NEVER_MESSAGE: ReadonlySet<Person['status']> = new Set(['stopped', 'closed', 'removed', 'held']);
 
 /** Kinds that count against the same daily cap as this one. LinkedIn invites have their own; everything else shares. */
-function capKinds(channel: Channel, kind: OutKind): OutKind[] {
+export function capKinds(channel: Channel, kind: OutKind): OutKind[] {
   if (channel === 'linkedin') return kind === 'invite' ? ['invite'] : ['hello', 'thanks', 'follow_up'];
   return ['hello', 'invite', 'thanks', 'follow_up'];
 }
@@ -53,21 +58,46 @@ function replySubject(subject: string): string {
   return /^re:/i.test(subject.trim()) ? subject : `Re: ${subject}`;
 }
 
-function failureOf(err: unknown): ChannelError {
-  return { code: 'unknown', message: err instanceof Error && err.message ? err.message : 'Callum could not send this' };
+export interface DispatchOptions {
+  /** Only items of this origin. The runner sends the user's own first, before any slow planning. */
+  origin?: 'user' | 'auto';
+  /** Where a failure on one item is reported; the rest of the batch carries on. */
+  onError?: (err: unknown) => void;
 }
 
 /** Sends everything that is due and allowed. Returns how many messages went out. */
-export async function dispatchDue(ctx: Ctx): Promise<number> {
+export async function dispatchDue(ctx: Ctx, opts: DispatchOptions = {}): Promise<number> {
+  const report = opts.onError ?? ((err: unknown) => console.error(`[callum] ${err instanceof Error ? err.message : String(err)}`));
+  const held = heldBackPeople(ctx);
   let sent = 0;
   for (const due of ctx.outbox.due()) {
+    if (opts.origin && due.origin !== opts.origin) continue;
     if (sendingSet(ctx).has(due.id)) continue;
-    if (await dispatchOne(ctx, due.id)) sent++;
+    try {
+      if (await dispatchOne(ctx, due.id, held)) sent++;
+    } catch (err) {
+      report(err);
+    }
   }
   return sent;
 }
 
-async function dispatchOne(ctx: Ctx, id: number): Promise<boolean> {
+/**
+ * Items still `sending` when Callum starts were claimed by a run that never finished. They may have gone out, so they
+ * are never sent again on their own: they become failed, marked `maybeSent`, and the user decides.
+ */
+export function recoverSending(ctx: Ctx): number {
+  const items = ctx.repo.listOutbox({ state: ['sending'] });
+  for (const item of items) {
+    ctx.repo.updateOutbox(item.id, { state: 'failed', error: CLOSED_WHILE_SENDING, detail: JSON.stringify({ maybeSent: true }) });
+    const person = item.origin === 'user' ? ctx.repo.getPerson(item.personId) : null;
+    if (person) sendUnsure(ctx, item, person);
+  }
+  if (items.length > 0) ctx.bus.emit('outbox');
+  return items.length;
+}
+
+async function dispatchOne(ctx: Ctx, id: number, held: Set<number>): Promise<boolean> {
   const { repo, clock } = ctx;
   const now = clock.now();
   const item = repo.getOutbox(id);
@@ -84,6 +114,8 @@ async function dispatchOne(ctx: Ctx, id: number): Promise<boolean> {
   const settings = repo.getSettings();
   const project = repo.getProject(person.projectId);
   if (item.origin === 'auto' && (settings.pauseState !== 'running' || project?.state !== 'running')) return false;
+  // A reply from this person could not be read yet (it may be a stop). Nothing automatic goes meanwhile.
+  if (item.origin === 'auto' && held.has(person.id)) return false;
 
   const account = repo.getChannel(item.channel);
   if (account.status !== 'connected') return false;
@@ -114,17 +146,47 @@ async function dispatchOne(ctx: Ctx, id: number): Promise<boolean> {
     }
   }
 
+  // What goes out is worked out once: the same subject, body and thread are what get recorded.
+  const thread = threading(repo.listMessages(person.id), item.channel);
+  const subject = item.subject ?? (item.channel === 'email' && thread.subject ? replySubject(thread.subject) : null);
+  const body = item.channel === 'email' ? withOptOut(item.body) : item.body;
+  const msg: OutboundMessage = {
+    to: { name: person.name, email: person.email, linkedinUrl: person.linkedinUrl, xHandle: person.xHandle },
+    kind: item.kind,
+    subject,
+    body,
+    inReplyTo: item.kind === 'hello' || item.kind === 'invite' ? null : thread.inReplyTo,
+  };
+
   const sending = sendingSet(ctx);
   if (sending.has(item.id)) return false;
   sending.add(item.id);
   try {
     // Nothing above waited, but anything that could have changed the item gets a last look before it leaves.
     if (repo.getOutbox(item.id)?.state !== 'scheduled') return false;
-    const result = await send(ctx, adapter, item, person);
+    // The claim is written before the channel is asked, so a crash mid-send is never mistaken for "not sent".
+    repo.updateOutbox(item.id, { state: 'sending', claimedAt: iso(now) });
+    let result: SendResult;
+    let thrown = false;
+    try {
+      result = await adapter.send(msg);
+    } catch (err) {
+      thrown = true;
+      result = { ok: false, error: { code: 'unknown', message: err instanceof Error && err.message ? err.message : 'Callum could not send this' } };
+    }
     if (result.ok) {
-      afterSend(ctx, item, person.id, result);
+      record(ctx, item, person.id, result, subject, body);
       return true;
     }
+    if (thrown) {
+      // Whether it left is unknown, so it is not put back to be sent again.
+      repo.updateOutbox(item.id, { state: 'failed', error: result.error.message, detail: JSON.stringify({ thrown: true }), claimedAt: null });
+      if (item.origin === 'user') sendFailed(ctx, item, person, result.error.message);
+      ctx.bus.emit('outbox');
+      return false;
+    }
+    // The channel said no: nothing left, so the item is back to waiting before the failure decides its fate.
+    repo.updateOutbox(item.id, { state: 'scheduled', claimedAt: null });
     onFailure(ctx, item, person, result.error);
     return false;
   } finally {
@@ -132,34 +194,33 @@ async function dispatchOne(ctx: Ctx, id: number): Promise<boolean> {
   }
 }
 
-async function send(ctx: Ctx, adapter: ChannelAdapter, item: OutboxItem, person: Person): Promise<SendResult> {
-  const thread = threading(ctx.repo.listMessages(person.id), item.channel);
-  const subject = item.subject ?? (item.channel === 'email' && thread.subject ? replySubject(thread.subject) : null);
-  const msg: OutboundMessage = {
-    to: { name: person.name, email: person.email, linkedinUrl: person.linkedinUrl, xHandle: person.xHandle },
-    kind: item.kind,
-    subject,
-    body: item.channel === 'email' ? withOptOut(item.body) : item.body,
-    inReplyTo: item.kind === 'hello' || item.kind === 'invite' ? null : thread.inReplyTo,
-  };
-  try {
-    return await adapter.send(msg);
-  } catch (err) {
-    return { ok: false, error: failureOf(err) };
+/** Writes down a send that went out. Tried twice; if it still cannot be written the item is failed, never left to send again. */
+function record(ctx: Ctx, item: OutboxItem, personId: number, result: Extract<SendResult, { ok: true }>, subject: string | null, body: string): void {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      writeSent(ctx, item, personId, result, subject, body);
+      return;
+    } catch (err) {
+      lastError = err;
+    }
   }
+  try {
+    ctx.repo.updateOutbox(item.id, { state: 'failed', error: COULD_NOT_RECORD, detail: JSON.stringify({ maybeSent: true, unrecorded: true }) });
+  } catch {
+    // The store is not answering at all. The item stays `sending`, which is never picked up again.
+  }
+  throw lastError;
 }
 
-function afterSend(ctx: Ctx, item: OutboxItem, personId: number, result: Extract<SendResult, { ok: true }>): void {
+function writeSent(ctx: Ctx, item: OutboxItem, personId: number, result: Extract<SendResult, { ok: true }>, subject: string | null, body: string): void {
   const { repo } = ctx;
   const now = ctx.clock.now();
-  const sentBody = item.channel === 'email' ? withOptOut(item.body) : item.body;
-  const thread = threading(repo.listMessages(personId), item.channel);
   repo.transaction(() => {
     repo.insertMessage({
-      personId, channel: item.channel, direction: 'out', kind: item.kind,
-      subject: item.subject ?? (item.channel === 'email' && thread.subject && item.kind !== 'hello' ? replySubject(thread.subject) : null),
+      personId, channel: item.channel, direction: 'out', kind: item.kind, subject,
       // An invitation that lost its note went out empty: that is what the person got.
-      body: result.noteDropped ? '' : sentBody,
+      body: result.noteDropped ? '' : body,
       at: iso(now), externalId: result.externalId,
     });
     repo.updateOutbox(item.id, { state: 'sent', error: null });
@@ -173,8 +234,11 @@ function afterSend(ctx: Ctx, item: OutboxItem, personId: number, result: Extract
       repo.updatePerson(personId, patch);
     }
   });
-  // The user has taken over: whatever Callum had lined up for them goes.
-  if (item.origin === 'user') ctx.outbox.cancelPending(personId, ['auto']);
+  if (item.origin === 'user') {
+    // The user has taken over: whatever Callum had lined up for them goes, and an earlier notice about this reply is settled.
+    ctx.outbox.cancelPending(personId, ['auto']);
+    resolveSendFailed(ctx, personId, item.channel);
+  }
   ctx.bus.emit('outbox');
   ctx.bus.emit('people');
 }
@@ -184,14 +248,20 @@ function onFailure(ctx: Ctx, item: OutboxItem, person: Person, error: ChannelErr
   const now = clock.now();
   switch (error.code) {
     case 'auth':
-      channelSignedOut(ctx, item.channel, error.message);
+      channelSignedOut(ctx, item.channel);
       return;
     case 'checkpoint':
       channelCheckpoint(ctx, item.channel);
       return;
     case 'rate_limit':
-      if (item.channel === 'x') channelRateLimited(ctx, 'x', error.message);
-      else repo.updateOutbox(item.id, { sendAfter: iso(tomorrow(ctx, person)) });
+      if (item.channel === 'x') {
+        channelRateLimited(ctx, 'x', error.message);
+      } else {
+        const slot = tomorrow(ctx, person);
+        repo.updateOutbox(item.id, { sendAfter: iso(slot) });
+        // Callum's own messages just wait; the user's reply gets a notice with the time it goes.
+        if (item.origin === 'user') replyDeferred(ctx, item, person, slot);
+      }
       ctx.bus.emit('outbox');
       return;
     default:

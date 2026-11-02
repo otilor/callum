@@ -1,6 +1,6 @@
 import type { Channel, ChannelAccount, Incident, NewIncident, OutboxItem, Person } from '../../shared/types.js';
 import type { Ctx } from '../context.js';
-import { addLocalDays, startOfLocalDay } from '../engine/time.js';
+import { addLocalDays, localParts, startOfLocalDay } from '../engine/time.js';
 import { chooseChannel, personTz, switchChannel } from '../engine/lifecycle.js';
 import { nextMonday } from '../engine/windows.js';
 
@@ -8,6 +8,15 @@ const DAY_MS = 86_400_000;
 const CHANNEL_NAME: Record<Channel, string> = { email: 'email', linkedin: 'LinkedIn', x: 'X' };
 
 const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
+const waiting = (n: number, noun: string): string =>
+  n === 0 ? `No ${noun}s are waiting` : `${n} ${plural(n, `${noun} is`, `${noun}s are`)} waiting`;
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** "Wednesday at 9:00": an exact time in the user's words and zone. */
+export function formatSlot(d: Date, tz: string): string {
+  const p = localParts(d, tz);
+  return `${WEEKDAYS[p.weekday]} at ${p.hour}:${String(p.minute).padStart(2, '0')}`;
+}
 
 /** What each incident says, in the design's words. */
 export const INCIDENT_COPY = {
@@ -15,7 +24,9 @@ export const INCIDENT_COPY = {
   linkedin_weekly_limit: "LinkedIn's weekly invite limit is reached. New invites wait until Monday. Messages to your connections keep going.",
   x_limit: "X stopped accepting Callum's messages because your X plan's daily limit is reached. DMs resume tomorrow at 9:00.",
   mailbox_signed_out: (provider: string, address: string, n: number): string =>
-    `${provider} signed Callum out of ${address}. ${n === 0 ? 'No emails are' : `${n} ${plural(n, 'email is', 'emails are')}`} waiting and nothing was lost.`,
+    `${provider} signed Callum out of ${address}. ${waiting(n, 'email')} and nothing was lost.`,
+  x_signed_out: (n: number): string => `X signed Callum out. ${waiting(n, 'message')} and nothing was lost.`,
+  linkedin_signed_out: (n: number): string => `LinkedIn signed Callum out. ${waiting(n, 'message')} and nothing was lost.`,
   /** `fallback` is where the bounced people go next; null when nobody had anywhere else to go. */
   bounces: (n: number, domain: string, fallback: string | null): string => {
     const one = n === 1;
@@ -24,6 +35,11 @@ export const INCIDENT_COPY = {
   },
   send_failed: (first: string, reason: string): string =>
     `Your reply to ${first} didn't go out: ${reason.trim().replace(/\.+$/, '')}. It's saved here.`,
+  /** The mailbox's own daily limit stopped a reply; it goes at the next slot. */
+  send_deferred: (first: string, slot: string): string => `Your reply to ${first} goes ${slot}. Your mailbox reached today's limit.`,
+  /** Callum was closed while a reply was on its way, so nobody knows whether it left. */
+  send_unsure: (first: string): string =>
+    `Callum was closed while your reply to ${first} was going out. It may have gone, so check your Sent folder before you try again.`,
 } as const;
 
 interface BounceDetail { domain: string; people: { id: number; fallback: Channel | null }[] }
@@ -94,7 +110,7 @@ export function resumeChannel(ctx: Ctx, ch: Channel, pace: 'half' | 'full'): Cha
     pausedUntil: null,
     halfPaceUntil: pace === 'half' ? new Date(now.getTime() + 7 * DAY_MS).toISOString() : null,
   });
-  resolveIncidents(ctx, ch, ['linkedin_check', 'mailbox_signed_out', 'x_limit']);
+  resolveIncidents(ctx, ch, ['linkedin_check', 'x_limit']);
   ctx.bus.emit('channels');
   return account;
 }
@@ -107,32 +123,34 @@ function providerName(secret: Record<string, string> | null): string {
   }
 }
 
-function signedOutMessage(ctx: Ctx, ch: Channel, reason: string | null): string {
+const SIGNED_OUT_KIND = { email: 'mailbox_signed_out', linkedin: 'linkedin_signed_out', x: 'x_signed_out' } as const;
+
+function signedOutMessage(ctx: Ctx, ch: Channel): string {
+  const n = ctx.repo.listOutbox({ state: ['scheduled'] }).filter((i) => i.channel === ch).length;
   if (ch === 'email') {
-    const waiting = ctx.repo.listOutbox({ state: ['scheduled'] }).filter((i) => i.channel === ch).length;
     const secret = ctx.repo.getChannelSecret('email');
     const address = ctx.repo.getChannel('email').identity ?? secret?.address ?? 'your mailbox';
-    return INCIDENT_COPY.mailbox_signed_out(providerName(secret), address, waiting);
+    return INCIDENT_COPY.mailbox_signed_out(providerName(secret), address, n);
   }
-  const name = CHANNEL_NAME[ch];
-  return reason && reason !== 'auth' ? reason : `${name} signed Callum out. Connect ${name} again from Your Callum.`;
+  return ch === 'x' ? INCIDENT_COPY.x_signed_out(n) : INCIDENT_COPY.linkedin_signed_out(n);
 }
 
 /** The channel's sign-in no longer works: stop it, keep everything queued, and say how many messages wait. */
-export function channelSignedOut(ctx: Ctx, ch: Channel, reason: string | null = null): Incident {
+export function channelSignedOut(ctx: Ctx, ch: Channel): Incident {
   ctx.repo.updateChannel(ch, { status: 'error' });
   ctx.bus.emit('channels');
-  return openIncident(ctx, { channel: ch, kind: 'mailbox_signed_out', message: signedOutMessage(ctx, ch, reason) });
+  return openIncident(ctx, { channel: ch, kind: SIGNED_OUT_KIND[ch], message: signedOutMessage(ctx, ch) });
 }
 
-/** Messages keep arriving in the outbox while the mailbox is signed out; keep the count in the notice true. */
+/** Messages keep arriving in the outbox while a channel is signed out; keep the count in the notice true. */
 export function refreshSignedOutCount(ctx: Ctx): void {
-  const open = ctx.repo.listIncidents({ open: true }).find((i) => i.channel === 'email' && i.kind === 'mailbox_signed_out');
-  if (!open) return;
-  const message = signedOutMessage(ctx, 'email', null);
-  if (message === open.message) return;
-  ctx.repo.updateIncident(open.id, { message });
-  ctx.bus.emit('incidents');
+  for (const open of ctx.repo.listIncidents({ open: true })) {
+    if (open.kind !== SIGNED_OUT_KIND[open.channel]) continue;
+    const message = signedOutMessage(ctx, open.channel);
+    if (message === open.message) continue;
+    ctx.repo.updateIncident(open.id, { message });
+    ctx.bus.emit('incidents');
+  }
 }
 
 /** LinkedIn asked to check it's the user: pause it. Email and X carry on. */
@@ -176,6 +194,41 @@ export function sendFailed(ctx: Ctx, item: OutboxItem, person: Person, reason: s
     detail: JSON.stringify({ outboxId: item.id }),
     personId: person.id,
   });
+}
+
+/** A reply the mailbox's limit held back: say exactly when it goes. */
+export function replyDeferred(ctx: Ctx, item: OutboxItem, person: Person, slot: Date): Incident {
+  const tz = personTz(person, ctx.repo.getSettings().timezone);
+  return openIncident(ctx, {
+    channel: item.channel,
+    kind: 'send_failed',
+    message: INCIDENT_COPY.send_deferred(person.firstName, formatSlot(slot, tz)),
+    detail: JSON.stringify({ outboxId: item.id, deferred: true }),
+    personId: person.id,
+  });
+}
+
+/** A reply was closed in the middle of sending: nobody knows whether it left. */
+export function sendUnsure(ctx: Ctx, item: OutboxItem, person: Person): Incident {
+  return openIncident(ctx, {
+    channel: item.channel,
+    kind: 'send_failed',
+    message: INCIDENT_COPY.send_unsure(person.firstName),
+    detail: JSON.stringify({ outboxId: item.id, maybeSent: true }),
+    personId: person.id,
+  });
+}
+
+/** The user's message to this person went out after all; the notice about it is settled. */
+export function resolveSendFailed(ctx: Ctx, personId: number, ch: Channel): void {
+  const at = ctx.clock.now().toISOString();
+  let n = 0;
+  for (const i of ctx.repo.listIncidents({ open: true })) {
+    if (i.kind !== 'send_failed' || i.channel !== ch || i.personId !== personId) continue;
+    ctx.repo.updateIncident(i.id, { state: 'resolved', resolvedAt: at });
+    n++;
+  }
+  if (n > 0) ctx.bus.emit('incidents');
 }
 
 function clearHandle(ch: Channel): Partial<Person> {

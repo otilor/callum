@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { InboundEvent } from '../channels/types.js';
-import { handleInbound } from './inbound.js';
-import { harness, NOW } from './testing.test-helpers.js';
+import { MAX_INBOUND_ATTEMPTS, handleInbound, heldBackPeople, retryFailedInbound } from './inbound.js';
+import { ctxWith, harness, NOW } from './testing.test-helpers.js';
 
 type Reply = Extract<InboundEvent, { type: 'reply' }>;
 const reply = (over: Partial<Reply> & { from: Reply['from'] }): Reply => ({
@@ -229,5 +229,97 @@ describe('handleInbound: checkpoint', () => {
       channel: 'linkedin', kind: 'linkedin_check',
       message: "LinkedIn asked to check it's you, so Callum paused LinkedIn to keep your account safe. Email and X keep going.",
     }]);
+  });
+});
+
+describe('handleInbound: a user who answered by hand', () => {
+  it('takes someone off the dock, drops the draft and what was queued, and makes them talking', async () => {
+    const h = harness();
+    const p = h.person({ email: 'kemi@okopay.com', status: 'waiting', stage: 'hello', touches: 1, draft: 'Hi Kemi, yes.', replyKind: 'question' });
+    const auto = h.ctx.outbox.queueAuto(p.id, 'follow_up', 'x', 'S', new Date('2026-11-05T08:00:00Z'), false);
+    const user = h.ctx.outbox.queueUserSend(p.id, 'reply', 'My own draft');
+    await handleInbound(h.ctx, 'email', [{ type: 'outbound_seen', email: 'kemi@okopay.com', at: NOW, externalId: '<hand@x>' }]);
+    expect(h.ctx.repo.getPerson(p.id)).toMatchObject({ status: 'active', stage: 'talking', badge: 'sent', draft: null });
+    expect(h.ctx.repo.getOutbox(auto.id)?.state).toBe('cancelled');
+    expect(h.ctx.repo.getOutbox(user.id)?.state).toBe('cancelled');
+  });
+});
+
+describe('handleInbound: an event that cannot be handled', () => {
+  it('keeps it, reports it, and carries on with the rest', async () => {
+    const h = harness();
+    const bad = h.person({ email: 'bad@okopay.com' });
+    const good = h.person({ email: 'good@okopay.com' });
+    const real = h.ctx.writer;
+    const ctx = ctxWith(h, { classify: async (t, c) => { if (c.person.id === bad.id) throw new Error('model down'); return real.classify(t, c); } });
+    const errors: unknown[] = [];
+    await handleInbound(ctx, 'email', [
+      reply({ from: { email: 'bad@okopay.com' }, externalId: '<1@x>' }),
+      reply({ from: { email: 'good@okopay.com' }, externalId: '<2@x>' }),
+    ], (e) => errors.push(e));
+    expect(errors).toHaveLength(1);
+    expect(h.ctx.repo.getPerson(good.id)?.status).toBe('waiting');
+    expect(h.ctx.repo.getPerson(bad.id)?.status).toBe('active');
+    expect(h.ctx.repo.listMessages(bad.id)).toEqual([]);
+    expect(h.ctx.repo.listInboundFailures()).toMatchObject([{ channel: 'email', externalId: '<1@x>', personId: bad.id, attempts: 1, error: 'model down' }]);
+    expect(JSON.parse(h.ctx.repo.listInboundFailures()[0]?.event ?? '{}')).toMatchObject({ type: 'reply', text: 'Can you tell me more about pricing?' });
+    expect([...heldBackPeople(ctx)]).toEqual([bad.id]);
+  });
+
+  it('is not kept twice when the same event fails again', async () => {
+    const h = harness();
+    h.person({ email: 'bad@okopay.com' });
+    const ctx = ctxWith(h, { classify: async () => { throw new Error('model down'); } });
+    const event = reply({ from: { email: 'bad@okopay.com' }, externalId: '<1@x>' });
+    await handleInbound(ctx, 'email', [event]);
+    await handleInbound(ctx, 'email', [event]);
+    expect(h.ctx.repo.listInboundFailures()).toHaveLength(1);
+  });
+
+  it('is tried again a little later each time, up to five attempts, then left', async () => {
+    const h = harness();
+    const bad = h.person({ email: 'bad@okopay.com' });
+    let calls = 0;
+    const ctx = ctxWith(h, { classify: async () => { calls++; throw new Error('model down'); } });
+    await handleInbound(ctx, 'email', [reply({ from: { email: 'bad@okopay.com' }, externalId: '<1@x>' })]);
+    const errors: unknown[] = [];
+    await retryFailedInbound(ctx, (e) => errors.push(e)); // too soon
+    expect(calls).toBe(1);
+    for (let i = 0; i < 10; i++) {
+      h.clock.advance(6 * 60_000);
+      await retryFailedInbound(ctx, (e) => errors.push(e));
+    }
+    expect(calls).toBe(MAX_INBOUND_ATTEMPTS);
+    expect(h.ctx.repo.listInboundFailures()).toMatchObject([{ attempts: MAX_INBOUND_ATTEMPTS }]);
+    expect(errors.map((e) => (e as Error).message)).toEqual(['Callum gave up on a email message after 5 tries: model down']);
+    // Once given up, the person is no longer held back.
+    expect(heldBackPeople(ctx).has(bad.id)).toBe(false);
+  });
+
+  it('is dropped once it has been handled, and a copy that arrives later is not recorded twice', async () => {
+    const h = harness();
+    const p = h.person({ email: 'kemi@okopay.com' });
+    let fail = true;
+    const real = h.ctx.writer;
+    const ctx = ctxWith(h, { classify: async (t, c) => { if (fail) throw new Error('model down'); return real.classify(t, c); } });
+    const event = reply({ from: { email: 'kemi@okopay.com' }, externalId: '<1@x>' });
+    await handleInbound(ctx, 'email', [event]);
+    fail = false;
+    await handleInbound(ctx, 'email', [event]); // the mailbox shows it again after a restart
+    await retryFailedInbound(ctx);
+    h.clock.advance(2 * 60_000);
+    await retryFailedInbound(ctx);
+    expect(h.ctx.repo.listMessages(p.id)).toHaveLength(1);
+    expect(h.ctx.repo.listInboundFailures()).toEqual([]);
+  });
+
+  it('does not put someone on the dock who was stopped while the draft was being written', async () => {
+    const h = harness();
+    const p = h.person({ email: 'kemi@okopay.com' });
+    const real = h.ctx.writer;
+    const ctx = ctxWith(h, { write: async (k, c) => { h.ctx.repo.updatePerson(p.id, { status: 'stopped' }); return real.write(k, c); } });
+    await handleInbound(ctx, 'email', [reply({ from: { email: 'kemi@okopay.com' } })]);
+    expect(h.ctx.repo.getPerson(p.id)).toMatchObject({ status: 'stopped', draft: null });
+    expect(h.ctx.repo.listMessages(p.id)).toHaveLength(1);
   });
 });
