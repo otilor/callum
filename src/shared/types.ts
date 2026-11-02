@@ -80,6 +80,8 @@ export interface Settings {
   currentProjectId: number | null;    // the project last viewed
   pauseState: 'running' | 'paused' | 'wrapped'; pausedUntil: string | null;
   notifications: boolean | null;
+  /** Desktop app only: open Callum when the computer starts. Off until the person turns it on. */
+  openAtLogin?: boolean;
 }
 
 export interface PathStep { label: string; at: string | null; done: boolean }

@@ -1,0 +1,40 @@
+appId: app.callum.desktop
+productName: Callum
+copyright: Copyright (c) 2026 Gabriel
+directories:
+  output: release
+  buildResources: build
+# The built web app (dist/web), the server and electron code compiled by tsc (dist/src, dist/electron) and the preload script.
+# Production dependencies are added by electron-builder itself.
+files:
+  - dist/**
+  - package.json
+  - "!dist/**/*.map"
+extraResources:
+  - from: build/tray
+    to: tray
+  - from: build/icon.png
+    to: icon.png
+asar: true
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.png
+  target:
+    - dmg
+  # Not signed: the first open is right-click, Open (see README).
+  identity: null
+win:
+  icon: build/icon.png
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+linux:
+  icon: build/icon.png
+  category: Office
+  maintainer: Callum <callum@users.noreply.github.com>
+  target:
+    - AppImage
+artifactName: Callum-${version}-${os}-${arch}.${ext}
