@@ -1,0 +1,60 @@
+import Anthropic from '@anthropic-ai/sdk';
+import { Hono } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import type { Ctx } from '../../context.js';
+import { UserError } from '../../services/errors.js';
+import { readBody } from '../http.js';
+
+export interface KeysRoutesOptions {
+  /** Asks Claude whether a key works. Throws a UserError when it does not. Tests replace it. */
+  verify?: (key: string) => Promise<void>;
+}
+
+const BROKEN = 'Something went wrong. Callum kept everything as it was.';
+
+/** Asks Anthropic to list its models, which takes no tokens and fails for a key that is not accepted. */
+export async function verifyClaudeKey(key: string): Promise<void> {
+  try {
+    await new Anthropic({ apiKey: key, timeout: 15_000, maxRetries: 0 }).models.list({ limit: 1 });
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
+      throw new UserError("Claude didn't accept that key. Check that you copied all of it.");
+    }
+    throw new UserError("Callum couldn't reach Claude to check that key. Try again in a moment.");
+  }
+}
+
+/**
+ * Routes under `/api` for the Claude key. It is stored in `channel_secrets` and never returned: the state says only
+ * whether Callum has one. A key in the environment (ANTHROPIC_API_KEY) wins over a saved one.
+ */
+export function keysRoutes(ctx: Ctx, opts: KeysRoutesOptions = {}): Hono {
+  const app = new Hono();
+  const verify = opts.verify ?? verifyClaudeKey;
+
+  app.onError((err, c) => {
+    if (err instanceof UserError) return c.json({ error: err.message }, err.status as ContentfulStatusCode);
+    return c.json({ error: BROKEN }, 500);
+  });
+
+  app.post('/settings/claude-key', async (c) => {
+    const { key } = await readBody(c);
+    const trimmed = typeof key === 'string' ? key.trim() : '';
+    if (trimmed === '') throw new UserError('Paste your Claude key first.');
+    if (/\s/.test(trimmed)) throw new UserError('A Claude key has no spaces in it. Check that you copied just the key.');
+    await verify(trimmed);
+    ctx.repo.setChannelSecret('anthropic', { key: trimmed });
+    ctx.reloadKeys();
+    ctx.bus.emit('settings');
+    return c.json({ claudeConnected: ctx.claudeKey !== null });
+  });
+
+  app.delete('/settings/claude-key', (c) => {
+    ctx.repo.setChannelSecret('anthropic', null);
+    ctx.reloadKeys();
+    ctx.bus.emit('settings');
+    return c.json({ claudeConnected: ctx.claudeKey !== null });
+  });
+
+  return app;
+}

@@ -47,7 +47,7 @@ export function appState(over: Partial<AppState> = {}): AppState {
     outbox: [],
     incidents: [],
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], nextSendAt: null, line: 'All caught up. Callum keeps the river moving.' },
-    demo: false,
+    demo: false, apolloConnected: false, claudeConnected: false,
     ...over,
   };
 }

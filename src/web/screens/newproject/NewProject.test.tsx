@@ -44,7 +44,7 @@ function appState(over: Partial<AppState> = {}): AppState {
     settings: { senderName: 'Ada', senderEmail: 'ada@example.com', timezone: 'Africa/Lagos', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null, morningBrief: true },
     projects: [project()],
     channels: [channel('email', 'connected'), channel('linkedin', 'connected'), channel('x', 'disconnected')],
-    people: [], outbox: [], incidents: [], demo: false,
+    people: [], outbox: [], incidents: [], demo: false, apolloConnected: false, claudeConnected: false,
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], nextSendAt: null, line: '' },
     ...over,
   };

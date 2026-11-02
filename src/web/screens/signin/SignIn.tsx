@@ -11,7 +11,7 @@ const BROKEN = 'Something went wrong. Callum kept everything as it was.';
 export interface SignInProps {
   /** `starting` while the first fetch is pending; `locked` once the server answered 401. */
   mode: 'starting' | 'locked';
-  /** Fetches the app state again; the app swaps this screen out once it is allowed in. */
+  /** Fetches the app state again; the app swaps this screen out once it is allowed in. A failure is shown on the card. */
   refresh(): Promise<void>;
   /** How long "Callum is waking up" shows before the app appears. */
   wakeMs?: number;
@@ -185,7 +185,15 @@ export function SignIn({ mode, refresh, wakeMs }: SignInProps) {
     setPhase('waking');
     const wait = wakeMs ?? (reducedMotion() ? 0 : 1600);
     await new Promise((resolve) => setTimeout(resolve, wait));
-    if (alive.current) await refresh();
+    if (!alive.current) return;
+    try {
+      await refresh();
+    } catch (err) {
+      // Signed in, but the app still could not be fetched: back to the card with the reason, not stuck waking up.
+      if (!alive.current) return;
+      setPhase('locked');
+      setError(err instanceof ApiError ? err.message : BROKEN);
+    }
   };
 
   const awake = phase === 'waking';

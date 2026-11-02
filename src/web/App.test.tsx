@@ -27,7 +27,7 @@ function awaiting(): OutboxItem {
 function appState(over: Partial<AppState> = {}, settings: Partial<AppState['settings']> = {}): AppState {
   return {
     settings: { senderName: null, senderEmail: null, timezone: 'UTC', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null, morningBrief: true, ...settings },
-    projects: [project()], channels: [], people: [], outbox: [], incidents: [], demo: false,
+    projects: [project()], channels: [], people: [], outbox: [], incidents: [], demo: false, apolloConnected: false, claudeConnected: false,
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], nextSendAt: null, line: 'All caught up. Callum keeps the river moving.' },
     ...over,
   };
@@ -70,7 +70,8 @@ describe('App', () => {
     first.unmount();
     mocks.state.mockResolvedValue(appState({}, { pauseState: 'wrapped' }));
     const second = render(<App />);
-    await waitFor(() => expect(second.container.querySelector('main')).toHaveAttribute('data-screen', 'wrapped'));
+    expect(await screen.findByRole('heading', { name: 'All wrapped up' })).toBeInTheDocument();
+    second.unmount();
   });
 
   it('asks for the password on a 401, says when it is wrong, and lets the person in once it is right', async () => {
@@ -78,7 +79,7 @@ describe('App', () => {
     mocks.login.mockRejectedValueOnce(new ApiError(401, "That's not the password."));
     const user = userEvent.setup();
     const { container } = render(<App />);
-    expect(await screen.findByRole('heading', { name: 'This Callum is private.' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'This Callum is private' })).toBeInTheDocument();
     await user.type(screen.getByPlaceholderText('Password'), 'nope');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('alert')).toHaveTextContent("That's not the password.");
@@ -97,7 +98,7 @@ describe('App', () => {
     mocks.login.mockResolvedValueOnce({ ok: true });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole('heading', { name: 'This Callum is private.' });
+    await screen.findByRole('heading', { name: 'This Callum is private' });
     mocks.state.mockRejectedValue(new ApiError(0, "Callum can't be reached. Check that it is still running."));
     await user.type(screen.getByPlaceholderText('Password'), 'right');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -109,5 +110,11 @@ describe('App', () => {
     mocks.state.mockRejectedValue(new ApiError(0, "Callum can't be reached. Check that it is still running."));
     render(<App />);
     expect(await screen.findByText("Callum can't be reached. Check that it is still running.")).toBeInTheDocument();
+  });
+});
+
+describe('screenFor order', () => {
+  it('shows the wrapped screen even when Callum is not onboarded', () => {
+    expect(screenFor(appState({}, { pauseState: 'wrapped', onboarded: false }), null)).toBe('wrapped');
   });
 });

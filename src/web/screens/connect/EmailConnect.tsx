@@ -132,8 +132,12 @@ export function EmailConnect({ account, again, provider: initial, onConnected, o
         if (res.status === 'expired') return stop('That code ran out. Open Microsoft again for a new one.');
         if (res.status === 'denied') return stop('Microsoft said no. Open Microsoft again when you are ready.');
       } catch (e) {
-        if (!stopped) stop(messageOf(e));
-        return;
+        if (stopped) return;
+        // A request that never got an answer (or got a server error) says nothing about the code: ask again at the
+        // next interval, until the code runs out. An answer that refuses the request is final.
+        const unanswered = e instanceof ApiError && (e.status === 0 || e.status >= 500);
+        if (!unanswered) return stop(messageOf(e));
+        if (Date.parse(device.expiresAt) <= Date.now()) return stop('That code ran out. Open Microsoft again for a new one.');
       }
       timer = setTimeout(() => void tick(), pollMs);
     };

@@ -117,22 +117,11 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
   api.get('/state', (c) => c.json(getState(ctx)));
   api.get('/events', (c) => eventStream(ctx.bus, c.req.raw.signal));
 
+  // The feature modules come first: a path they own (a person's page, connecting a channel) is theirs, not the generic one below.
+  for (const routes of (opts.extraRoutes ?? [])) api.route('/', routes);
+
   // ---- channels --------------------------------------------------------------------------------------
 
-  api.post('/channels/:ch/connect', async (c) => {
-    const ch = channelParam(c);
-    const body = await readBody(c);
-    const fields: Record<string, string> = {};
-    for (const [k, v] of Object.entries(body)) if (typeof v === 'string') fields[k] = v;
-    const account = await ctx.adapters.connect(ch, fields, ctx.clock.now());
-    // The mailbox Callum writes from is also the address its offer suggestion reads from.
-    if (ch === 'email' && account.identity?.includes('@')) {
-      ctx.repo.updateSettings({ senderEmail: account.identity });
-      ctx.bus.emit('settings');
-    }
-    return c.json(account);
-  });
-  api.post('/channels/:ch/disconnect', async (c) => c.json(await ctx.adapters.disconnect(channelParam(c))));
   api.post('/channels/:ch/resume', async (c) => {
     const ch = channelParam(c);
     const { pace } = await readBody(c);
@@ -157,6 +146,14 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
     if (b.notifications !== undefined) {
       if (b.notifications !== null && typeof b.notifications !== 'boolean') throw new UserError('Pick on or off.');
       patch.notifications = b.notifications;
+    }
+    if (b.morningBrief !== undefined) {
+      if (typeof b.morningBrief !== 'boolean') throw new UserError('Pick on or off.');
+      patch.morningBrief = b.morningBrief;
+    }
+    if (b.openAtLogin !== undefined) {
+      if (typeof b.openAtLogin !== 'boolean') throw new UserError('Pick on or off.');
+      patch.openAtLogin = b.openAtLogin;
     }
     const next = ctx.repo.updateSettings(patch);
     ctx.bus.emit('settings');
@@ -258,7 +255,6 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
 
   // ---- a person --------------------------------------------------------------------------------------
 
-  api.get('/people/:id', (c) => c.json(actions.personDetail(ctx, idParam(c))));
   api.get('/people/:id/draft', async (c) => {
     const kind = DRAFT_KINDS.find((k) => k === c.req.query('kind'));
     if (!kind) throw new UserError('Pick reply, booking or close.');
@@ -313,7 +309,7 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
   });
   api.post('/wrap', async (c) => {
     const deleteData = optBool(await readBody(c), 'deleteData') ?? false;
-    return c.json(leave.wrapUp(ctx, { deleteData }));
+    return c.json(await leave.wrapUpEverything(ctx, { deleteData }));
   });
   api.get('/wrap/summary', (c) => c.json({ line: leave.wrapSummaryLine(ctx) }));
   api.post('/start-again', (c) => {
@@ -340,11 +336,11 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
   api.post('/demo/seed', async (c) => {
     if (!ctx.demo) return c.json({ error: NOT_FOUND }, 404);
     const { scene } = await readBody(c);
-    if (scene !== 'morning') throw new UserError("Callum doesn't have that scene.");
-    return c.json((await seedScene(ctx, scene)) ?? { ok: true });
+    if (scene !== 'fresh' && scene !== 'morning') throw new UserError("Callum doesn't have that scene.");
+    seedScene(ctx, scene);
+    return c.json({ ok: true, scene });
   });
 
-  for (const routes of (opts.extraRoutes ?? [])) api.route('/', routes);
   app.route('/api', api);
   app.all('/api/*', (c) => c.json({ error: NOT_FOUND }, 404));
   if (opts.webDir !== null) app.get('*', staticHandler(opts.webDir));

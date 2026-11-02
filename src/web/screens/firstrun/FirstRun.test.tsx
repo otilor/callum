@@ -62,7 +62,7 @@ function appState(over: Partial<AppState> = {}): AppState {
     outbox: [],
     incidents: [],
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], nextSendAt: null, line: '' },
-    demo: false,
+    demo: false, apolloConnected: false, claudeConnected: false,
     ...over,
   };
 }
@@ -499,7 +499,7 @@ describe('Microsoft sign-in', () => {
     mocks.microsoftStart.mockResolvedValue({ userCode: 'ABCD-EFGH', verificationUri: 'https://microsoft.com/devicelogin', expiresAt: '2099-01-01T00:00:00.000Z' });
     await user.click(screen.getByRole('button', { name: 'Continue with Microsoft' }));
     const sheet = await screen.findByRole('dialog');
-    await user.type(within(sheet).getByLabelText('Your email address'), 'gabriel@yourcompany.com');
+    await user.type(within(sheet).getByLabelText('Email address'), 'gabriel@yourcompany.com');
     await user.click(within(sheet).getByRole('button', { name: 'Open Microsoft' }));
     await within(sheet).findByText('ABCD-EFGH');
     return sheet;
@@ -603,7 +603,7 @@ describe('the sheet as a modal', () => {
     const linkedin = screen.getByRole('button', { name: 'Connect LinkedIn' });
     linkedin.focus();
     await user.click(linkedin);
-    const sheet = await screen.findByRole('dialog', { name: 'Connect LinkedIn' });
+    const sheet = await screen.findByRole('dialog', { name: 'Connect a channel' });
     expect(linkedin.closest('.fr-root')?.parentElement).toHaveAttribute('inert');
     await user.keyboard('{Escape}');
     expect(sheet).not.toBeInTheDocument();

@@ -80,7 +80,7 @@ function appState(people: Person[], over: Partial<AppState> = {}): AppState {
     outbox: [],
     incidents: [],
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], nextSendAt: null, line: '' },
-    demo: false,
+    demo: false, apolloConnected: false, claudeConnected: false,
     ...over,
   };
 }

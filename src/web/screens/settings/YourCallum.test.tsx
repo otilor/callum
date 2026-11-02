@@ -77,7 +77,7 @@ function appState(over: Partial<AppState> = {}): AppState {
     outbox: [item(1, 1), item(2, 3)],
     incidents: [],
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], nextSendAt: null, line: '' },
-    demo: false,
+    demo: false, apolloConnected: false, claudeConnected: false,
     ...over,
   };
 }

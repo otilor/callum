@@ -99,6 +99,10 @@ export interface Brief { wantToTalk: number; sentYesterday: number; acceptedRece
 export interface AppState {
   settings: Settings; projects: Project[]; channels: ChannelAccount[]; people: Person[];
   outbox: OutboxItem[]; incidents: Incident[]; brief: Brief; demo: boolean;
+  /** Whether Callum can look people up in Apollo (a key in the environment or saved in Your Callum). Never the key itself. */
+  apolloConnected: boolean;
+  /** Whether Callum writes with Claude (a key in the environment or saved in Your Callum). Never the key itself. */
+  claudeConnected: boolean;
 }
 export type AskAction =
   | { kind: 'find_more'; label: string; args: { likePersonId: number | null; query: string | null; count: number } }

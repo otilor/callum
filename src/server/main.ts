@@ -8,10 +8,13 @@ import { createApp } from './api/app.js';
 import { FEATURE_ROUTES } from './api/features.js';
 import { createCtx, type Ctx } from './context.js';
 import { openDb } from './db/db.js';
+import { seedScene } from './demo/seed.js';
 import { readEnv } from './env.js';
 import { Runner } from './runner/runner.js';
 
 export const TICK_EVERY_MS = 5_000;
+/** How long closing waits for a poll that does not answer before the database is closed anyway. */
+export const STOP_WAIT_MS = 5_000;
 
 export interface StartOptions {
   dataDir: string;
@@ -84,31 +87,27 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   mkdirSync(opts.dataDir, { recursive: true, mode: 0o700 });
   chmodSync(opts.dataDir, 0o700);
   const db = openDb(join(opts.dataDir, 'callum.db'));
-  const ctx = createCtx({ db, demo: readEnv(env).demo, dataDir: opts.dataDir, env });
-  setDefaultTimezone(ctx, readEnv(env).timezone);
+  const conf = readEnv(env);
+  const ctx = createCtx({ db, demo: conf.demo, dataDir: opts.dataDir, env });
+  setDefaultTimezone(ctx, conf.timezone);
+  // A demo Callum with nothing in it starts with a scene to look at.
+  if (conf.demo && ctx.repo.listProjects().length === 0) {
+    seedScene(ctx, env.CALLUM_DEMO_SCENE?.trim() === 'morning' ? 'morning' : 'fresh');
+    setDefaultTimezone(ctx, conf.timezone);
+  }
 
-  // Every pass is remembered until it ends, so closing waits for work that is already under way.
   const runner = new Runner(ctx);
-  const passes = new Set<Promise<void>>();
-  const tracked = {
-    tick(): Promise<void> {
-      const pass: Promise<void> = runner.tick().finally(() => passes.delete(pass));
-      passes.add(pass);
-      return pass;
-    },
-  };
-  const report = (err: unknown) => console.error(`[callum] ${err instanceof Error ? err.message : String(err)}`);
-  const timer = setInterval(() => tracked.tick().catch(report), TICK_EVERY_MS);
+  runner.start(TICK_EVERY_MS);
 
   let server: Server;
   const stopWork = async () => {
-    clearInterval(timer);
-    await Promise.allSettled([...passes]);
+    // Waits for the pass and the polls under way, but no longer than 5 seconds for a poll that never answers.
+    await runner.stop({ timeoutMs: STOP_WAIT_MS });
     await ctx.adapters.closeAll();
     db.close();
   };
   try {
-    const app = createApp(ctx, { password: opts.password, webDir: opts.webDir, runner: tracked, extraRoutes: FEATURE_ROUTES.map((build) => build(ctx)) });
+    const app = createApp(ctx, { password: opts.password, webDir: opts.webDir, runner, extraRoutes: FEATURE_ROUTES.map((build) => build(ctx)) });
     server = serve({ fetch: app.fetch, hostname: opts.host, port: opts.port }) as Server;
     await new Promise<void>((resolveListening, reject) => {
       server.once('listening', resolveListening);
@@ -128,7 +127,6 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     ctx,
     close() {
       closing ??= (async () => {
-        clearInterval(timer);
         // Live-event streams stay open for as long as a page is, so they are cut for the port to be freed.
         await new Promise<void>((resolveClosed) => {
           server.close(() => resolveClosed());

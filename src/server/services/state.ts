@@ -29,6 +29,8 @@ export function getState(ctx: Ctx): AppState {
     incidents: repo.listIncidents({ open: true }),
     brief: brief(ctx),
     demo: ctx.demo,
+    apolloConnected: ctx.apollo !== null,
+    claudeConnected: ctx.claudeKey !== null,
   };
 }
 
