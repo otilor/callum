@@ -1,4 +1,4 @@
-import type { Channel } from '../../shared/types.js';
+import type { Channel, PersonLead } from '../../shared/types.js';
 import type { Clock } from '../engine/clock.js';
 import type { ChannelAdapter, InboundEvent, OutboundMessage, Recipient } from './types.js';
 
@@ -22,6 +22,16 @@ export function demoHash(s: string): number {
   }
   return h >>> 0;
 }
+
+/** Who a demo LinkedIn search "finds": fixed, so a demo reads the same every time. */
+const DEMO_SEARCH: readonly { name: string; role: string; company: string }[] = [
+  { name: 'Amara Nwosu', role: 'Founder', company: 'Ledgerly' },
+  { name: 'Tobi Adeyemi', role: 'Head of Finance', company: 'Payloop' },
+  { name: 'Lerato Mokoena', role: 'CEO', company: 'Kudi Labs' },
+  { name: 'Yaw Boateng', role: 'Co-founder', company: 'Mintbox' },
+  { name: 'Zainab Bello', role: 'CFO', company: 'Paywise' },
+  { name: 'Chidi Okafor', role: 'Founder', company: 'Stackpay' },
+];
 
 const IDENTITY: Record<Channel, string> = {
   email: 'you@yourcompany.com',
@@ -96,6 +106,16 @@ export function createDemoAdapter(
       }
       return events;
     },
+    ...(channel === 'linkedin'
+      ? {
+          async searchPeople(_url: string, limit: number): Promise<PersonLead[]> {
+            return DEMO_SEARCH.slice(0, Math.max(0, limit)).map((p) => ({
+              name: p.name, source: 'linkedin_search' as const, role: p.role, company: p.company,
+              linkedinUrl: `https://www.linkedin.com/in/${slug(p.name)}`,
+            }));
+          },
+        }
+      : {}),
     async close() {},
   };
 }

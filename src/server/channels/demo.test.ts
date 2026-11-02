@@ -132,3 +132,15 @@ describe('createDemoAdapter', () => {
     await expect(adapter.close()).resolves.toBeUndefined();
   });
 });
+
+describe('demo linkedin search', () => {
+  it('finds the same few people with LinkedIn addresses, and only on linkedin', async () => {
+    const clock = fixedClock('2026-11-02T09:00:00Z');
+    const li = createDemoAdapter('linkedin', clock);
+    const found = await li.searchPeople?.('https://www.linkedin.com/search/results/people/?keywords=fintech', 4);
+    expect(found).toHaveLength(4);
+    expect(found?.[0]).toMatchObject({ name: 'Amara Nwosu', source: 'linkedin_search', linkedinUrl: 'https://www.linkedin.com/in/amara-nwosu' });
+    expect(await li.searchPeople?.('https://www.linkedin.com/search/results/people/', 100)).toHaveLength(6);
+    expect(createDemoAdapter('email', clock).searchPeople).toBeUndefined();
+  });
+});

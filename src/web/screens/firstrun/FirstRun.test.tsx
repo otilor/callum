@@ -342,7 +342,8 @@ describe('Who', () => {
     expect(mocks.search).toHaveBeenCalledWith('Founders of startups', 25, 1);
     expect(await screen.findByText("That's about 48,000 people.")).toBeInTheDocument();
     expect(screen.getByText('Narrow it down?', { exact: false })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Seed to Series A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '20 to 200 people' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Seed to Series A' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
   });
 

@@ -13,7 +13,7 @@ export const SEARCH_COUNT = 25;
 export const TOO_MANY = 5000;
 
 const CHIPS = ['Seed-stage fintech founders in Lagos', 'Heads of finance at fintechs', 'Startups'];
-const NARROW = ['Seed to Series A', '20 to 200 people'];
+const NARROW = ['20 to 200 people'];
 const LINKEDIN_LINK = /^(https?:\/\/)?([\w-]+\.)*linkedin\.com\/\S+$/i;
 const PEEKS = 8;
 

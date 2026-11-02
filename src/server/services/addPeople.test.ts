@@ -271,15 +271,15 @@ describe('describe', () => {
     s.ctx.apollo = fakeApollo({ total: 2300 }).source;
     const d = await describePeople(s.ctx, { query: 'Heads of finance at fintechs in Accra', filters: [] });
     expect(d.total).toBe(2300);
-    expect(d.narrow).toEqual(['20 to 200 people', 'Accra only']);
+    expect(d.narrow).toEqual(['20 to 200 people']);
     expect(d.line).toBe("That's about 2,300 people. Narrow it down?");
   });
 
-  it('leaves out the city chip when the words name no city, and the chips already used', async () => {
+  it('never offers a city chip, because a city the words end with is already a filter, and leaves out chips already used', async () => {
     s.ctx.apollo = fakeApollo({ total: 2300 }).source;
     expect((await describePeople(s.ctx, { query: 'Heads of finance', filters: [] })).narrow).toEqual(['20 to 200 people']);
-    const again = await describePeople(s.ctx, { query: 'Heads of finance in Accra', filters: ['Accra only'] });
-    expect(again.narrow).toEqual(['20 to 200 people']);
+    const again = await describePeople(s.ctx, { query: 'Heads of finance in Accra', filters: ['20 to 200 people'] });
+    expect(again.narrow).toBeNull();
   });
 
   it('sends the chips to Apollo as real filters, with the city out of the keywords', async () => {

@@ -21,11 +21,14 @@ const mocks = vi.hoisted(() => ({
   exportCsvUrl: (projectId?: number) => (projectId ? `/api/export.csv?projectId=${projectId}` : '/api/export.csv'),
   setup: vi.fn(),
   saveClientId: vi.fn(),
+  saveClaude: vi.fn(),
+  removeClaude: vi.fn(),
 }));
 vi.mock('../../api.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api.js')>()),
   api: mocks,
   channelSetup: { microsoft: mocks.setup, saveMicrosoftClientId: mocks.saveClientId },
+  claudeKeyApi: { save: mocks.saveClaude, remove: mocks.removeClaude },
 }));
 
 const NOW = new Date('2026-11-02T10:00:00Z');
@@ -99,7 +102,7 @@ const SUMMARY: Record<Channel, { pending: { invites: number; followUps: number; 
 };
 
 beforeEach(() => {
-  for (const fn of [mocks.settings, mocks.updateProject, mocks.sample, mocks.channelSummary, mocks.disconnect, mocks.pauseProject, mocks.resumeProject, mocks.wrapProject, mocks.connect, mocks.setup, mocks.saveClientId]) fn.mockReset();
+  for (const fn of [mocks.settings, mocks.updateProject, mocks.sample, mocks.channelSummary, mocks.disconnect, mocks.pauseProject, mocks.resumeProject, mocks.wrapProject, mocks.connect, mocks.setup, mocks.saveClientId, mocks.saveClaude, mocks.removeClaude]) fn.mockReset();
   refresh.mockClear();
   download.mockClear();
   mocks.channelSummary.mockImplementation((ch: Channel) => Promise.resolve(SUMMARY[ch]));
@@ -462,5 +465,48 @@ describe('copy', () => {
   it('sounds like a person, not a dashboard', () => {
     setup();
     expect(document.body.textContent).not.toMatch(/\b(leads?|prospects?|cadence|churn|disable|the AI)\b/i);
+  });
+});
+
+describe('Claude key', () => {
+  it('says what the key is for, and keeps it hidden while typing', async () => {
+    const user = setup();
+    expect(screen.getByRole('button', { name: /^Claude key Not connected/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Claude key / }));
+    expect(screen.getByText('Callum writes hellos with Claude when a key is here. Without one it uses its own templates.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Claude API key')).toHaveAttribute('type', 'password');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('saves the key, forgets what was typed, and asks for the state again', async () => {
+    mocks.saveClaude.mockResolvedValue({ claudeConnected: true });
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: /^Claude key / }));
+    await user.type(screen.getByLabelText('Claude API key'), ' sk-ant-secret ');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(mocks.saveClaude).toHaveBeenCalledWith('sk-ant-secret');
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(screen.getByLabelText('Claude API key')).toHaveValue('');
+  });
+
+  it('shows the reason in words when the key is refused', async () => {
+    mocks.saveClaude.mockRejectedValue(new ApiError(422, 'Claude did not accept that key.'));
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: /^Claude key / }));
+    await user.type(screen.getByLabelText('Claude API key'), 'nope');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Claude did not accept that key.');
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('shows Connected without the key, and removes it', async () => {
+    mocks.removeClaude.mockResolvedValue({ claudeConnected: false });
+    const user = setup(appState({ claudeConnected: true }));
+    expect(screen.getByRole('button', { name: /^Claude key Connected/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Claude key / }));
+    expect(screen.queryByLabelText('Claude API key')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(mocks.removeClaude).toHaveBeenCalled();
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 });

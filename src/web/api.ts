@@ -33,7 +33,7 @@ function withQuery(path: string, query?: Query): string {
   return text ? `${path}?${text}` : path;
 }
 
-async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown, query?: Query): Promise<T> {
+async function request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, query?: Query): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`/api${withQuery(path, query)}`, {
@@ -64,6 +64,7 @@ async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown, 
 
 const get = <T>(path: string, query?: Query) => request<T>('GET', path, undefined, query);
 const post = <T>(path: string, body: unknown = {}) => request<T>('POST', path, body);
+const del = <T>(path: string) => request<T>('DELETE', path);
 
 // ---- shapes the routes answer with ---------------------------------------------------------------------
 
@@ -192,4 +193,11 @@ export const noteApi = {
   /** The user's hello to a person someone pointed to. */
   referralHello: (id: number, body: string, subject?: string | null) =>
     post<OutboxItem>(`/people/${id}/referral-hello`, subject ? { body, subject } : { body }),
+};
+
+// Integration
+/** The key Callum writes hellos with. The server keeps it and never sends it back. */
+export const claudeKeyApi = {
+  save: (key: string) => post<{ claudeConnected: boolean }>('/settings/claude-key', { key }),
+  remove: () => del<{ claudeConnected: boolean }>('/settings/claude-key'),
 };

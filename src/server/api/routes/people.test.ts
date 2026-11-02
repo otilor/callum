@@ -65,7 +65,7 @@ describe('people routes', () => {
     const found = await post('/people/describe', { query: 'heads of finance in Accra', filters: [] });
     expect(found.status).toBe(200);
     const d = found.json as unknown as Described;
-    expect(d.narrow).toEqual(['20 to 200 people', 'Accra only']);
+    expect(d.narrow).toEqual(['20 to 200 people']);
     expect(d.people).toHaveLength(3);
   });
 

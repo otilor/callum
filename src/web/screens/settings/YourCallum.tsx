@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AppState, Channel, ChannelAccount, Project } from '../../../shared/types.js';
 import { CHANNELS } from '../../../shared/types.js';
-import { api, channelSetup, type ChannelSummary, type MicrosoftSetup } from '../../api.js';
+import { api, channelSetup, claudeKeyApi, type ChannelSummary, type MicrosoftSetup } from '../../api.js';
 import { joinNames } from '../../ui/format.js';
 import { marbleBackground } from '../../ui/Marble.js';
 import { useToast } from '../../ui/Toast.js';
@@ -99,6 +99,9 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
   const [msSetup, setMsSetup] = useState<MicrosoftSetup | null>(null);
   const [clientId, setClientId] = useState('');
   const [clientIdMsg, setClientIdMsg] = useState<{ text: string; bad: boolean } | null>(null);
+  const [claudeKey, setClaudeKey] = useState('');
+  const [claudeBusy, setClaudeBusy] = useState(false);
+  const [claudeMsg, setClaudeMsg] = useState('');
 
   const desktop = typeof window !== 'undefined' ? window.callumDesktop : undefined;
   const toggleRow = (key: string) => setOpen((o) => ({ ...o, [key]: !o[key] }));
@@ -212,6 +215,35 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
       setClientIdMsg({ text: 'Saved. Microsoft sign-in is ready.', bad: false });
     } catch (e) {
       setClientIdMsg({ text: messageOf(e), bad: true });
+    }
+  };
+
+  const saveClaudeKey = async () => {
+    setClaudeMsg('');
+    setClaudeBusy(true);
+    try {
+      await claudeKeyApi.save(claudeKey.trim());
+      setClaudeKey('');
+      await refresh();
+      toast('Callum will write with Claude');
+    } catch (e) {
+      setClaudeMsg(messageOf(e));
+    } finally {
+      setClaudeBusy(false);
+    }
+  };
+
+  const removeClaudeKey = async () => {
+    setClaudeMsg('');
+    setClaudeBusy(true);
+    try {
+      await claudeKeyApi.remove();
+      await refresh();
+      toast('Callum is back to its own templates');
+    } catch (e) {
+      setClaudeMsg(messageOf(e));
+    } finally {
+      setClaudeBusy(false);
     }
   };
 
@@ -415,6 +447,22 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
                   on={taps.morningBrief}
                   onToggle={() => void setTap('morningBrief')}
                 />
+              </Row>
+
+              <Row id="claude" title="Claude key" summary={state.claudeConnected ? 'Connected' : 'Not connected'} open={Boolean(open.claude)} onToggle={() => toggleRow('claude')}>
+                <p className="yc-aside">Callum writes hellos with Claude when a key is here. Without one it uses its own templates.</p>
+                {state.claudeConnected ? (
+                  <div className="yc-inline">
+                    <span className="yc-hint" role="status">Connected</span>
+                    <button type="button" className="yc-pill" disabled={claudeBusy} aria-busy={claudeBusy} onClick={() => void removeClaudeKey()}>Remove</button>
+                  </div>
+                ) : (
+                  <form className="yc-inline" onSubmit={(e) => { e.preventDefault(); if (claudeKey.trim() && !claudeBusy) void saveClaudeKey(); }}>
+                    <input className="yc-input" type="password" aria-label="Claude API key" value={claudeKey} placeholder="sk-ant-..." spellCheck={false} autoComplete="off" onChange={(e) => setClaudeKey(e.target.value)} />
+                    <button type="submit" className="yc-solid" disabled={!claudeKey.trim() || claudeBusy} aria-busy={claudeBusy}>{claudeBusy ? <Spinner light /> : null}Save</button>
+                  </form>
+                )}
+                {claudeMsg ? <p className="yc-alert" role="alert"><span className="yc-alert-dot" aria-hidden="true" />{claudeMsg}</p> : null}
               </Row>
 
               {desktop ? (

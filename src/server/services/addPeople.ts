@@ -272,7 +272,8 @@ export async function describe(
   }
   const batchId = keep(ctx, { projectId, leads: [], unreadable: [], apollo: found.previews, known: new Set() });
   const people = found.previews.map((p) => previewRow(p, projectId));
-  const offered = found.total > TOO_WIDE ? [SIZE_CHIP, city === null ? null : `${city} only`].filter((c): c is string => c !== null && !filters.includes(c)) : [];
+  // A city the words already end with is already a location filter, so it is never offered again as a chip.
+  const offered = found.total > TOO_WIDE ? [SIZE_CHIP].filter((c) => !filters.includes(c)) : [];
   const narrow = offered.length > 0 ? offered : null;
   return {
     batchId, total: found.total, people, narrow,
