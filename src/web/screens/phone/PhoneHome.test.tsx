@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   resumeProject: vi.fn(),
   resumeChannel: vi.fn(),
   retry: vi.fn(),
+  person: vi.fn(),
 }));
 vi.mock('../../api.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../api.js')>()), api: mocks }));
 
@@ -89,7 +90,7 @@ describe('PhoneHome', () => {
     await user.type(draft, 'Thanks Kemi, Monday works.');
     await user.click(screen.getByRole('button', { name: 'Send' }));
     expect(mocks.reply).toHaveBeenCalledWith(1, 'Thanks Kemi, Monday works.');
-    const status = await screen.findByText('Sent to Kemi');
+    const status = await screen.findByText('Sending your reply to Kemi');
     expect(status).toBeInTheDocument();
     expect(await screen.findByText('All caught up')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Undo' }));
@@ -124,7 +125,7 @@ describe('PhoneHome', () => {
     });
     const { user, container } = setup();
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    await screen.findByText('Sent to Kemi');
+    await screen.findByText('Sending your reply to Kemi');
     const ring = container.ownerDocument.querySelector('.ph-ring') as SVGElement;
     expect(ring.style.animationDuration).toBe('8000ms');
     vi.restoreAllMocks();
@@ -176,7 +177,7 @@ describe('PhoneHome', () => {
     const { user } = setup();
     await user.click(screen.getByRole('button', { name: 'Snooze' }));
     expect(mocks.snooze).toHaveBeenCalledWith(1);
-    expect(await screen.findByText('Kemi rests until 9 Nov at 9:00')).toBeInTheDocument();
+    expect(await screen.findByText('Kemi comes back 9 Nov at 9:00')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
   });
 
@@ -185,7 +186,7 @@ describe('PhoneHome', () => {
     const { user } = setup();
     await user.click(screen.getByRole('button', { name: 'Close politely' }));
     expect(mocks.close).toHaveBeenCalledWith(1);
-    expect(await screen.findByText('Sent. No more follow-ups for Kemi')).toBeInTheDocument();
+    expect(await screen.findByText('Thanking Kemi. No more follow-ups.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
   });
 
@@ -195,7 +196,7 @@ describe('PhoneHome', () => {
     const { user } = setup(state);
     await user.click(screen.getByRole('button', { name: 'Book a call' }));
     expect(mocks.book).toHaveBeenCalledWith(1);
-    expect(await screen.findByText('Calendar link sent to Kemi')).toBeInTheDocument();
+    expect(await screen.findByText('Sending Kemi your calendar link')).toBeInTheDocument();
   });
 
   it('Book a call asks for the calendar link first, saves it, then sends', async () => {
@@ -208,7 +209,7 @@ describe('PhoneHome', () => {
     await user.click(screen.getByRole('button', { name: 'Save and send' }));
     expect(mocks.updateProject).toHaveBeenCalledWith(1, { calendarUrl: 'https://cal.com/gabriel' });
     expect(mocks.book).toHaveBeenCalledWith(1);
-    expect(await screen.findByText('Calendar link sent to Kemi')).toBeInTheDocument();
+    expect(await screen.findByText('Sending Kemi your calendar link')).toBeInTheDocument();
   });
 
   it('says why when the reply did not go and keeps the card', async () => {
@@ -239,6 +240,47 @@ describe('PhoneHome', () => {
     unmount();
     setup();
     expect(within(screen.getByRole('article')).queryByText('Reconciliation')).not.toBeInTheDocument();
+  });
+});
+
+describe('PhoneHome: Day one banner and people in the river', () => {
+  const tunde = () => person(5, 'Tunde', { stage: 'following', touches: 1 });
+
+  it('shows a compact banner for the hellos still to OK, and opens Day one from it', async () => {
+    const onOpen = vi.fn();
+    const { user } = setup(appState({ people: [kemi()] }), { dayOne: { left: 7, onOpen } });
+    expect(screen.getByText('7 of 10 hellos left to OK in Reconciliation')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'OK the hellos' }));
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws no banner when Day one is not waiting', () => {
+    setup(appState({ people: [kemi()] }));
+    expect(screen.queryByRole('button', { name: 'OK the hellos' })).not.toBeInTheDocument();
+  });
+
+  it('opens a person from a face in the river', async () => {
+    mocks.person.mockResolvedValue({ person: tunde(), messages: [], path: [] });
+    const state = appState({ people: [kemi(), tunde()] });
+    const { user } = setup(state, {
+      river: ({ onFace }: { onFace(p: Person): void }) => <button type="button" onClick={() => onFace(tunde())}>Tunde in the river</button>,
+    });
+    await user.click(screen.getByRole('button', { name: 'Tunde in the river' }));
+    expect(await screen.findByRole('dialog', { name: 'Tunde Eze' })).toBeInTheDocument();
+    expect(mocks.person).toHaveBeenCalledWith(5);
+  });
+
+  it('lists people by how far along they are, and a row opens the same sheet', async () => {
+    mocks.person.mockResolvedValue({ person: tunde(), messages: [], path: [] });
+    const { user } = setup(appState({ people: [kemi(), tunde()] }));
+    expect(screen.getByText('Following up')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Tunde Eze/ }));
+    expect(await screen.findByRole('dialog', { name: 'Tunde Eze' })).toBeInTheDocument();
+  });
+
+  it('does not list the people who already have a card', () => {
+    setup(appState({ people: [kemi(), tunde()] }));
+    expect(screen.queryByText('Want to talk')).not.toBeInTheDocument();
   });
 });
 

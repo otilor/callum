@@ -104,9 +104,22 @@ function greeting(now: Date, tz: string): string {
 
 const FOLLOW_SHOWN = 3;
 
-/** The River tab: the brief, the strip, and everyone by how far along they are. The people who want to talk come from every project, with the project named when there are several. */
-export function PhoneRiver({ state, project, tz, now, notify, refresh }: PhoneRiverProps) {
-  const [openId, setOpenId] = useState<number | null>(null);
+export interface PhoneStagesProps {
+  state: AppState;
+  project: Project | null;
+  tz: string;
+  now: Date;
+  notify: Notify;
+  refresh(): Promise<void> | void;
+  /** The person whose sheet is open, and what opens and closes it. A face in the river and a row in the list open the same sheet. */
+  openId: number | null;
+  onOpen(id: number | null): void;
+  /** Leaves out the people who want to talk, for a screen that already shows them as cards. */
+  hideWant?: boolean;
+}
+
+/** Everyone by how far along they are, and the sheet that opens for one of them. */
+export function PhoneStages({ state, project, tz, now, notify, refresh, openId, onOpen, hideWant = false }: PhoneStagesProps) {
   const [more, setMore] = useState(false);
   const projectId = project?.id ?? state.settings.currentProjectId;
   const several = state.projects.length > 1;
@@ -114,57 +127,18 @@ export function PhoneRiver({ state, project, tz, now, notify, refresh }: PhoneRi
   const tagFor = (p: Person) => (several ? names.get(p.projectId) ?? null : null);
 
   const mine = state.people.filter((p) => projectId === null || p.projectId === projectId);
-  const want = wantToTalk(state.people);
+  const want = hideWant ? [] : wantToTalk(state.people);
   const groups = groupByStage(state.people, projectId ?? null);
   const paused = pauseLine(state, project, tz);
   const quiet = paused !== null;
-  const faces = stripFaces(mine);
 
   const followShown = more ? groups.following : groups.following.slice(0, FOLLOW_SHOWN);
   const followHidden = groups.following.length - followShown.length;
   const open = openId === null ? null : state.people.find((p) => p.id === openId) ?? null;
-
-  const pills: { key: string; text: string; kind: string }[] = [
-    { key: 'want', kind: 'want', text: want.length > 0 ? `${want.length} want${want.length === 1 ? 's' : ''} to talk` : 'All caught up' },
-  ];
-  if (state.brief.sentYesterday > 0) {
-    pills.push({ key: 'sent', kind: 'hello', text: `${state.brief.sentYesterday} ${state.brief.sentYesterday === 1 ? 'hello' : 'hellos'} sent yesterday` });
-  }
-  const accepted = state.brief.acceptedRecently[0];
-  if (accepted) pills.push({ key: 'accepted', kind: 'following', text: `${accepted} accepted` });
+  const setOpenId = onOpen;
 
   return (
-    <div className="pa-tab pa-river">
-      <section aria-labelledby="pa-brief" className="pa-brief">
-        <h1 id="pa-brief">{greeting(now, tz)}</h1>
-        <div className="pa-pills">
-          {pills.map((pl) => (
-            <span key={pl.key} className="pa-pill"><i className={`pa-dot pa-dot-${pl.kind}`} aria-hidden="true" />{pl.text}</span>
-          ))}
-        </div>
-      </section>
-
-      <section className={`pa-strip${quiet ? ' pa-strip-quiet' : ''}`} aria-label={`${project?.name ?? 'Your'} river`}>
-        <svg className="pa-strip-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M0 50 C 20 38, 40 62, 60 50 S 90 44, 100 50" /></svg>
-        {faces.map((f) => (
-          <span
-            key={f.id}
-            role="img"
-            aria-label={f.label}
-            className="pa-face"
-            style={{ left: `${f.x}%`, top: f.y, width: f.size, height: f.size }}
-          >
-            <Marble
-              seed={300 + f.id}
-              size={f.size}
-              tone={f.want ? 'warm' : lookForStage(f.stage).tone}
-              ring={f.want ? 'var(--sun)' : lookForStage(f.stage).ring}
-              style={f.want ? { boxShadow: '0 0 0 2px var(--sun)' } : undefined}
-            />
-          </span>
-        ))}
-      </section>
-
+    <>
       <div className="pa-list">
         {paused ? <p className="pa-pause fade-in">{paused}</p> : null}
 
@@ -219,7 +193,7 @@ export function PhoneRiver({ state, project, tz, now, notify, refresh }: PhoneRi
           </>
         ) : null}
 
-        {mine.length === 0 && want.length === 0 ? <p className="pa-note">Nobody is in this river yet. Add people from your computer, or ask Callum to find some.</p> : null}
+        {mine.length === 0 && (hideWant || want.length === 0) ? <p className="pa-note">Nobody is in this river yet. Add people from your computer, or ask Callum to find some.</p> : null}
       </div>
 
       {open ? (
@@ -235,6 +209,62 @@ export function PhoneRiver({ state, project, tz, now, notify, refresh }: PhoneRi
           onClose={() => setOpenId(null)}
         />
       ) : null}
+    </>
+  );
+}
+
+/** The River tab: the brief, the strip, and everyone by how far along they are. The people who want to talk come from every project, with the project named when there are several. */
+export function PhoneRiver({ state, project, tz, now, notify, refresh }: PhoneRiverProps) {
+  const [openId, setOpenId] = useState<number | null>(null);
+  const want = wantToTalk(state.people);
+  const projectId = project?.id ?? state.settings.currentProjectId;
+  const mine = state.people.filter((p) => projectId === null || p.projectId === projectId);
+  const paused = pauseLine(state, project, tz);
+  const quiet = paused !== null;
+  const faces = stripFaces(mine);
+
+  const pills: { key: string; text: string; kind: string }[] = [
+    { key: 'want', kind: 'want', text: want.length > 0 ? `${want.length} want${want.length === 1 ? 's' : ''} to talk` : 'All caught up' },
+  ];
+  if (state.brief.sentYesterday > 0) {
+    pills.push({ key: 'sent', kind: 'hello', text: `${state.brief.sentYesterday} ${state.brief.sentYesterday === 1 ? 'hello' : 'hellos'} sent yesterday` });
+  }
+  const accepted = state.brief.acceptedRecently[0];
+  if (accepted) pills.push({ key: 'accepted', kind: 'following', text: `${accepted} accepted` });
+
+  return (
+    <div className="pa-tab pa-river">
+      <section aria-labelledby="pa-brief" className="pa-brief">
+        <h1 id="pa-brief">{greeting(now, tz)}</h1>
+        <div className="pa-pills">
+          {pills.map((pl) => (
+            <span key={pl.key} className="pa-pill"><i className={`pa-dot pa-dot-${pl.kind}`} aria-hidden="true" />{pl.text}</span>
+          ))}
+        </div>
+      </section>
+
+      <section className={`pa-strip${quiet ? ' pa-strip-quiet' : ''}`} aria-label={`${project?.name ?? 'Your'} river`}>
+        <svg className="pa-strip-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M0 50 C 20 38, 40 62, 60 50 S 90 44, 100 50" /></svg>
+        {faces.map((f) => (
+          <span
+            key={f.id}
+            role="img"
+            aria-label={f.label}
+            className="pa-face"
+            style={{ left: `${f.x}%`, top: f.y, width: f.size, height: f.size }}
+          >
+            <Marble
+              seed={300 + f.id}
+              size={f.size}
+              tone={f.want ? 'warm' : lookForStage(f.stage).tone}
+              ring={f.want ? 'var(--sun)' : lookForStage(f.stage).ring}
+              style={f.want ? { boxShadow: '0 0 0 2px var(--sun)' } : undefined}
+            />
+          </span>
+        ))}
+      </section>
+
+      <PhoneStages state={state} project={project} tz={tz} now={now} notify={notify} refresh={refresh} openId={openId} onOpen={setOpenId} />
     </div>
   );
 }
