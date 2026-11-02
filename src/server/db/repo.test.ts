@@ -150,6 +150,18 @@ describe('messages', () => {
     expect(repo.countOut('x', null, since)).toBe(0);
     expect(repo.countOut('email', [], since)).toBe(0);
   });
+
+  it('finds a message by its provider id, channel and direction', () => {
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });
+    const base = { personId: p.id, subject: null, body: 'x', at: '2026-01-02T00:00:00.000Z' };
+    repo.insertMessage({ ...base, channel: 'email', direction: 'in', kind: 'inbound', externalId: '<in@x>' });
+    repo.insertMessage({ ...base, channel: 'email', direction: 'out', kind: 'hello', externalId: '<out@x>' });
+    expect(repo.hasMessageWithExternalId('email', '<in@x>', 'in')).toBe(true);
+    expect(repo.hasMessageWithExternalId('email', '<in@x>', 'out')).toBe(false);
+    expect(repo.hasMessageWithExternalId('email', '<out@x>', 'out')).toBe(true);
+    expect(repo.hasMessageWithExternalId('x', '<in@x>', 'in')).toBe(false);
+    expect(repo.hasMessageWithExternalId('email', '<nope@x>', 'in')).toBe(false);
+  });
 });
 
 describe('outbox', () => {
