@@ -189,7 +189,11 @@ export class Runner {
     }
   }
 
-  private async planProject(projectId: number): Promise<void> {
+  /**
+   * Writes what is due for one project. With `early`, first hellos that need an OK are written ahead of their slot
+   * (they wait in the outbox with their send time), which is how Start fills Day one.
+   */
+  async planProject(projectId: number, opts: { early?: boolean } = {}): Promise<void> {
     const { repo } = this.ctx;
     const project = repo.getProject(projectId);
     if (!project || project.state !== 'running' || project.startedAt === null) return;
@@ -232,9 +236,8 @@ export class Runner {
           if (due === null) continue;
           person = repo.updatePerson(person.id, { nextTouchAt: due.toISOString() });
         }
-        if (due.getTime() > now.getTime()) continue;
-
         const needsOk = project.approvalsLeft > 0 && (kind === 'hello' || kind === 'invite');
+        if (due.getTime() > now.getTime() && !(opts.early && needsOk)) continue;
         if (needsOk && awaiting >= project.approvalsLeft) continue;
 
         const written = await this.ctx.writer.write(kind, {
@@ -250,4 +253,14 @@ export class Runner {
       }
     }
   }
+}
+
+/**
+ * Plans one project now, outside the timer, and says so if it went wrong. Used by Start and by skipping a hello,
+ * which both have to fill the stack of hellos waiting for an OK straight away.
+ */
+export async function planProjectNow(ctx: Ctx, projectId: number, opts: { early?: boolean } = {}): Promise<void> {
+  const problems: unknown[] = [];
+  await new Runner(ctx, { onError: (err) => problems.push(err) }).planProject(projectId, opts);
+  if (problems.length > 0) throw problems[0];
 }
