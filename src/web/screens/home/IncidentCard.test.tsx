@@ -134,10 +134,22 @@ describe('IncidentCards: the other kinds', () => {
     const message = INCIDENT_COPY.mailbox_signed_out('Google', 'gabriel@yourcompany.com', 14);
     const { user } = setup(appState({ incidents: [incident(2, 'mailbox_signed_out', message)] }));
     expect(screen.getByRole('heading', { name: 'Google signed Callum out' })).toBeInTheDocument();
-    expect(screen.getByText(message)).toBeInTheDocument();
+    // The title says who signed Callum out; the card does not repeat it, and does not count messages next to the people line.
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+    expect(screen.queryByText(/signed Callum out of/)).not.toBeInTheDocument();
+    expect(screen.getByText('Callum paused email. Nothing was lost.')).toBeInTheDocument();
     expect(screen.getByText('Reconnect Google to send them.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reconnect Google' }));
     expect(onReconnect).toHaveBeenCalledWith('email');
+  });
+
+  it('a signed-out custom mail server does not repeat its title or count emails that contradict the people line', () => {
+    const message = INCIDENT_COPY.mailbox_signed_out('Your mail server', 'gabriel@yourcompany.com', 0);
+    setup(appState({ incidents: [incident(2, 'mailbox_signed_out', message)] }));
+    expect(screen.getByRole('heading', { name: 'Your mail server signed Callum out' })).toBeInTheDocument();
+    expect(screen.queryByText(/No emails are waiting/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/signed Callum out of/)).not.toBeInTheDocument();
+    expect(screen.getByText('Callum paused email. Nothing was lost.')).toBeInTheDocument();
   });
 
   it('bounces say how many and Okay puts the notice away for good', async () => {

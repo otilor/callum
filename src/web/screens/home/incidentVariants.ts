@@ -109,27 +109,30 @@ function parseOutboxId(detail: string | null): number | null {
 
 const OKAY: VariantButton = { label: 'Okay', action: { kind: 'dismiss' } };
 
+/** "Your mail server" in the middle of a sentence: only the first word of a name that starts with "Your" loses its capital. */
+const midSentence = (name: string): string => name.replace(/^Your\b/, 'your');
+
 function signedOut(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when'>): IncidentVariant | null {
-  const parts = sentences(i.message);
   const waiting = waitingOn(state.people, i.channel);
   const name = CHANNEL_NAME[i.channel];
   const provider = i.channel === 'email' ? providerOf(i.message) : null;
   const who = provider ?? name;
-  const what = [parts[0] ?? i.message];
-  if (provider === 'Google' || provider === 'Microsoft') what.push('This usually follows a password change.');
-  const rest = parts.slice(1).join(' ');
+  const whoInSentence = midSentence(who);
+  // The title already says who signed Callum out, so the card does not say it again. Google and Microsoft add why.
+  const what: VariantLine[] = provider === 'Google' || provider === 'Microsoft' ? [{ kind: 'what', text: 'This usually follows a password change.' }] : [];
   return {
     ...base, key: 'signed_out',
     title: `${who} signed Callum out`,
     quote: null,
     lines: [
-      { kind: 'what', text: what.join(' ') },
-      { kind: 'did', text: `Callum paused ${name}.${rest ? ` ${rest}` : ''}${othersKeepGoing(state, i.channel)}` },
-      { kind: 'next', text: `Reconnect ${who} to send them.` },
+      ...what,
+      // The people line below says who waits, so this one does not count messages: the two never disagree.
+      { kind: 'did', text: `Callum paused ${name}. Nothing was lost.${othersKeepGoing(state, i.channel)}` },
+      { kind: 'next', text: `Reconnect ${whoInSentence} to send them.` },
     ],
     waitIds: waiting.map((p) => p.id),
     waitLine: waiting.length ? `${waiting.length} ${plural(waiting.length, 'person waits', 'people wait')} for ${name}. Nothing is lost.` : null,
-    primary: { label: `Reconnect ${who}`, action: { kind: 'reconnect', channel: i.channel } },
+    primary: { label: `Reconnect ${whoInSentence}`, action: { kind: 'reconnect', channel: i.channel } },
     secondary: null,
     icon: { personId: null, glyph: i.channel === 'email' ? 'mail' : i.channel === 'x' ? 'x' : 'in', badge: 'pause' },
   };

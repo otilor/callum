@@ -25,11 +25,26 @@ describe('signed out', () => {
       key: 'signed_out', title: 'Google signed Callum out', when: 'Today at 9:14', waitIds: [1, 2], waitLine: '2 people wait for email. Nothing is lost.',
       primary: { label: 'Reconnect Google', action: { kind: 'reconnect', channel: 'email' } }, secondary: null,
     });
+    // The title already says who signed Callum out, so no line repeats it; the people line says who waits, so no line counts emails.
     expect(v?.lines).toEqual([
-      { kind: 'what', text: 'Google signed Callum out of gabriel@yourcompany.com. This usually follows a password change.' },
-      { kind: 'did', text: 'Callum paused email. 2 emails are waiting and nothing was lost. LinkedIn and X keep going.' },
+      { kind: 'what', text: 'This usually follows a password change.' },
+      { kind: 'did', text: 'Callum paused email. Nothing was lost. LinkedIn and X keep going.' },
       { kind: 'next', text: 'Reconnect Google to send them.' },
     ]);
+  });
+
+  it('writes a custom mail server in lower case inside a sentence, and keeps the title capitalised', () => {
+    const custom = incident(4, 'mailbox_signed_out', { message: 'Your mail server signed Callum out of gabriel@yourcompany.com. No emails are waiting and nothing was lost.' });
+    const v = incidentVariant(custom, appState({ people: waiting }), NOW);
+    expect(v?.title).toBe('Your mail server signed Callum out');
+    expect(v?.lines).toEqual([
+      { kind: 'did', text: 'Callum paused email. Nothing was lost. LinkedIn and X keep going.' },
+      { kind: 'next', text: 'Reconnect your mail server to send them.' },
+    ]);
+    expect(v?.primary.label).toBe('Reconnect your mail server');
+    // The old line said no emails were waiting while this one says two people wait.
+    expect(v?.lines.map((l) => l.text).join(' ')).not.toMatch(/No emails are waiting|signed Callum out of/);
+    expect(v?.waitLine).toBe('2 people wait for email. Nothing is lost.');
   });
 
   it('works for LinkedIn and X too', () => {

@@ -373,7 +373,8 @@ export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss,
     const people = waitingFor(state, incident.channel);
     return (
       <Shell incident={incident} state={state} now={at} titleId={titleId} paused={false}>
-        <Lines what={incident.message} next={nextStepOf(incident)} />
+        {/* The title says who signed Callum out and the strip below says who waits, so this line does neither. */}
+        <Lines what={`Callum paused ${CHANNEL_NAME[incident.channel]}. Nothing was lost.`} next={nextStepOf(incident)} />
         {people.length > 0 ? <WaitStrip people={people} line={`${people.length} ${people.length === 1 ? 'person waits' : 'people wait'} for ${CHANNEL_NAME[incident.channel]}. Nothing is lost.`} /> : null}
         <div className="inc-actions">
           <button type="button" className="inc-primary" onClick={() => onReconnect(incident.channel)}>{label}</button>
