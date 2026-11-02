@@ -1,0 +1,563 @@
+/* Take a break, or wrap up, and the done screen. Daylight tokens only. */
+.lv-root {
+  position: relative;
+  min-height: 100vh;
+  padding: 22px 32px 26px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--white);
+  color: var(--ink);
+}
+.lv-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+}
+.lv-mark[data-gone='true'] .wm-dot {
+  background: var(--tick);
+}
+.lv-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px 0 12px;
+  border: none;
+  border-radius: 20px;
+  background: var(--mist);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.lv-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 0 10px;
+}
+.lv-view {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.lv-choose {
+  max-width: 1120px;
+  align-items: center;
+  gap: 30px;
+}
+.lv-rest,
+.lv-done {
+  max-width: 640px;
+  align-items: center;
+  text-align: center;
+}
+.lv-wrap {
+  max-width: 660px;
+}
+.lv-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lv-head-center {
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+}
+.lv-title {
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+}
+.lv-title-xl {
+  font-size: 42px;
+  line-height: 1.1;
+}
+.lv-title:focus {
+  outline: none;
+}
+.lv-lede {
+  max-width: 40ch;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--slate);
+}
+.lv-head .lv-lede {
+  max-width: none;
+}
+.lv-lede-sm {
+  font-size: 17px;
+}
+.lv-note {
+  font-size: 15px;
+  color: var(--slate);
+}
+
+/* ---- the two cards ---- */
+.lv-choices {
+  width: 100%;
+  display: flex;
+  gap: 24px;
+  align-items: stretch;
+}
+.lv-card {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px 30px;
+  border-radius: 32px;
+  background: var(--white);
+  box-shadow: 0 36px 80px -44px rgba(29, 33, 64, 0.45), var(--hairline);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.lv-card:hover {
+  transform: translateY(-3px);
+}
+.lv-card-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.lv-card-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lv-card-icon {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--mist);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lv-card-title {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.lv-card-sub {
+  font-size: 15px;
+  color: var(--slate);
+}
+.lv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lv-chip {
+  min-height: 44px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 22px;
+  background: var(--mist);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.lv-chip[aria-checked='true'] {
+  background: var(--ink);
+  color: var(--white);
+}
+.lv-date {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+}
+.lv-date input {
+  min-height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 22px;
+  background: var(--mist);
+  font-size: 15px;
+}
+.lv-date input:focus-visible {
+  outline: 2px solid var(--focus);
+}
+.lv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lv-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+}
+.lv-list li::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tick);
+}
+.lv-talking {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  font-size: 15px;
+  color: var(--slate);
+}
+.lv-faces {
+  display: flex;
+  padding-right: 8px;
+}
+
+/* ---- buttons ---- */
+.lv-primary,
+.lv-quiet {
+  min-height: 52px;
+  padding: 0 26px;
+  border: none;
+  border-radius: 26px;
+  font-size: 16px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-decoration: none;
+  transition: opacity 0.3s ease, transform 0.2s ease;
+}
+.lv-primary {
+  background: var(--ink);
+  color: var(--white);
+}
+.lv-quiet {
+  background: var(--mist);
+  color: var(--ink);
+}
+.lv-primary-lg {
+  padding: 0 22px 0 24px;
+}
+.lv-primary:disabled {
+  opacity: 0.35;
+}
+.lv-primary[aria-busy='true'] {
+  opacity: 0.7;
+}
+.lv-push {
+  margin-top: auto;
+  align-self: flex-start;
+}
+.lv-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.lv-actions-center {
+  justify-content: center;
+  margin-top: 4px;
+}
+
+/* ---- resting ---- */
+.lv-moon {
+  width: 92px;
+  height: 92px;
+  margin-bottom: 18px;
+  border-radius: 50%;
+  background: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 14px var(--mist), 0 0 0 28px #fafafc;
+  animation: lv-rest 4s ease-in-out infinite;
+}
+@keyframes lv-rest {
+  50% {
+    box-shadow: 0 0 0 18px var(--mist), 0 0 0 36px #fafafc;
+  }
+}
+
+/* ---- the wrap-up list ---- */
+.lv-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lv-step {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 24px;
+  background: var(--white);
+  box-shadow: 0 0 0 1px var(--line);
+  transition: opacity 0.4s ease;
+}
+.lv-step[data-dim='true'] {
+  opacity: 0.55;
+}
+.lv-disc {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--mist);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+}
+.lv-disc[data-done='done'] {
+  background: var(--ink);
+}
+.lv-disc[data-done='skipped'] {
+  background: var(--tick);
+}
+.lv-spin {
+  animation: spin 1.1s linear infinite;
+  transform-origin: 50% 50%;
+}
+.lv-step-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.lv-step-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+.lv-step-sub {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--slate);
+}
+.lv-step-note {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--slate);
+}
+.lv-switch {
+  flex: 0 0 auto;
+  position: relative;
+  width: 52px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 16px;
+  background: var(--track);
+  transition: background-color 0.25s ease;
+}
+.lv-switch[data-on='true'] {
+  background: var(--ink);
+}
+.lv-knob {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 1px 3px rgba(29, 33, 64, 0.25);
+  transition: transform 0.25s var(--ease);
+}
+.lv-switch[data-on='true'] .lv-knob {
+  transform: translateX(20px);
+}
+
+/* ---- done ---- */
+.lv-sun {
+  width: 84px;
+  height: 84px;
+  margin-bottom: 18px;
+  border-radius: 50%;
+  background: var(--sun);
+  box-shadow: 0 0 0 16px var(--sun-tint), 0 0 0 32px #fff9ec;
+}
+.lv-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lv-file {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 10px 10px 14px;
+  border-radius: 22px;
+  background: var(--mist);
+  text-align: left;
+}
+.lv-file-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lv-file-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lv-file-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+.lv-file-meta {
+  font-size: 13px;
+  color: var(--slate);
+}
+.lv-file-again {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 20px;
+  background: var(--white);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+/* ---- the river underneath ---- */
+.lv-river {
+  position: relative;
+  height: 130px;
+  margin-top: 10px;
+}
+.lv-river svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.lv-bed {
+  transition: opacity 1.2s ease;
+}
+.lv-current {
+  stroke-dasharray: 1 22;
+  animation: lv-flow 2.4s linear infinite;
+}
+.lv-current-slow {
+  animation-duration: 3.8s;
+}
+.lv-current[data-still='true'] {
+  animation-play-state: paused;
+  opacity: 0.4;
+}
+@keyframes lv-flow {
+  to {
+    stroke-dashoffset: -23;
+  }
+}
+.lv-face {
+  transition: filter 1.2s ease, opacity 1.2s ease, box-shadow 1.2s ease;
+}
+
+@media (max-width: 760px) {
+  .lv-root {
+    padding: 18px 16px 24px;
+  }
+  .lv-title,
+  .lv-title-xl {
+    font-size: 30px;
+  }
+  .lv-choices {
+    flex-direction: column;
+  }
+  .lv-card {
+    padding: 22px 20px;
+  }
+  .lv-river {
+    height: 110px;
+  }
+  .lv-date {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lv-card,
+  .lv-chip,
+  .lv-knob,
+  .lv-switch,
+  .lv-face,
+  .lv-bed {
+    transition: none;
+  }
+  .lv-moon,
+  .lv-current,
+  .lv-spin {
+    animation: none;
+  }
+}
+
+/* ---- wrapping up one project, asked in place ---- */
+.pw-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pw-text {
+  font-size: 15px;
+  line-height: 1.45;
+}
+.pw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pw-primary,
+.pw-quiet,
+.pw-ghost {
+  min-height: 42px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 21px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.pw-primary {
+  background: var(--ink);
+  color: var(--white);
+}
+.pw-quiet {
+  background: var(--mist);
+  color: var(--ink);
+}
+.pw-ghost {
+  background: transparent;
+  color: var(--slate);
+  padding: 0 14px;
+}
+.pw-primary[aria-busy='true'],
+.pw-quiet[aria-busy='true'] {
+  opacity: 0.7;
+}

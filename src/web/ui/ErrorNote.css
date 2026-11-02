@@ -1,0 +1,13 @@
+.err-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: var(--error-tint);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.err-note svg {
+  flex: 0 0 auto;
+}
