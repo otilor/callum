@@ -69,7 +69,7 @@ function metaDescription(html: string, lower: string, ends: TagEnds): string | n
     if (end === Number.POSITIVE_INFINITY) break;
     if (end - at > TAG_MAX) continue;
     const attrs: Record<string, string> = {};
-    for (const a of html.slice(at, end + 1).matchAll(/([a-z_:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi)) {
+    for (const a of html.slice(at, end + 1).matchAll(/(?<![a-z_:-])([a-z_:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi)) {
       attrs[a[1]!.toLowerCase()] = a[2] ?? a[3] ?? a[4] ?? '';
     }
     const key = (attrs.name ?? attrs.property ?? '').toLowerCase();
@@ -225,7 +225,11 @@ export function isPublicAddress(address: string): boolean {
     // "::", "::1", IPv4-mapped (::ffff:a.b.c.d) and the old IPv4-compatible form.
     return g[5] === 0xffff ? embedded(g[6]!, g[7]!) : false;
   }
-  if (g[0] === 0x64 && g[1] === 0xff9b && g.slice(2, 6).every((x) => x === 0)) return embedded(g[6]!, g[7]!); // NAT64
+  if (g.slice(0, 4).every((x) => x === 0) && g[4] === 0xffff && g[5] === 0) return false; // IPv4-translated (SIIT) ::ffff:0:a.b.c.d
+  if (g[0] === 0x64 && g[1] === 0xff9b) {
+    // NAT64: the well-known /96 carries a public IPv4 address; the local-use 64:ff9b:1::/48 does not.
+    return g.slice(2, 6).every((x) => x === 0) ? embedded(g[6]!, g[7]!) : false;
+  }
   if (g[0] === 0x2002) return embedded(g[1]!, g[2]!); // 6to4
   if ((g[0]! & 0xfe00) === 0xfc00) return false; // unique local fc00::/7
   if ((g[0]! & 0xffc0) === 0xfe80) return false; // link-local fe80::/10
@@ -259,6 +263,8 @@ function plainHost(raw: string): string | null {
  * What a company's home page says about itself: its title, description and first words. Used to write an offer line.
  * Returns '' on any failure (no answer in 5 seconds, a page that is not HTML, an error status). Redirects are
  * followed by hand, at most 5, and every host on the way must be a plain domain whose addresses are all public.
+ * Known limit: the name is resolved here and again by `fetch`, so a DNS-rebinding host could still slip through. That is
+ * accepted because the only domain read is the user's own (their email's domain).
  */
 export async function fetchSiteText(domain: string, fetchImpl?: typeof fetch, opts: SiteOptions = {}): Promise<string> {
   const first = plainHost(domain);

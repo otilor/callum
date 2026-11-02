@@ -228,6 +228,18 @@ describe('importPeople', () => {
       expect(importPeople(repo, projectId, [{ name: 'K', email: 'kemi@okopay.com', source: 'csv' }]).updated).toEqual([]);
     });
 
+    it('someone added earlier in the same import is reported once, as added, with what they learned', () => {
+      const result = importPeople(repo, projectId, [
+        { name: 'Kemi Eze', linkedinUrl: 'linkedin.com/in/kemi-eze', source: 'csv', row: 2 },
+        { name: 'Femi Ade', email: 'femi@ledgerly.io', source: 'csv', row: 3 },
+        { name: 'Kemi Eze', email: 'kemi@okopay.com', linkedinUrl: 'linkedin.com/in/kemi-eze', source: 'csv', row: 4 },
+      ]);
+      expect(result.skipped).toEqual([{ name: 'Kemi Eze', reason: 'duplicate', row: 4 }]);
+      expect(result.added.map((p) => [p.name, p.email])).toEqual([['Kemi Eze', 'kemi@okopay.com'], ['Femi Ade', 'femi@ledgerly.io']]);
+      expect(result.added[0]).toEqual(repo.getPerson(result.added[0]!.id));
+      expect(result.updated).toEqual([]);
+    });
+
     it('a stopped person in another project still learns the handle, so the stop holds', () => {
       const second = makeProject(repo, { name: 'Reconciliation' });
       const kemi = repo.insertPerson({ name: 'Kemi Eze', source: 'csv', projectId, linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' });

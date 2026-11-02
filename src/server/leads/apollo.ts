@@ -14,14 +14,15 @@ const TIMEOUT_MS = 20_000;
 /** Emails Apollo stands behind; anything else is a guess and would bounce. */
 const TRUSTED_EMAIL_STATUS = new Set(['verified', 'likely_to_engage']);
 
+export type ApolloOperation = 'search' | 'enrich';
 export type ApolloErrorCode = 'bad_key' | 'not_allowed' | 'bad_search' | 'rate_limited' | 'failed';
 
 /** A failed Apollo call, with a message that is already plain words and never contains the key. */
 export class ApolloError extends Error {
   /** For `enrich`: what earlier batches already found and cost before this one failed. */
   partial?: ApolloEnrichment;
-  constructor(readonly code: ApolloErrorCode, readonly status: number | null) {
-    super(MESSAGES[code]);
+  constructor(readonly code: ApolloErrorCode, readonly status: number | null, op: ApolloOperation = 'search') {
+    super(op === 'enrich' ? ENRICH_MESSAGES[code] : MESSAGES[code]);
     this.name = 'ApolloError';
   }
 }
@@ -32,6 +33,15 @@ const MESSAGES: Record<ApolloErrorCode, string> = {
   bad_search: "Apollo couldn't understand that search. Try fewer words.",
   rate_limited: "Apollo's hourly search limit is reached. Try again in an hour.",
   failed: 'Apollo search failed.',
+};
+
+/** The same failures, as they read when looking up the people the user kept. */
+const ENRICH_MESSAGES: Record<ApolloErrorCode, string> = {
+  ...MESSAGES,
+  bad_search: "Apollo couldn't look up the people you chose. Search again and pick them from the new results.",
+  rate_limited: "Apollo's lookup limit is reached. Try again in an hour.",
+  not_allowed: "This Apollo key can't look up people. Check its permissions in Apollo.",
+  failed: 'Apollo lookup failed. Try again in a minute.',
 };
 
 const CODE_BY_STATUS: Record<number, ApolloErrorCode> = { 401: 'bad_key', 403: 'not_allowed', 422: 'bad_search', 429: 'rate_limited' };
@@ -111,7 +121,7 @@ export class ApolloSource {
       if (q.query) params.push(`q_keywords=${encodeURIComponent(q.query)}`);
       for (const t of q.titles) params.push(`person_titles[]=${encodeURIComponent(t)}`);
       params.push(`per_page=${perPage}`, `page=${page}`);
-      const data = await this.post(`${SEARCH_PATH}?${params.join('&')}`);
+      const data = await this.post('search', `${SEARCH_PATH}?${params.join('&')}`);
       const found = Array.isArray(data.people) ? data.people : [];
       const pagination = record(data.pagination);
       const entries = pagination.total_entries ?? data.total_entries;
@@ -129,12 +139,14 @@ export class ApolloSource {
 
   /** Looks the chosen people up by their Apollo id, ten at a time. Spends credits. */
   async enrich(ids: string[]): Promise<ApolloEnrichment> {
-    const unique = [...new Set(ids)];
+    // An id that is not text can never be looked up; say so in words rather than failing with a TypeError.
+    if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) throw new ApolloError('bad_search', null, 'enrich');
+    const unique = [...new Set(ids.map((id) => id.trim()).filter((id) => id !== ''))];
     const result: ApolloEnrichment = { people: [], creditsUsed: 0 };
     for (let i = 0; i < unique.length; i += ENRICH_BATCH) {
       let data: Record<string, unknown>;
       try {
-        data = await this.post(ENRICH_PATH, { details: unique.slice(i, i + ENRICH_BATCH).map((id) => ({ id })) });
+        data = await this.post('enrich', ENRICH_PATH, { details: unique.slice(i, i + ENRICH_BATCH).map((id) => ({ id })) });
       } catch (e) {
         if (e instanceof ApolloError) e.partial = { people: [...result.people], creditsUsed: result.creditsUsed };
         throw e;
@@ -148,7 +160,7 @@ export class ApolloSource {
     return result;
   }
 
-  private async post(pathAndQuery: string, body?: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private async post(op: ApolloOperation, pathAndQuery: string, body?: Record<string, unknown>): Promise<Record<string, unknown>> {
     let res: Response;
     try {
       res = await this.fetchImpl(`${this.baseUrl}${pathAndQuery}`, {
@@ -161,16 +173,16 @@ export class ApolloSource {
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch {
-      throw new ApolloError('failed', null);
+      throw new ApolloError('failed', null, op);
     }
     if (!res.ok) {
       await res.body?.cancel().catch(() => undefined);
-      throw new ApolloError(CODE_BY_STATUS[res.status] ?? 'failed', res.status);
+      throw new ApolloError(CODE_BY_STATUS[res.status] ?? 'failed', res.status, op);
     }
     try {
       return record(await res.json());
     } catch {
-      throw new ApolloError('failed', res.status);
+      throw new ApolloError('failed', res.status, op);
     }
   }
 }

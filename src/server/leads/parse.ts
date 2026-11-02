@@ -395,8 +395,35 @@ export function parseCsv(text: string): ParseResult {
 
 // ---- paste ------------------------------------------------------------------------------------
 
-function splitLine(line: string): string[] {
-  const delimiter = line.includes('\t') ? '\t' : line.includes('|') ? '|' : line.includes(',') ? ',' : line.includes(';') ? ';' : null;
+/** A tab is a field boundary wherever it appears: nobody types one inside a name or a company. */
+const TAB = '\t';
+/** The separators a whole paste or file can use, in the order tried when they are equally common. */
+const LINE_DELIMITERS = [',', ';', '|'] as const;
+type LineDelimiter = (typeof LINE_DELIMITERS)[number];
+
+/**
+ * The one separator for the lines of a paste or file that have no tab: the one found on the most lines, so a "|" in
+ * a headline on a comma line never splits that line. When several are equally common (and there are at least two
+ * lines): the one that appears the same number of times on every line it is on, then the one that appears more often
+ * per line, then comma, semicolon, pipe.
+ */
+function pickLineDelimiter(lines: string[]): LineDelimiter | null {
+  const stats = LINE_DELIMITERS.map((d) => {
+    const counts = lines.map((l) => l.split(d).length - 1).filter((n) => n > 0);
+    return { d, lines: counts.length, steady: counts.every((n) => n === counts[0]), perLine: counts.reduce((a, b) => a + b, 0) / (counts.length || 1) };
+  }).filter((c) => c.lines > 0);
+  const most = Math.max(0, ...stats.map((c) => c.lines));
+  let tied = stats.filter((c) => c.lines === most);
+  if (tied.length > 1 && lines.length > 1) {
+    if (tied.some((c) => c.steady)) tied = tied.filter((c) => c.steady);
+    const top = Math.max(...tied.map((c) => c.perLine));
+    tied = tied.filter((c) => c.perLine === top);
+  }
+  return tied[0]?.d ?? null;
+}
+
+function splitLine(line: string, chosen: LineDelimiter | null): string[] {
+  const delimiter = line.includes(TAB) ? TAB : chosen;
   if (!delimiter) return [line];
   const fields: string[] = [];
   let cur = '';
@@ -415,10 +442,10 @@ function splitLine(line: string): string[] {
 const X_URL = /(?:^|\/\/)(?:[a-z0-9-]+\.)*(?:x|twitter)\.com\//i;
 
 /** One person per line, with names, emails, LinkedIn links and @handles recognised by their shape. */
-function parsePasteLine(line: string): Parts {
+function parsePasteLine(line: string, delimiter: LineDelimiter | null): Parts {
   const parts: Parts = { name: null, first: null, email: null, company: null, role: null, linkedinUrl: null, xHandle: null, timezone: null };
   const texts: string[] = [];
-  for (const field of splitLine(line)) {
+  for (const field of splitLine(line, delimiter)) {
     const words: string[] = [];
     for (const token of field.trim().split(/\s+/).filter(Boolean)) {
       const bare = token.replace(/^[<("']+|[>)"',;]+$/g, '');
@@ -460,7 +487,9 @@ function startsWithHeader(text: string): boolean {
 function parseLines(raw: string, source: LeadSource): ParseResult {
   const text = stripBom(raw);
   const out = new Collector(source);
-  text.split(/\r?\n/).forEach((line, i) => {
+  const lines = text.split(/\r?\n/);
+  const delimiter = pickLineDelimiter(lines.filter((l) => l.trim() !== '' && !l.includes(TAB) && !emailsOnly(l)));
+  lines.forEach((line, i) => {
     if (line.trim() === '') return;
     const row = i + 1;
     const many = emailsOnly(line);
@@ -468,7 +497,7 @@ function parseLines(raw: string, source: LeadSource): ParseResult {
       for (const email of many) out.add({ name: null, first: null, email: cleanEmail(email), company: null, role: null, linkedinUrl: null, xHandle: null, timezone: null }, row);
       return;
     }
-    out.add(parsePasteLine(line), row);
+    out.add(parsePasteLine(line, delimiter), row);
   });
   return out.result();
 }
