@@ -20,7 +20,7 @@ function project(over: Partial<Project> = {}): Project {
 function awaiting(): OutboxItem {
   return {
     id: 5, personId: 1, channel: 'email', kind: 'hello', subject: 'Hi', body: 'Hi', state: 'awaiting_ok', origin: 'auto', sendAfter: AT,
-    undoUntil: null, error: null, approvalCounted: false, createdAt: AT, updatedAt: AT,
+    undoUntil: null, error: null, approvalCounted: false, claimedAt: null, detail: null, createdAt: AT, updatedAt: AT,
   };
 }
 

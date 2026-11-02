@@ -1,5 +1,5 @@
 import type {
-  AppState, AskAction, AskAnswer, Channel, ChannelAccount, Correction, Message, OutboxItem, PathStep, Person, Project, Settings, Skipped, Tone,
+  AppState, AskAction, AskAnswer, Channel, ChannelAccount, Correction, Message, OutboxItem, PathStep, Person, PersonFull, Project, Settings, Skipped, Tone,
 } from '../shared/types.js';
 
 
@@ -143,9 +143,14 @@ export const api = {
   wrapSummary: () => get<{ line: string }>('/wrap/summary'),
   startAgain: () => post<Settings>('/start-again'),
 
-  seed: (scene: 'morning') => post<unknown>('/demo/seed', { scene }),
+  seed: (scene: 'fresh' | 'morning') => post<unknown>('/demo/seed', { scene }),
 
   /** Download links; the browser follows them, so they are plain URLs. */
   exportJsonUrl: (projectId?: number) => `/api${withQuery('/export.json', { projectId })}`,
   exportCsvUrl: (projectId?: number) => `/api${withQuery('/export.csv', { projectId })}`,
+  // Task 17
+  /** The same route as `person`, with what the person page needs: next step, why this channel, what can be done. */
+  personFull: (id: number) => get<PersonFull>(`/people/${id}`),
+  wake: (id: number) => post<{ person: Person; undoUntil: string; next: string | null }>(`/people/${id}/wake`),
+  rest: (id: number) => post<Person>(`/people/${id}/rest`),
 };
