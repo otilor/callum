@@ -195,10 +195,15 @@ function findNameBlockStart(lines: string[]): number {
   return lines.length;
 }
 
-/** What is left once a closing signature, footer or name block is cut: where away phrases are looked for. Whole text when nothing but a greeting is above it. */
+/** Where the closing block (signature, client footer or name block) starts: `lines.length` when there is none. */
+function closingBlockStart(lines: string[]): number {
+  return Math.min(findSignatureStart(lines, false), findNameBlockStart(lines));
+}
+
+/** What is left once the closing block is cut: where away phrases are looked for. Whole text when nothing but a greeting is above it. */
 function aboveSignature(text: string): string {
   const lines = text.split('\n');
-  const cut = Math.min(findSignatureStart(lines, false), findNameBlockStart(lines));
+  const cut = closingBlockStart(lines);
   return cut >= lines.length ? text : lines.slice(0, cut).join('\n');
 }
 
@@ -209,6 +214,8 @@ export function cleanReply(rawText: string): string {
 
 // ---- engagement
 const NEGATED_INTEREST_RE = /\b(?:not|never|no|isn'?t|aren'?t|n'?t)\s+(?:really\s+|very\s+|that\s+|so\s+)?(?:interested|keen)\b|\bno interest\b|\bkein interesse\b|pas int[ée]ress[ée]e?|no me interesa|n[ãa]o tenho interesse|\bnot sure\b/gi;
+/** "Don't call me", "never send me ...": the engagement phrase is refused, not offered. */
+const REFUSED_REQUEST_RE = /\b(?:do not|don'?t|never)\s+(?:ever\s+)?(?:call|ring|send|text|phone)\s+(?:me|us)\b/gi;
 const RHETORICAL_QUESTION_RE = /\b(?:any |other )?(?:questions|queries|urgent(?:ly)?|need (?:help|assistance)|anything urgent)\s*\?/gi;
 const ENGAGED_RE = new RegExp(
   '(?<![\\p{L}])(?:' + [
@@ -229,7 +236,7 @@ const RETURN_SLOT_RE = new RegExp(`\\b(?:until|till|back|returning|returns?|from
  * a weekday, a clock time, "works" or "ok" counts too (the return date of an away message does not).
  */
 export function isEngaged(text: string, scheduling = false): boolean {
-  const t = text.replace(NEGATED_INTEREST_RE, ' ').replace(RHETORICAL_QUESTION_RE, ' ');
+  const t = text.replace(NEGATED_INTEREST_RE, ' ').replace(REFUSED_REQUEST_RE, ' ').replace(RHETORICAL_QUESTION_RE, ' ');
   return ENGAGED_RE.test(t) || (scheduling && SCHEDULING_RE.test(t.replace(RETURN_SLOT_RE, ' ')));
 }
 
@@ -248,74 +255,83 @@ const FOOTER_WORDING_RE = new RegExp(
   ].join('|'),
   'i',
 );
-const NEGATION = String.raw`(?:do not|don'?t|never)`;
-const DONT_VERB = String.raw`(?:e-?mail|mail|contact|write(?: to)?|message|dm|text|sms|call|phone|ring|reach out to)`;
+const NEGATION = String.raw`(?:do not|don'?t|never)(?:\s+ever)?`;
+const OTHER_CHANNEL_VERB = String.raw`(?:call|phone|ring|text|sms|whats\s?app|dm)`;
+const DONT_VERB = String.raw`(?:e-?mail|mail|contact|write(?: to)?|message|reach out to|${OTHER_CHANNEL_VERB})`;
+const VERB_LIST_SEPARATOR = String.raw`(?:\s*,\s*(?:or\s+|and\s+)?|\s+(?:or|and)\s+)`;
+const DONT_VERBS = String.raw`${DONT_VERB}(?:${VERB_LIST_SEPARATOR}${DONT_VERB})*`;
 /**
  * "Don't email me", "do not contact us again", "don't send me any more": the three shapes of a general request.
- * Each one still has to pass `isDontOptOut`, which rules out qualified phrases and phrases aimed at something else.
+ * Each match is then read by `readDontPhrase`, which decides whether it is a stop or something narrower.
  */
 const DONT_PATTERNS = [
-  new RegExp(String.raw`\b${NEGATION}\s+(${DONT_VERB})\s+(?:me|us|my team|this address|this e-?mail(?: address)?)\b`, 'gi'),
-  new RegExp(String.raw`\b${NEGATION}\s+(${DONT_VERB})\s+(?:again|anymore|any more|any longer)\b`, 'gi'),
+  new RegExp(String.raw`\b${NEGATION}\s+(${DONT_VERBS})\s+(?:me|us|my team|this address|this e-?mail(?: address)?)\b`, 'gi'),
+  new RegExp(String.raw`\b${NEGATION}\s+(${DONT_VERBS})\s+(?:again|anymore|any more|any longer)\b`, 'gi'),
   new RegExp(String.raw`\b${NEGATION}\s+(send)\s+(?:me|us)\s+(?:any\s+)?(?:more|further|another)\b(?:\s+([\w-]+))?`, 'gi'),
 ];
+const OTHER_CHANNEL_VERB_RE = new RegExp(`^${OTHER_CHANNEL_VERB}$`, 'i');
 /** What can follow "any more" and still be a request to stop writing; any other noun ("attachments", "paper invoices") is a narrower request. */
 const MESSAGE_NOUNS = new Set([
   'e-mail', 'e-mails', 'email', 'emails', 'mail', 'mails', 'message', 'messages', 'note', 'notes', 'follow-up', 'follow-ups', 'followups', 'info', 'information',
   'offer', 'offers', 'pitch', 'pitches', 'spam', 'stuff', 'update', 'updates', 'newsletter', 'newsletters', 'text', 'texts', 'call', 'calls', 'reminder', 'reminders',
   'outreach', 'marketing', 'material', 'materials', 'junk', 'correspondence', 'of', 'from', 'please', 'thanks', 'now', 'and', 'or',
 ]);
-const AGAIN_RE = /\b(?:again|anymore|any more|any longer|ever|at all)\b/i;
-const WEEKDAY_Q = '(?:mon|tues|wednes|thurs|fri|satur|sun)days?';
-/** "on Fridays", "before January", "outside working hours", "until after the audit", "if it's urgent": a time or condition. */
-const TIME_QUALIFIER_RE = new RegExp(
-  String.raw`\b(?:on ${WEEKDAY_Q}|(?:on|at|over|during) (?:the )?(?:weekends?|weekdays?|holidays?|public holidays?)|at (?:\d|noon|midnight|night|lunch)|outside|out of hours|before|after|until|till|during|between|from \d|next (?:week|month|quarter|year)|this (?:week|month|quarter|year)|in the (?:morning|evening|afternoon|night)|every \w+|when|while|once|if|unless|except|as long as)\b|^\s*back\b`,
+/** "again", "ever", "anymore": the writer means never, whatever else the clause says. */
+const AGAIN_RE = /\b(?:again|anymore|any more|any longer|ever)\b/i;
+/** The clause of a phrase ends at a comma, a semicolon, "but" or "and then"; what follows is somebody else's business. */
+const CLAUSE_END_RE = /[,;]|\s+but\s+|\s+and then\s+/i;
+/** "after this", "after today", "after this message" end nothing: the writer does not mean "write again later". */
+const AFTER_THIS_RE = /\bafter\s+(?:this|that|today|now|tonight|these)\b(?:\s+(?:message|e-?mail|note|one))?/gi;
+/** The one qualifier that survives "again": a stated end point ("until ...", "before January", "after 9am") means the writer will hear from us later. */
+const END_POINT_RE = new RegExp(
+  String.raw`\b(?:until|till)\b|\b(?:before|after)\s+(?:the\s+)?(?:\d|(?:${MONTH_RE})\b|${DAY}\b|tomorrow\b|next\b|christmas\b|new year\b)`,
   'i',
 );
-/** "on this number", "at the info@ address", "through the website form", "on LinkedIn": where, not whether. */
-const PLACE_QUALIFIER_RE = new RegExp(
-  String.raw`\b(?:on this (?:number|line)|at this address|through|via|by (?:phone|e-?mail|text|sms|post)|on (?:linkedin|whatsapp|telegram|signal|slack|facebook|instagram|twitter|sms|my (?:mobile|cell|work|personal|office|desk|landline)|the (?:phone|mobile|landline|website|portal|form))|at (?:my |the )?(?:office|desk|work|home))\b|\bat (?:the |that )?[\w.-]*@`,
+/**
+ * A time, condition, place or channel attached to the phrase: "on Fridays", "if it's urgent", "on this number", "via the website form",
+ * "at the info@ address". Our own channel is not one: "by email", "via any channel", "on my work email", "at work", "at this address".
+ */
+const QUALIFIER_RE = new RegExp(
+  [
+    String.raw`\b(?:outside|out of hours|before|after|during|between|next (?:week|month|quarter|year)|this (?:week|month|quarter|year)|in the (?:morning|evening|afternoon|night)|(?:at|over) (?:the )?(?:weekends?|weekdays?|holidays?|noon|midnight|night|lunch)|every \w+|when|while|once|if|unless|except|as long as)\b`,
+    String.raw`\b(?:from|at)\s+\d`, String.raw`^\s*back\b`,
+    String.raw`\b(?:through|via|by|on|over|using)\s+(?!(?:\w+\s+){0,3}?(?:e-?mail|mail)\b|(?:any|all|every|whatever)\b)`,
+    String.raw`\bat\s+(?:the\s+|that\s+)?[\w.-]*@`,
+  ].join('|'),
   'i',
 );
 /** A thing being named after "email us": "your card details", "the PDF". A narrower request, not a stop. */
 const NOUN_OBJECT_RE = /^\s*(?:your|my|the|any|a|an|our|their|these|those|this|that|\d)\b/i;
-const OTHER_CHANNEL_WORDS: Record<string, RegExp> = {
-  email: /\be-?mail\b|\bmail\b/i, phone: /\bcall(?:s|ing)?\b|\bphone\b|\bring\b/i, sms: /\b(?:text|texts|sms)\b/i, whatsapp: /whats\s?app/i,
-  telegram: /\btelegram\b/i, signal: /\bsignal\b/i, linkedin: /\blinkedin\b/i, slack: /\bslack\b/i, dm: /\bdm\b|\bdirect message/i,
-};
-function channelOf(verb: string): string | null {
-  const v = verb.toLowerCase();
-  if (/^(?:e-?mail|mail)$/.test(v)) return 'email';
-  if (/^(?:call|phone|ring)$/.test(v)) return 'phone';
-  if (/^(?:text|sms)$/.test(v)) return 'sms';
-  if (/^(?:message|dm)$/.test(v)) return 'message';
-  return null; // contact, write to, reach out to, send: no channel, so no other channel can excuse them
+/** The same sentence points the writer elsewhere: "call me instead", "WhatsApp me", "use payments@...". */
+const OTHER_CHANNEL_RE = /\b(?:call(?:s|ing)?|phone|ring|text(?:s|ing)?|sms|whats\s?app|telegram|signal|linkedin|slack|dm|direct message|instead|rather)\b|\b(?:use|try|reach me at|contact me at|write to)\b[^.]{0,60}@/i;
+
+/** One "don't ..." match: is it a request to stop, or something narrower? */
+function isStopRequest(sentence: string, m: RegExpExecArray): boolean {
+  const verbs = (m[1] ?? '').split(new RegExp(VERB_LIST_SEPARATOR, 'i'));
+  if (verbs.every((v) => OTHER_CHANNEL_VERB_RE.test(v.trim()))) return false; // "don't call me" is not an email opt-out
+  // "Do not email this address" is about the mailbox ("it is not monitored"), not about the person, unless they say again
+  if (/\bthis (?:e-?mail )?address$/i.test(m[0]) && !AGAIN_RE.test(m[0] + sentence.slice(m.index + m[0].length))) return false;
+  const end = m.index + m[0].length;
+  const rest = sentence.slice(end);
+  const clauseEnd = rest.search(CLAUSE_END_RE);
+  const clause = (clauseEnd < 0 ? rest : rest.slice(0, clauseEnd)).replace(AFTER_THIS_RE, ' ');
+  if (END_POINT_RE.test(clause)) return false;
+  if (!AGAIN_RE.test(`${m[0]} ${clause}`) && (QUALIFIER_RE.test(clause) || NOUN_OBJECT_RE.test(clause))) return false;
+  const emailOnly = verbs.every((v) => /^(?:e-?mail|mail)$/i.test(v.trim())) || /\bat this (?:e-?mail )?address\b/i.test(clause);
+  return !(emailOnly && OTHER_CHANNEL_RE.test(sentence.slice(0, m.index) + ' ' + rest));
 }
-/** "Don't call me, email is best", "don't email me at 9am, email me at x@y.com instead": the same sentence offers another channel. */
-function offersOtherChannel(rest: string, channel: string): boolean {
-  if (/\b(?:instead|rather)\b/i.test(rest)) return true;
-  if (Object.entries(OTHER_CHANNEL_WORDS).some(([name, re]) => name !== channel && re.test(rest))) return true;
-  return channel === 'email' ? /\b(?:use|try|reach me at|contact me at|write to)\b[^.]{0,60}@/i.test(rest) : /@[\w-]+\.\w/.test(rest);
-}
-/** A "don't ..." sentence that really asks the writer to stop: aimed at the writer, with no time, condition or channel attached. */
-function isDontOptOut(sentence: string): boolean {
+
+/** `stop` when a sentence asks the writer to stop; `narrow` when it has a "don't ..." phrase that asks for less; null for neither. */
+function readDontPhrase(sentence: string): 'stop' | 'narrow' | null {
+  let found: 'narrow' | null = null;
   for (const re of DONT_PATTERNS) {
     for (const m of sentence.matchAll(re)) {
-      const before = sentence.slice(0, m.index);
-      const after = sentence.slice(m.index + m[0].length);
-      const verb = m[1] ?? '';
-      const noun = m[2]?.toLowerCase();
-      if (noun !== undefined && !MESSAGE_NOUNS.has(noun)) continue;
-      const tail = noun === undefined ? after : `${noun} ${after}`;
-      if (TIME_QUALIFIER_RE.test(after) || TIME_QUALIFIER_RE.test(before)) continue;
-      const general = AGAIN_RE.test(m[0]) || AGAIN_RE.test(after);
-      if (!general && (PLACE_QUALIFIER_RE.test(after) || NOUN_OBJECT_RE.test(tail))) continue;
-      const channel = channelOf(verb);
-      if (channel && offersOtherChannel(before + ' ' + after, channel)) continue;
-      return true;
+      if (m[2] !== undefined && !MESSAGE_NOUNS.has(m[2].toLowerCase())) continue;
+      if (isStopRequest(sentence, m)) return 'stop';
+      found = 'narrow';
     }
   }
-  return false;
+  return found;
 }
 
 /** Explicit opt-out phrases: these win over any softer reading, including Claude's. */
@@ -328,12 +344,16 @@ const STOP_RE = new RegExp(
     String.raw`^opt[ -]?out[\s.!]*$`,
     String.raw`\bno more (?:e-?mails?|mails?|messages?|notes?)\b`,
     String.raw`\bi (?:no longer|do not|don'?t) (?:wish|want) to (?:receive|get|hear from)\b`,
-    String.raw`\bstop (?:emailing|e-?mailing|messaging|contacting|writing|sending|texting|calling|following up)(?=\s*[.,!?;]|\s*$|\s+(?:me|us|this|my|our|again|please|now)\b)`,
+    String.raw`\b(?:stop|quit) (?:emailing|e-?mailing|messaging|contacting|writing|sending|texting|calling|following up|reaching out(?: to (?:me|us))?)(?=\s*[.,!?;]|\s*$|\s+(?:me|us|this|my|our|again|please|now)\b)`,
+    String.raw`\bcease (?:all |any )?(?:contact|communication|correspondence)\b`, String.raw`\brefrain from (?:e-?mailing|contacting|writing|messaging|calling)\b`,
+    String.raw`\b(?:never|do not|don'?t)\s+(?:ever\s+)?(?:e-?mail|contact|write to|message)\s+(?:anyone|anybody|everyone)\b[^.!?;]*\bagain\b`,
     // other languages
     String.raw`d[ée]sabonn\w*`, String.raw`d[ée]sinscri\w*`, String.raw`ne plus (?:me |m['’]|nous )?(?:contacter|[ée]crire|envoyer)`, String.raw`me retirer de votre liste`, String.raw`retirez[- ]moi`,
     String.raw`\bdar(?:se|me|nos)? de baja\b`, String.raw`\bd[ae]n?me de baja\b`, String.raw`no me (?:env[ií]en?|escriban?|manden?) m[aá]s`,
     String.raw`\babmelden\b`, String.raw`keine (?:e-?mails?|mails?|nachrichten) mehr`, String.raw`aus (?:dem|ihrem|ihrer) verteiler`, String.raw`von ihrer liste`, String.raw`streichen sie mich`,
-    String.raw`\bdescadastr\w+`, String.raw`n[ãa]o me (?:envie|mande|escreva) mais`, String.raw`me remov\w+ da lista`, String.raw`remova-me`, String.raw`me tire da lista`,
+    String.raw`\bne (?:me |nous )?(?:contactez|[ée]crivez|envoyez) plus\b`, String.raw`\bmeld\w* sie mich ab\b`, String.raw`\b(?:kontaktier\w*|schreib\w*) sie (?:mich|mir|uns) nicht mehr\b`,
+    String.raw`\bd[eé]j(?:en|a|e|ar) de (?:escribir|enviar|contactar|mandar|molestar)\w*`, String.raw`\bno (?:me|nos) (?:contact(?:en?|es)|llam(?:en?|es)) m[aá]s`,
+    String.raw`\bpar(?:e|em) de (?:me |nos )?(?:enviar|mandar|escrever|contactar|contatar|ligar)\b`, String.raw`\bdescadastr\w+`, String.raw`n[ãa]o me (?:envie|mande|escreva) mais`, String.raw`me remov\w+ da lista`, String.raw`remova-me`, String.raw`me tire da lista`,
   ].join('|'),
   'i',
 );
@@ -345,46 +365,67 @@ const STOP_FIRST_RE = /^[\s"'*_>-]*(?:(?:please|pls|just|kindly)[\s,]+)?stop\b(?
 const STOP_SENTENCE_RE = /(?:^|[.!?\n,;]\s*)(?:(?:i\s+(?:said|asked you to|told you to|already said)|please|pls|just|kindly|so|oh|ok|okay|yes)[\s,]+)*stop(?:[\s.!,]+(?:thanks|thank you|please|pls)\b)?[\s.!,]*$/i;
 
 
-interface OptOutUnit { text: string; /** above any signature, "--" line or footer wording: "don't ..." phrases are read here */ body: boolean }
+/** "unsubscribe me", "remove me", "take me off", "how do I unsubscribe": a person asking. */
+const ASKING_RE = /\b(?:unsubscribe|remove|take|opt) me\b|\bremove my (?:e-?mail|address|name|details|number)\b|\bhow (?:do|can) i (?:unsubscribe|opt[ -]?out)\b/i;
+/** "I want to unsubscribe", "I no longer wish to receive ...": a person saying so. */
+const SAYING_RE = /\bi(?:'d| would)? (?:(?:no longer|do not|don'?t) (?:wish|want) to|(?:want|wish|need|like) to (?:unsubscribe|opt[ -]?out))/i;
+/**
+ * A line with a link or footer wording is boilerplate, unless a person is asking in it: the line opens with "unsubscribe me",
+ * has a short sentence of its own that says so ("Remove me."), or says "I want to unsubscribe". A footer that mentions
+ * "remove me from list requests" in the middle of a long sentence is still boilerplate.
+ */
+function holdsOwnOptOut(line: string): boolean {
+  if (SAYING_RE.test(line)) return true;
+  return line.split(/(?<=[.!?])\s+/).some((sentence, i) => (i === 0 || sentence.trim().split(/\s+/).length <= 8) && ASKING_RE.test(sentence));
+}
+
+interface OptOutUnit { text: string; /** above the closing block and the first footer wording */ body: boolean }
 
 /**
- * Every non-empty sentence of every line, except lines that carry a link or mailing-list footer wording (and the
- * hard-wrapped lines that continue one). `body` marks the sentences above the signature and the first footer wording.
+ * Every non-empty sentence of every line, except list-footer lines (a link or footer wording, and the hard-wrapped
+ * lines that continue one) that hold no first-person opt-out. `body` marks the sentences above the closing block
+ * and the first footer wording.
  */
-function optOutUnits(quotedFree: string): OptOutUnit[] {
-  const lines = quotedFree.split('\n');
-  const signature = findSignatureStart(lines, false);
-  const firstFooter = lines.findIndex((l) => FOOTER_WORDING_RE.test(l));
-  const bodyEnd = Math.min(signature, firstFooter < 0 ? lines.length : firstFooter);
+function optOutUnits(lines: string[], closing: number): OptOutUnit[] {
+  const firstFooter = lines.findIndex((l) => FOOTER_WORDING_RE.test(l) && !holdsOwnOptOut(l));
+  const bodyEnd = Math.min(closing, firstFooter < 0 ? lines.length : firstFooter);
   const units: OptOutUnit[] = [];
-  let afterPs = false;
   let prevFooter = false;
   lines.forEach((line, i) => {
-    if (PS_RE.test(line) && i >= signature) afterPs = true;
     const wrapped = prevFooter && line.trim() !== '' && (/^\s*[a-z]/.test(line) || line.includes('@'));
-    const footer = URL_RE.test(line) || FOOTER_WORDING_RE.test(line) || wrapped;
+    const footer = (URL_RE.test(line) || FOOTER_WORDING_RE.test(line) || wrapped) && !holdsOwnOptOut(line);
     prevFooter = footer && !/[.!?:;]\s*$/.test(line);
     if (footer) return;
-    for (const part of line.split(/(?<=[.!?])\s+/)) if (part.trim()) units.push({ text: part.trim(), body: i < bodyEnd || afterPs });
+    for (const part of line.split(/(?<=[.!?])\s+/)) if (part.trim()) units.push({ text: part.trim(), body: i < bodyEnd });
   });
   return units;
 }
 
-type OptOut = 'explicit' | 'soft' | null;
-interface OptOutScan { kind: OptOut; /** a bare "stop" that engagement overrode: it still beats an away message */ vetoed: boolean }
+/**
+ * `explicit`: unambiguous on its own. `soft`: a bare "stop" that a clearly engaged message overrides. `narrow`: a "don't ..."
+ * phrase that asks for less than a stop (a time, a condition, another channel). `engaged` is the body above the closing block.
+ */
+type OptOut = 'explicit' | 'soft' | 'narrow' | null;
+interface OptOutScan { kind: OptOut; /** a bare "stop" that engagement overrode: it still beats an away message */ vetoed: boolean; engaged: boolean }
 
 /**
- * Looks for a request to stop on the full text the person typed. `explicit` is a phrase that is unambiguous on its
- * own; `soft` is a bare "stop" reading that a clearly engaged message overrides.
+ * Looks for a request to stop on the full text the person typed. A "don't ..." phrase below the closing block
+ * (signature, client footer, name block) counts only when the body above it is not engaged: a footer cannot stop a
+ * person who is answering us, and a request typed under a signature still stops one who is not.
  */
 function scanOptOut(quotedFree: string): OptOutScan {
-  const engaged = isEngaged(stripSignature(quotedFree));
+  const lines = quotedFree.split('\n');
+  const closing = closingBlockStart(lines);
+  const engaged = isEngaged(lines.slice(0, closing).join('\n'));
   let soft = false;
   let vetoed = false;
-  for (const unit of optOutUnits(quotedFree)) {
-    if (STOP_RE.test(unit.text) || (unit.body && isDontOptOut(unit.text))) return { kind: 'explicit', vetoed: false };
+  let narrow = false;
+  for (const unit of optOutUnits(lines, closing)) {
+    const dont = unit.body || !engaged ? readDontPhrase(unit.text) : null;
+    if (STOP_RE.test(unit.text) || dont === 'stop') return { kind: 'explicit', vetoed: false, engaged };
+    if (dont === 'narrow') narrow = true;
     if (STOP_ONLY_RE.test(unit.text)) {
-      if (!engaged) return { kind: 'explicit', vetoed: false };
+      if (!engaged) return { kind: 'explicit', vetoed: false, engaged };
       vetoed = true;
     }
     if (STOP_SENTENCE_RE.test(unit.text)) {
@@ -396,16 +437,21 @@ function scanOptOut(quotedFree: string): OptOutScan {
     if (engaged) vetoed = true;
     else soft = true;
   }
-  return { kind: soft ? 'soft' : null, vetoed: vetoed && !soft };
+  return { kind: soft ? 'soft' : narrow ? 'narrow' : null, vetoed: vetoed && !soft, engaged };
 }
 
 /** Someone the writer sends us to instead, in the same message as an opt-out: "take me off this, but loop in Chidi Okafor". */
-const OPT_OUT_REFERRAL_VERB_RE = /\b(?:talk(?:ing)? to|speak(?:ing)? (?:to|with)|reach(?:ing)? out to|loop(?:ed|ing)? in|cc'?(?:ing|d)?|(?<!(?:\bnot|\bnever|\bno|n't) )contact(?:ing)?)\b/gi;
+const OPT_OUT_REFERRAL_VERB_RE = /\b(?:talk(?:ing)? to|speak(?:ing)? (?:to|with)|reach(?:ing)? out to|loop(?:ed|ing)? in|cc'?(?:ing|d)?|contact(?:ing)?)\b/gi;
+/**
+ * Before a referral verb in an opt-out message: "not talking to", "won't speak to", "stop contacting", "I'll talk to", "I've cc'd".
+ * A negation, a stop verb or the writer's own plan, so the name that follows is not someone we are sent to.
+ */
+const NOT_A_POINTER_RE = /(?:\b(?:not|never|no|cannot|stop|quit|cease|without|refrain from)\b|n't|\b(?:i|we)(?:'ll|'m|'ve|'d|\s+(?:will|shall|am|have|had|would|may|might|can|could))\b)(?:\s+\w+){0,2}\s*$/i;
 
 /** True when the reply says, in so many words, to stop writing and names no one else to talk to. Claude never overrides this. */
 export function isExplicitOptOut(rawText: string, opts: ClassifyOptions = {}): boolean {
   const quotedFree = stripQuoted(rawText);
-  return scanOptOut(quotedFree).kind === 'explicit' && !findReferral(stripSignature(quotedFree), referralExclusions(opts), OPT_OUT_REFERRAL_VERB_RE);
+  return scanOptOut(quotedFree).kind === 'explicit' && !findReferral(stripSignature(quotedFree), referralExclusions(opts), OPT_OUT_REFERRAL_VERB_RE, true);
 }
 
 // ---- hostile
@@ -468,6 +514,7 @@ const QUESTION_RE = /(?:\?|(?:^|[.!]\s+|\n)(?:how|what|what'?s|why|who|which|whe
 const NOT_NAMES = new Set([
   'I', 'We', 'You', 'The', 'Our', 'My', 'Your', 'Us', 'Me', 'Him', 'Her', 'Them', 'This', 'That', 'It', 'If', 'Please', 'Thanks', 'Thank', 'Hi', 'Hello', 'Hey',
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Head', 'Director', 'Manager', 'Team', 'CEO', 'CFO', 'CTO', 'COO',
+  'Legal', 'Compliance', 'Procurement', 'Accounts', 'Accounting', 'Payroll', 'Billing', 'Security', 'Privacy', 'Management', 'Reception', 'Everyone', 'Anybody', 'Department',
   'Finance', 'Support', 'Sales', 'Someone', 'Anyone', 'Marketing', 'Operations', 'Ops', 'Admin', 'Info', 'Sir', 'Madam', 'Best', 'Regards', 'Kind',
   'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'Mr', 'Mrs', 'Ms', 'Dr',
 ]);
@@ -501,7 +548,7 @@ function referralExclusions(opts: ClassifyOptions): ReferralExclusions {
   return { emails: [opts.ownEmail ?? null, ...(opts.excludeEmails ?? [])], names: opts.excludeNames ?? [] };
 }
 
-function findReferral(text: string, exclude: ReferralExclusions, verbs: RegExp = REFERRAL_VERB_RE): Classification['referral'] {
+function findReferral(text: string, exclude: ReferralExclusions, verbs: RegExp = REFERRAL_VERB_RE, optOut = false): Classification['referral'] {
   const skipEmail = (email: string): boolean =>
     exclude.emails.some((e) => e && e.toLowerCase() === email.toLowerCase()) || /^(?:no-?reply|donotreply)@/i.test(email);
   const excludedTokens = exclude.names.filter((n): n is string => !!n).map((n) => n.toLowerCase().split(/\s+/).filter(Boolean));
@@ -510,6 +557,7 @@ function findReferral(text: string, exclude: ReferralExclusions, verbs: RegExp =
     return excludedTokens.some((set) => tokens.every((t) => set.includes(t)));
   };
   for (const verb of text.matchAll(verbs)) {
+    if (optOut && NOT_A_POINTER_RE.test(text.slice(0, verb.index).replace(/^[\s\S]*[.!?;,\n]/, ''))) continue;
     const from = verb.index + verb[0].length;
     const rest = text.slice(from);
     const m = NAME_RE.exec(rest);
@@ -562,16 +610,20 @@ export function classifyReply(rawText: string, today: Date, opts: ClassifyOption
   const hostileText = text.replace(/\b(?:in|into|to|from|via|my|the)\s+(?:my\s+|the\s+)?(?:spam|junk)(?:\s+(?:folder|box|filter))?\b/gi, ' ');
   const exclusions = referralExclusions(opts);
   const optOut = scanOptOut(quotedFree);
-  if (optOut.kind) {
+  if (optOut.kind === 'explicit' || optOut.kind === 'soft') {
     // "take me off this, but loop in Chidi Okafor": the person named someone else, so a human has to see it
-    const named = findReferral(text, exclusions, OPT_OUT_REFERRAL_VERB_RE);
+    const named = findReferral(text, exclusions, OPT_OUT_REFERRAL_VERB_RE, true);
     return named ? result('referral', { referral: named }) : result('stop');
   }
   if (HOSTILE_RE.test(hostileText)) return result('hostile');
+  // a phrase that asks for less than a stop ("not on Fridays", "don't call me") goes to the dock, never to out_of_office,
+  // and as a "no" unless the reply is engaged
+  const narrow = optOut.kind === 'narrow';
+  if (narrow && !optOut.engaged) return result('not_interested');
   const away = aboveSignature(quotedFree);
   // a bare "stop" that a question overrode still beats an away message: "Out of Office until Monday. Who are you? Stop."
   if (optOut.vetoed && (hasAutoReplyHeader(text) || OOO_RE.test(away.replace(RECURRING_RE, ' ')))) return result('stop');
-  if (isOutOfOffice(text, away)) return result('out_of_office', { returnDate: findDate(away, today) ?? findRelativeReturn(away, today) });
+  if (!narrow && isOutOfOffice(text, away)) return result('out_of_office', { returnDate: findDate(away, today) ?? findRelativeReturn(away, today) });
   const referral = findReferral(text, exclusions);
   if (referral) return result('referral', { referral });
   if (NOT_INTERESTED_RE.test(text) || NOT_INTERESTED_FOREIGN_RE.test(text) || /^\s*no[\s.,]*$/i.test(text)) return result('not_interested');
