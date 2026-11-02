@@ -72,7 +72,7 @@ export interface DispatchOptions {
 
 /** Sends everything that is due and allowed. Returns how many messages went out. */
 export async function dispatchDue(ctx: Ctx, opts: DispatchOptions = {}): Promise<number> {
-  const report = opts.onError ?? ((err: unknown) => console.error(`[callum] ${err instanceof Error ? err.message : String(err)}`));
+  const report = opts.onError ?? ctx.onError;
   const held = heldBackPeople(ctx);
   let sent = 0;
   for (const due of ctx.outbox.due()) {

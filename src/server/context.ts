@@ -21,6 +21,8 @@ export interface Ctx {
   apollo: ApolloSource | null;
   demo: boolean;
   dataDir: string;
+  /** Where a problem that does not fail the user's request is reported (work that was saved, but a follow-on step failed). */
+  onError: (err: unknown) => void;
 }
 
 export interface CtxOptions {
@@ -31,6 +33,7 @@ export interface CtxOptions {
   demo?: boolean;
   dataDir?: string;
   env?: NodeJS.ProcessEnv;
+  onError?: (err: unknown) => void;
 }
 
 export function createCtx(opts: CtxOptions): Ctx {
@@ -52,6 +55,7 @@ export function createCtx(opts: CtxOptions): Ctx {
     apollo: apolloKey ? new ApolloSource(apolloKey) : null,
     demo,
     dataDir,
+    onError: opts.onError ?? ((err) => console.error(`[callum] ${err instanceof Error ? err.message : String(err)}`)),
   };
   // A message claimed by a run that never finished may have gone out: it is failed for the user to look at, never sent again.
   recoverSending(ctx);

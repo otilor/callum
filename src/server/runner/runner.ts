@@ -70,7 +70,7 @@ interface Candidate {
  */
 export async function planDue(ctx: Ctx, opts: PlanOptions = {}): Promise<number> {
   const { repo } = ctx;
-  const report = opts.onError ?? ((err: unknown) => console.error(`[callum] ${err instanceof Error ? err.message : String(err)}`));
+  const report = opts.onError ?? ctx.onError;
   const settings = repo.getSettings();
   const alone = opts.projectId !== undefined;
   const early = opts.early === true;
@@ -203,7 +203,7 @@ export class Runner {
     this.pollTimeoutMs = opts.pollTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS;
     this.planBudgetMs = opts.planBudgetMs ?? PLAN_BUDGET_MS;
     this.wallNow = opts.wallNow ?? Date.now;
-    this.onError = opts.onError ?? ((err) => console.error(`[callum] ${err instanceof Error ? err.message : String(err)}`));
+    this.onError = opts.onError ?? ctx.onError;
   }
 
   /** One pass. A second call while one is running gets the same promise, so nothing is done twice. */

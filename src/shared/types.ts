@@ -84,6 +84,8 @@ export interface Settings {
   currentProjectId: number | null;    // the project last viewed
   pauseState: 'running' | 'paused' | 'wrapped'; pausedUntil: string | null;
   notifications: boolean | null;
+  /** Projects that Wrap up everything wrapped (so Start again can bring back exactly those). */
+  wrappedByWrapUp?: number[];
 }
 
 export interface PathStep { label: string; at: string | null; done: boolean }
