@@ -22,7 +22,7 @@ interface Profile {
   /** A chat window restored from earlier, for someone else. A sticky one ignores its close button. */
   bubble?: 'closable' | 'sticky';
   /** What the server answers when the page posts the invitation or message. */
-  send?: 'error' | 'error-mark' | 'error-quiet' | 'silent';
+  send?: 'error' | 'error-mark' | 'error-quiet' | 'silent' | 'flicker' | 'reply';
   /** Messages already in the chat window when it opens. */
   history?: string[];
 }
@@ -38,6 +38,10 @@ export const PROFILES: Record<string, Profile> = {
   toast: { name: 'Toa St', headline: 'Analyst at Okopay', variant: 'connect', send: 'error' },
   echo: { name: 'Eko Echo', headline: 'Editor', variant: 'message', history: ['Hello Echo.'] },
   echofail: { name: 'Eko Fail', headline: 'Editor', variant: 'message', send: 'error', history: ['Hello Echo.'] },
+  // The Pending button shows for a moment after Send and then goes.
+  flicker: { name: 'Fli Cker', headline: 'Analyst at Okopay', variant: 'connect', send: 'flicker' },
+  // The person answers within a moment of the message, so the conversation no longer ends with the sent text.
+  chatty: { name: 'Chat Ty', headline: 'Writer', variant: 'message', send: 'reply' },
   mute: { name: 'Mu Te', headline: 'Editor', variant: 'message', send: 'silent', history: ['Hello Mute.'] },
   odd: { name: 'Odd Page', headline: 'Writer', variant: 'nothing' },
   pia: { name: 'Pia Pending', headline: 'Designer', variant: 'pending' },

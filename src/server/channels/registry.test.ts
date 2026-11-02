@@ -249,3 +249,102 @@ describe('defaultFactory', () => {
     expect((await demo.connect({})).identity).toBe('@you');
   });
 });
+
+describe('AdapterRegistry overlapping connects', () => {
+  /** An adapter whose connect finishes when the test says so. */
+  function slowAdapter(secret: Record<string, string>) {
+    let finish: () => void = () => undefined;
+    let fail: (e: Error) => void = () => undefined;
+    const adapter = stubAdapter('linkedin', {
+      connect: () => new Promise((resolve, reject) => {
+        finish = () => resolve({ identity: secret.who ?? 'who', secret });
+        fail = reject;
+      }),
+    });
+    return { adapter, finish: () => finish(), fail: (e: Error) => fail(e) };
+  }
+
+  function registryWith(...built: ReturnType<typeof slowAdapter>[]) {
+    const queue = [...built];
+    const hooks: Array<{ saveSecret: (s: Record<string, string>) => void } | undefined> = [];
+    const factory: AdapterFactory = (_ch, _secret, h) => {
+      hooks.push(h);
+      return (queue.shift() as ReturnType<typeof slowAdapter>).adapter;
+    };
+    return { registry: new AdapterRegistry(repo, factory, bus), hooks };
+  }
+
+  const now = new Date('2026-11-02T10:00:00Z');
+  const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+  it('closes the first adapter when a second connect finishes after it', async () => {
+    const one = slowAdapter({ who: 'one' });
+    const two = slowAdapter({ who: 'two' });
+    const { registry } = registryWith(one, two);
+    const first = registry.connect('linkedin', {}, now);
+    const second = registry.connect('linkedin', {}, now);
+    await settle();
+    one.finish();
+    await first;
+    expect(one.adapter.close).not.toHaveBeenCalled();
+    two.finish();
+    await second;
+    expect(one.adapter.close).toHaveBeenCalledOnce();
+    expect(two.adapter.close).not.toHaveBeenCalled();
+    expect(registry.get('linkedin')).toBe(two.adapter);
+    expect(repo.getChannelSecret('linkedin')).toEqual({ who: 'two' });
+  });
+
+  it('closes the adapter that finished first when the other one finishes later', async () => {
+    const one = slowAdapter({ who: 'one' });
+    const two = slowAdapter({ who: 'two' });
+    const { registry } = registryWith(one, two);
+    const first = registry.connect('linkedin', {}, now);
+    const second = registry.connect('linkedin', {}, now);
+    await settle();
+    two.finish();
+    await second;
+    one.finish();
+    await first;
+    expect(two.adapter.close).toHaveBeenCalledOnce();
+    expect(one.adapter.close).not.toHaveBeenCalled();
+    expect(registry.get('linkedin')).toBe(one.adapter);
+  });
+
+  it('drops a late secret save from the adapter that lost', async () => {
+    const one = slowAdapter({ who: 'one' });
+    const two = slowAdapter({ who: 'two' });
+    const { registry, hooks } = registryWith(one, two);
+    const first = registry.connect('linkedin', {}, now);
+    const second = registry.connect('linkedin', {}, now);
+    await settle();
+    one.finish();
+    await first;
+    two.finish();
+    await second;
+    hooks[0]?.saveSecret({ who: 'stale' });
+    expect(repo.getChannelSecret('linkedin')).toEqual({ who: 'two' });
+    hooks[1]?.saveSecret({ who: 'fresh' });
+    expect(repo.getChannelSecret('linkedin')).toEqual({ who: 'fresh' });
+  });
+
+  it('does not put the old adapter back over one a overlapping connect installed', async () => {
+    const old = stubAdapter('linkedin');
+    const one = slowAdapter({ who: 'one' });
+    const two = slowAdapter({ who: 'two' });
+    const queue = [old, one.adapter, two.adapter];
+    const registry = new AdapterRegistry(repo, () => queue.shift() as ChannelAdapter, bus);
+    await registry.connect('linkedin', {}, now);
+    const first = registry.connect('linkedin', {}, now);
+    await settle();
+    const second = registry.connect('linkedin', {}, now);
+    await settle();
+    two.finish();
+    await second;
+    one.fail(new ConnectError('LinkedIn would not sign in.'));
+    await expect(first).rejects.toThrow('LinkedIn would not sign in.');
+    expect(registry.get('linkedin')).toBe(two.adapter);
+    expect(two.adapter.close).not.toHaveBeenCalled();
+    expect(one.adapter.close).toHaveBeenCalled();
+  });
+});

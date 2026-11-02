@@ -425,21 +425,30 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     await send.click();
     // Success is a Pending button on the profile, whatever dialogs are still open: an error toast closes the dialog too.
     // The top card first. If it never shows Pending, look in the More menu once, after a pause like a person's.
-    let confirmed = await pollUntil(
+    let confirmedIn: 'card' | 'menu' | null = null;
+    const inCard = async () => (await locate(top, SELECTORS.pendingMarker)) !== null;
+    const confirmed = await pollUntil(
       page,
       async () => {
         await stopIfBlocked(page);
-        return (await locate(top, SELECTORS.pendingMarker)) !== null;
+        return inCard();
       },
       Math.min(settleMs, 3000),
     );
-    if (!confirmed) {
+    if (confirmed) confirmedIn = 'card';
+    else {
       await stopIfBlocked(page);
       await pause();
-      confirmed = await pendingInMoreMenu();
+      if (await pendingInMoreMenu()) confirmedIn = 'menu';
     }
     await stopIfBlocked(page);
-    if (!confirmed) throw new Stop(fail('unknown', "LinkedIn didn't confirm the invitation. Callum will check before trying again."));
+    if (!confirmedIn) throw new Stop(fail('unknown', "LinkedIn didn't confirm the invitation. Callum will check before trying again."));
+    // A Pending button can show for a moment and then go: LinkedIn takes the invitation back when it cannot keep it.
+    // After a pause like a person's, look once more before calling it sent.
+    await pause();
+    await stopIfBlocked(page);
+    const stillPending = confirmedIn === 'card' ? await inCard() : await pendingInMoreMenu();
+    if (!stillPending) throw new Stop(fail('unknown', "LinkedIn showed the invitation as sent, then took it back. Callum didn't count it as sent and will check before trying again."));
     if (await locate(page, SELECTORS.dialog)) await dismissDialog(page);
     return { ok: true, externalId: null, ...(noteDropped ? { noteDropped: true as const } : {}) };
   }
@@ -578,7 +587,10 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
       if (Date.now() >= watchEnd) break;
       await realSleep(100);
     }
-    if (!(await arrived())) throw failed;
+    // The watch found no failure mark. The message is still in the conversation if the count is above what it was;
+    // its last line may have changed since (a reply came in, a link preview was added). A duplicate message is worse
+    // than a failure that went unseen, so only a message that has gone from the conversation counts as failed.
+    if ((await countMessagesIn(bubble)) <= before) throw failed;
     await pause();
     const close = await locate(bubble, SELECTORS.bubbleClose);
     await close?.click().catch(() => undefined);

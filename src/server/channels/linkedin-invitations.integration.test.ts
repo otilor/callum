@@ -2,6 +2,7 @@
 // pending invitations, the Premium note offer, failures that must not count as sent, limits and security checks.
 import { describe, expect, it } from 'vitest';
 import { message, useLinkedin } from './__fixtures__/linkedin/harness.js';
+import { VALID_COOKIE } from './__fixtures__/linkedin/server.js';
 import { clampNote } from './linkedin-detect.js';
 
 describe('linkedin invitations against a local LinkedIn stand-in', () => {
@@ -44,6 +45,15 @@ describe('linkedin invitations against a local LinkedIn stand-in', () => {
       const result = await li.main.send(message('toast'));
       expect(result).toMatchObject({ ok: false, error: { code: 'unknown', message: expect.stringContaining("didn't confirm the invitation") } });
       expect(li.fixture.invites).toHaveLength(before);
+    });
+
+    it('does not report sent when the Pending button goes away again after the pause', async () => {
+      // Pauses are real here: Pending shows, then is taken back half a second later, before the final look.
+      const slow = await li.build({ liAt: VALID_COOKIE }, { sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, Math.min(ms, 700))) });
+      const result = await slow.send(message('flicker'));
+      expect(result).toMatchObject({ ok: false, error: { code: 'unknown', message: expect.stringContaining('took it back') } });
+      // A person reading the error is told, in plain words, that it was not counted as sent.
+      expect(result.ok ? '' : result.error.message).toContain("didn't count it as sent");
     });
 
     it('explains people it cannot invite', async () => {

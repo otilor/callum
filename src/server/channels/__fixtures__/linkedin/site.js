@@ -35,6 +35,9 @@
     }
     const actions = document.querySelector('.pvs-profile-actions');
     if (actions) {
+      const before = actions.innerHTML;
+      // LinkedIn can show Pending and then take the invitation back when it cannot keep it.
+      if (body.dataset.send === 'flicker') setTimeout(() => { actions.innerHTML = before; }, 500);
       actions.innerHTML =
         '<button class="artdeco-button" aria-label="Pending, click to withdraw invitation sent to ' + name + '"><span class="artdeco-button__text">Pending</span></button>';
     }
@@ -134,6 +137,8 @@
         return;
       }
       window.__sent = { slug, text };
+      // The person answers while Callum is still watching the conversation: the last line is no longer the sent text.
+      if (body.dataset.send === 'reply') setTimeout(() => addItem('Thanks, Thursday works.'), 100);
     });
   }
 
@@ -169,6 +174,11 @@
       else showInvite(slug, name);
     }
     if (action === 'message') showComposer(slug, name, { history: slug === body.dataset.slug ? JSON.parse(body.dataset.history || '[]') : [] });
+  });
+  // Escape closes the More menu, as it does on LinkedIn.
+  document.addEventListener('keydown', (e) => {
+    const menu = document.getElementById('more-menu');
+    if (e.key === 'Escape' && menu) menu.hidden = true;
   });
   if (dialogRoot) {
     dialogRoot.addEventListener('click', (e) => {

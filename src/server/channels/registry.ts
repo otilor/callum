@@ -40,6 +40,8 @@ export class AdapterRegistry {
   // Bumped whenever a channel's adapter is replaced or the channel is disconnected, so that a
   // late save from an adapter that no longer owns the secret (an in-flight token refresh) is dropped.
   private readonly generation = new Map<Channel, number>();
+  // Every generation handed out is new, so two connects that overlap never share one.
+  private lastGeneration = 0;
 
   private endConnecting(ch: Channel): void {
     const left = (this.connecting.get(ch) ?? 1) - 1;
@@ -79,7 +81,7 @@ export class AdapterRegistry {
     this.adapters.delete(ch);
     this.connecting.set(ch, (this.connecting.get(ch) ?? 0) + 1);
     await previous?.close().catch(() => undefined);
-    const next = this.generationOf(ch) + 1;
+    const next = ++this.lastGeneration;
     let adapter: ChannelAdapter | null = null;
     let connected: { identity: string; secret: Record<string, string> };
     try {
@@ -87,10 +89,14 @@ export class AdapterRegistry {
       connected = await adapter.connect(input);
     } catch (err) {
       await adapter?.close().catch(() => undefined);
-      if (previous) this.adapters.set(ch, previous);
+      // Put the old adapter back only if no overlapping connect has already installed one.
+      if (previous && !this.adapters.has(ch)) this.adapters.set(ch, previous);
       this.endConnecting(ch);
       throw err;
     }
+    // A connect that overlapped this one may have finished first. The last to finish owns the channel, and the
+    // adapter it replaces is closed here, or its browser would stay open with nothing left to close it.
+    const replaced = this.adapters.get(ch);
     this.generation.set(ch, next);
     this.adapters.set(ch, adapter);
     this.endConnecting(ch);
@@ -112,13 +118,14 @@ export class AdapterRegistry {
     }
     this.bus.emit('channels');
     if (resolvedIncident) this.bus.emit('incidents');
+    if (replaced && replaced !== adapter) await replaced.close().catch(() => undefined);
     return account;
   }
 
   async disconnect(ch: Channel): Promise<ChannelAccount> {
     // Build one even for a channel in an error state, so a saved browser session is still cleared.
     const adapter = this.adapters.get(ch) ?? this.factory(ch, this.repo.getChannelSecret(ch), this.hooks(ch, this.generationOf(ch)));
-    this.generation.set(ch, this.generationOf(ch) + 1);
+    this.generation.set(ch, ++this.lastGeneration);
     this.adapters.delete(ch);
     await adapter.forget?.().catch(() => undefined);
     await adapter.close().catch(() => undefined);

@@ -60,6 +60,13 @@ describe('linkedin messages against a local LinkedIn stand-in', () => {
       expect(li.fixture.messages).toHaveLength(before + 1);
     });
 
+    it('reports a message as sent when the person answers during the watch and nothing shows as failed', async () => {
+      const before = li.fixture.messages.length;
+      // The conversation now ends with their answer, not the sent text; sending again would be a duplicate.
+      expect(await li.main.send(message('chatty', { kind: 'follow_up', body: 'Hello Chat.' }))).toEqual({ ok: true, externalId: null });
+      expect(li.fixture.messages.slice(before)).toEqual([{ slug: 'chatty', text: 'Hello Chat.' }]);
+    });
+
     it('does not message someone it is not connected to', async () => {
       const before = li.fixture.messages.length;
       const result = await li.main.send(message('kemi', { kind: 'follow_up' }));
