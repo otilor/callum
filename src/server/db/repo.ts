@@ -287,6 +287,14 @@ export class Repo {
     return this.select<Message>('SELECT * FROM messages WHERE person_id = ? ORDER BY at, id', [personId]);
   }
 
+  /** True when a message with this provider id is stored on the channel in that direction. */
+  hasMessageWithExternalId(channel: Channel, externalId: string, direction: 'in' | 'out'): boolean {
+    const row = this.db
+      .prepare('SELECT 1 AS found FROM messages WHERE channel = ? AND external_id = ? AND direction = ? LIMIT 1')
+      .get(channel, externalId, direction);
+    return row !== undefined;
+  }
+
   /** Outbound messages on a channel sent at or after `sinceIso`; `kinds` null means any kind. */
   countOut(channel: Channel, kinds: OutKind[] | null, sinceIso: string): number {
     if (kinds && kinds.length === 0) return 0;
