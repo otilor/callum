@@ -11,8 +11,12 @@ export function Brief({ state, now }: { state: AppState; now: Date }) {
   const face: Person | undefined = accepted.length > 0 ? state.people.find((p) => p.id === brief.acceptedIds[0]) : undefined;
   const since: { key: string; node: ReactNode; text: string }[] = [];
 
-  if (brief.wantToTalk > 0) {
-    since.push({ key: 'talk', node: <span className="brief-dot brief-dot-sun" aria-hidden="true" />, text: `${brief.wantToTalk} want to talk` });
+  // The line under the pills ("4 people want to talk") is everyone waiting. This pill is only the replies since yesterday,
+  // so it never claims a number the line contradicts: some of the people waiting may have written days ago.
+  const since24h = now.getTime() - 24 * 3_600_000;
+  const newReplies = state.people.filter((p) => p.status === 'waiting' && p.repliedAt !== null && new Date(p.repliedAt).getTime() > since24h).length;
+  if (newReplies > 0) {
+    since.push({ key: 'talk', node: <span className="brief-dot brief-dot-sun" aria-hidden="true" />, text: `${newReplies} new ${newReplies === 1 ? 'reply' : 'replies'}` });
   }
   if (brief.sentYesterday > 0) {
     since.push({

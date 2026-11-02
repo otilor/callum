@@ -84,7 +84,8 @@ describe('Home', () => {
     const people = [replied(1, 'Kemi Eze'), replied(2, 'Femi Adeyemi'), replied(3, 'Temi Bello'), person(4, 'Ada Obi')];
     view(appState({ people, brief: { wantToTalk: 3, sentYesterday: 12, acceptedRecently: ['Ada'], acceptedIds: people.filter((p) => p.firstName === 'Ada').map((p) => p.id), nextSendAt: '2026-11-03T09:00:00Z', line: '' } }));
     expect(screen.getByText('Good morning. 3 people want to talk.')).toBeInTheDocument();
-    expect(screen.getByText('3 want to talk')).toBeInTheDocument();
+    expect(screen.getByText('3 new replies')).toBeInTheDocument();
+    expect(screen.queryByText('3 want to talk')).not.toBeInTheDocument();
     expect(screen.getByText('12 hellos went out yesterday')).toBeInTheDocument();
     expect(screen.getByText('Ada accepted')).toBeInTheDocument();
     expect(screen.getByText('Next hello tomorrow at 9:00')).toBeInTheDocument();
@@ -355,5 +356,25 @@ describe('Home', () => {
     };
     expect(face.style.background).toBe(probe(5));
     expect(face.style.background).not.toBe(probe(4));
+  });
+
+  it('counts only the replies since yesterday in the pill, and everyone waiting in the line', () => {
+    // Kemi wrote three days ago and still waits; Femi and Temi wrote this morning.
+    const people = [replied(1, 'Kemi Eze', { repliedAt: '2026-10-30T09:00:00Z' }), replied(2, 'Femi Adeyemi'), replied(3, 'Temi Bello')];
+    view(appState({ people, brief: { wantToTalk: 3, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: null, line: '' } }));
+    expect(screen.getByText('Good morning. 3 people want to talk.')).toBeInTheDocument();
+    expect(screen.getByText('2 new replies')).toBeInTheDocument();
+    expect(screen.queryByText(/want to talk$/, { selector: '.brief-pill' })).not.toBeInTheDocument();
+  });
+
+  it('says one new reply in the singular, and shows no pill when everyone waiting wrote before yesterday', () => {
+    const one = [replied(1, 'Kemi Eze'), replied(2, 'Femi Adeyemi', { repliedAt: '2026-10-29T09:00:00Z' })];
+    const first = view(appState({ people: one, brief: { wantToTalk: 2, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: null, line: '' } }));
+    expect(screen.getByText('1 new reply')).toBeInTheDocument();
+    first.unmount();
+    const old = [replied(1, 'Kemi Eze', { repliedAt: '2026-10-29T09:00:00Z' })];
+    view(appState({ people: old, brief: { wantToTalk: 1, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: null, line: '' } }));
+    expect(screen.getByText('Good morning. 1 person wants to talk.')).toBeInTheDocument();
+    expect(screen.queryByText(/new repl/)).not.toBeInTheDocument();
   });
 });
