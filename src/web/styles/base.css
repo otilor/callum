@@ -123,3 +123,8 @@ textarea::placeholder {
     scroll-behavior: auto !important;
   }
 }
+
+/* A heading the page puts the cursor on when it opens is not a control: it needs no ring. */
+h1[tabindex='-1']:focus {
+  outline: none;
+}

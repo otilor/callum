@@ -61,6 +61,13 @@ describe('Weekly', () => {
     expect(mocks.weeklySeen).toHaveBeenCalledTimes(1);
   });
 
+  it('puts the cursor on the heading of the note when it opens', async () => {
+    mocks.weekly.mockResolvedValue(answer());
+    view();
+    await userEvent.click(await screen.findByRole('button', { name: 'Your week, in people' }));
+    expect(screen.getByRole('heading', { name: 'Last week, in people' })).toHaveFocus();
+  });
+
   it('stays closed on a later visit and opens from Your week, in people', async () => {
     mocks.weekly.mockResolvedValue(answer());
     view();
@@ -184,7 +191,7 @@ describe('Weekly', () => {
     mocks.weekly.mockResolvedValue(answer({ shouldOpen: true }, {
       groups: [
         group(1, 'Reconciliation', 'Callum said hello to 30 people. 3 replied and 2 calls are booked.', 'Kemi'),
-        group(2, 'Payroll', 'Callum said hello to 12 people. 1 replied and 0 calls are booked.', 'Yaw'),
+        group(2, 'Payroll', 'Callum said hello to 12 people. 1 replied. No calls are booked yet.', 'Yaw'),
       ],
     }));
     view();
@@ -193,7 +200,7 @@ describe('Weekly', () => {
     expect(within(reconciliation).getByText('Callum said hello to 30 people. 3 replied and 2 calls are booked.')).toBeInTheDocument();
     expect(within(reconciliation).getByRole('button', { name: 'Kemi Test, replied' })).toBeInTheDocument();
     const payroll = within(dialog).getByRole('region', { name: 'Payroll' });
-    expect(within(payroll).getByText('Callum said hello to 12 people. 1 replied and 0 calls are booked.')).toBeInTheDocument();
+    expect(within(payroll).getByText('Callum said hello to 12 people. 1 replied. No calls are booked yet.')).toBeInTheDocument();
     expect(within(dialog).getAllByRole('button', { name: /^Find \d+ more$/ })).toHaveLength(1);
     await userEvent.click(within(payroll).getByRole('button', { name: 'Yaw Test, replied' }));
     expect(within(payroll).getByText('Yaw replied on Tuesday.')).toBeInTheDocument();

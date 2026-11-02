@@ -124,6 +124,11 @@ describe('the left column', () => {
     expect(screen.getByText("Callum picked email because Chidi's address is verified.")).toBeInTheDocument();
   });
 
+  it('puts the cursor on the name once the page has loaded', async () => {
+    await show(full(CHIDI));
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Chidi Okeke' })).toHaveFocus());
+  });
+
   it('puts the reason beside an action that cannot be used', async () => {
     await show(full(CHIDI, { nudge: { ok: false, reason: "Nudge now works after the first hello. Chidi's goes today at 11:00." } }));
     const nudge = screen.getByRole('button', { name: 'Nudge now' });

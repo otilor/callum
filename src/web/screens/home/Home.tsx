@@ -12,7 +12,7 @@
  *   dayOne        { left, onOpen }  App passes it while this project still has hellos to OK and more than one project
  *                 runs: a banner in the water, so replies are never stuck behind Day one.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { AppState, Channel, Person, Project } from '../../../shared/types.js';
 import type { FaceReaction } from './incidentVariants.js';
 import { api } from '../../api.js';
@@ -22,12 +22,13 @@ import { AccountMenu, type AccountSlots } from '../../ui/AccountMenu.js';
 import { CrossFade } from '../../ui/CrossFade.js';
 import { marbleBackground } from '../../ui/Marble.js';
 import { Wordmark } from '../../ui/Wordmark.js';
-import { formatSlot, joinNames } from '../../ui/format.js';
+import { formatSlot, joinNames, theirSlot } from '../../ui/format.js';
 import { hourIn } from '../../ui/when.js';
 import { AskBar } from './AskBar.js';
 import { Brief } from './Brief.js';
 import { Deck } from './Deck.js';
 import { Dock, RIVER_TOP } from './Dock.js';
+import { useRiverHeight } from '../../river/useRiverHeight.js';
 import { FacePopover } from './FacePopover.js';
 import { ListView } from './ListView.js';
 import { ProjectSwitcher } from './ProjectSwitcher.js';
@@ -55,7 +56,6 @@ export interface HomeProps {
 }
 
 const ALL_CHANNELS: Channel[] = ['email', 'linkedin', 'x'];
-const RIVER_HEIGHT = 280;
 const IDLE = "You're all caught up. Callum will tap you when someone replies.";
 
 /** `Email and LinkedIn are connected.` plus what is paused or needs a look, and where LinkedIn runs. */
@@ -94,6 +94,7 @@ function PlayGlyph() {
 export function Home({ state, project, refresh, now, account = {}, incident, quiet, overlay, reactions, onAddPeople, onNewProject, onOpenPerson, dayOne }: HomeProps) {
   const clock = useMemo(() => now ?? (() => new Date()), [now]);
   const toasts = useUndoToasts();
+  const riverHeight = useRiverHeight();
   const [view, setView] = useState<'river' | 'list'>('river');
   const [deck, setDeck] = useState<{ startAt?: number } | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
@@ -292,7 +293,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
         </header>
         <p className="home-channels">{channelLine(state)}</p>
 
-        <div className={`home-stage ${view === 'list' ? 'is-list' : 'is-river'}`}>
+        <div className={`home-stage ${view === 'list' ? 'is-list' : 'is-river'}`} style={{ '--river-h': `${riverHeight}px` } as CSSProperties}>
           <Dock
             people={waiting}
             projects={state.projects}
@@ -317,7 +318,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
                   people={inRiver}
                   running={!stillAll}
                   still={stillAll ? ALL_CHANNELS : stillChannels(state)}
-                  height={RIVER_HEIGHT}
+                  height={riverHeight}
                   sendingIds={[...sending]}
                   selectedId={selectedPerson?.id ?? null}
                   onFace={(p) => setSelected((s) => (s === p.id ? null : p.id))}
@@ -362,12 +363,13 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
             <span className="home-next-face" aria-hidden="true" style={{ background: marbleBackground(300 + nextPerson.id) }} />
             <span className="home-next-text">
               <span className="home-next-title">Next hello goes to {nextPerson.firstName}</span>
-              <span className="home-next-sub">{formatSlot(nextItem.sendAfter, nextPerson.timezone ?? tz, at)}</span>
+              <span className="home-next-sub">{theirSlot(nextItem.sendAfter, nextPerson.timezone, tz, at)}</span>
             </span>
           </p>
         ) : null}
 
         <AskBar
+          key={project?.id ?? 0}
           project={project}
           people={state.people}
           likeName={latestReply?.firstName ?? null}

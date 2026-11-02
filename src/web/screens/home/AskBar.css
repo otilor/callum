@@ -1,5 +1,7 @@
 .ab {
-  position: relative;
+  /* Always on screen: it rides the bottom edge of the window while the page is taller than it. */
+  position: sticky;
+  bottom: 16px;
   width: 100%;
   max-width: 760px;
   margin: auto auto 0;

@@ -4,6 +4,7 @@ import { api, ApiError } from '../../api.js';
 import { formatSlot } from '../../ui/format.js';
 import { lookForStage, Marble } from '../../ui/Marble.js';
 import { useToast } from '../../ui/Toast.js';
+import { useHeadingFocus } from '../../ui/useHeadingFocus.js';
 import { Wordmark } from '../../ui/Wordmark.js';
 import { Actions } from './Actions.js';
 import { Thread, type PendingSend } from './Thread.js';
@@ -172,6 +173,8 @@ function Pane({ state, personId, tz, now, onBack }: { state: AppState; personId:
   const [writeError, setWriteError] = useState<string | null>(null);
   const [local, setLocal] = useState<(PendingSend & { createdAt: string }) | null>(null);
   const asked = useRef(0);
+  // The cursor goes to the name once the page has loaded, and stays put while it refreshes.
+  const headingRef = useHeadingFocus(detail === null, detail !== null);
 
   const load = useCallback(async (): Promise<PersonFull | null> => {
     const ticket = ++asked.current;
@@ -368,7 +371,7 @@ function Pane({ state, personId, tz, now, onBack }: { state: AppState; personId:
             ) : null}
           </span>
           <div className="pv-names">
-            <h1>{person.name}</h1>
+            <h1 ref={headingRef} tabIndex={-1}>{person.name}</h1>
             <span className="pv-sub">{[person.role, person.company].filter(Boolean).join(' at ')}</span>
           </div>
         </div>

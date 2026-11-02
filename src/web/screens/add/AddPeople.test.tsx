@@ -79,6 +79,11 @@ describe('AddPeople', () => {
     expect(screen.getByText('Drop a CSV here, or choose one')).toBeInTheDocument();
   });
 
+  it('puts the cursor on the page heading when it opens', () => {
+    show();
+    expect(screen.getByRole('heading', { name: 'Who else should Callum meet?' })).toHaveFocus();
+  });
+
   it('names Monday when tomorrow is a weekend', () => {
     render(
       <ToastProvider>

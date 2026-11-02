@@ -11,10 +11,11 @@ const mocks = vi.hoisted(() => ({
   microsoftStart: vi.fn(),
   microsoftPoll: vi.fn(),
   setup: vi.fn(),
+  saveClientId: vi.fn(),
 }));
 vi.mock('../../api.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../api.js')>();
-  return { ...original, api: { ...mocks, microsoftStart: mocks.microsoftStart, microsoftPoll: mocks.microsoftPoll }, channelSetup: { microsoft: mocks.setup, saveMicrosoftClientId: vi.fn() } };
+  return { ...original, api: { ...mocks, microsoftStart: mocks.microsoftStart, microsoftPoll: mocks.microsoftPoll }, channelSetup: { microsoft: mocks.setup, saveMicrosoftClientId: mocks.saveClientId } };
 });
 
 function account(ch: Channel, status: ChannelAccount['status'] = 'connected', identity: string | null = null): ChannelAccount {
@@ -117,6 +118,53 @@ describe('Email tab', () => {
     expect(await screen.findByText(/Microsoft needs a one-time app setup on this computer first\./)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /How to set it up/ })).toHaveAttribute('href', 'https://github.com/otilor/callum/blob/main/docs/SETUP.md#microsoft');
     expect(screen.getByRole('button', { name: 'Open Microsoft' })).toBeDisabled();
+  });
+
+  it('takes the Microsoft client ID right here, then opens Microsoft', async () => {
+    mocks.setup.mockResolvedValue({ configured: false, source: null });
+    mocks.saveClientId.mockResolvedValue({ configured: true, source: 'settings' });
+    const { user } = setup({ provider: 'microsoft' });
+    const field = await screen.findByLabelText('Application (client) ID');
+    expect(screen.getByText(/Paste the application \(client\) ID of the app you registered\./)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await user.type(field, '11111111-2222-3333-4444-555555555555');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(mocks.saveClientId).toHaveBeenCalledWith('11111111-2222-3333-4444-555555555555');
+    await waitFor(() => expect(screen.queryByLabelText('Application (client) ID')).not.toBeInTheDocument());
+    await user.type(screen.getByLabelText('Email address'), 'gabriel@contoso.com');
+    expect(screen.getByRole('button', { name: 'Open Microsoft' })).toBeEnabled();
+  });
+
+  it('says why a client ID was refused and keeps Open Microsoft off', async () => {
+    mocks.setup.mockResolvedValue({ configured: false, source: null });
+    mocks.saveClientId.mockRejectedValue(new ApiError(422, 'That does not look like an application ID.'));
+    const { user } = setup({ provider: 'microsoft' });
+    await user.type(await screen.findByLabelText('Application (client) ID'), 'nope');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('That does not look like an application ID.');
+    expect(screen.getByRole('button', { name: 'Open Microsoft' })).toBeDisabled();
+  });
+
+  it('does not ask for a server name when Google cannot be reached', async () => {
+    mocks.connect.mockRejectedValue(new ApiError(422, "Couldn't reach smtp.gmail.com. Check the server name and port."));
+    const { user } = setup();
+    await user.type(screen.getByLabelText('Email address'), 'gabriel@yourcompany.com');
+    await user.type(screen.getByLabelText('App password'), 'abcdefghijklmnop');
+    await user.click(screen.getByRole('button', { name: 'Connect' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't reach Google. Check your internet connection and try again.");
+    expect(alert).not.toHaveTextContent('server name');
+  });
+
+  it('keeps the server wording for another provider, where the person did type the servers', async () => {
+    mocks.connect.mockRejectedValue(new ApiError(422, "Couldn't reach smtp.mail.example. Check the server name and port."));
+    const { user } = setup({ provider: 'other' });
+    await user.type(screen.getByLabelText('Sending server'), 'smtp.mail.example');
+    await user.type(screen.getByLabelText('Inbox server'), 'imap.mail.example');
+    await user.type(screen.getByLabelText('Email address'), 'gabriel@yourcompany.com');
+    await user.type(screen.getByLabelText('Email password'), 'secret');
+    await user.click(screen.getByRole('button', { name: 'Connect' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't reach smtp.mail.example. Check the server name and port.");
   });
 
   it('starts again with a new code when the first one ran out', async () => {

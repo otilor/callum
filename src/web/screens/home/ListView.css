@@ -56,7 +56,7 @@
 .lv-count {
   margin-left: 10px;
   font-weight: 500;
-  color: var(--tick);
+  color: var(--slate);
 }
 .lv-row > * {
   padding: 8px;

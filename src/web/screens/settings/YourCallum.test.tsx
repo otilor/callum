@@ -108,7 +108,7 @@ beforeEach(() => {
   mocks.channelSummary.mockImplementation((ch: Channel) => Promise.resolve(SUMMARY[ch]));
   mocks.settings.mockResolvedValue({});
   mocks.updateProject.mockImplementation((id: number, patch: Partial<Project>) => Promise.resolve(project(id, 'Reconciliation', patch)));
-  mocks.sample.mockImplementation((tone: string) => Promise.resolve({ body: `Hi Kemi, this is the ${tone} hello.` }));
+  mocks.sample.mockImplementation((tone: string) => Promise.resolve({ body: `Hi Kemi, this is the ${tone} hello.`, to: { name: 'Kemi Eze', company: 'Oko Pay' } }));
   mocks.disconnect.mockImplementation((ch: Channel) => Promise.resolve(channel(ch)));
   mocks.pauseProject.mockResolvedValue(project(1, 'Reconciliation', { state: 'paused' }));
   mocks.resumeProject.mockResolvedValue(project(1, 'Reconciliation'));
@@ -117,6 +117,13 @@ beforeEach(() => {
 });
 afterEach(() => {
   delete window.callumDesktop;
+});
+
+describe('Your Callum', () => {
+  it('puts the cursor on the page heading when it opens', () => {
+    setup();
+    expect(screen.getByRole('heading', { level: 1, name: 'Your Callum' })).toHaveFocus();
+  });
 });
 
 describe('You', () => {
@@ -250,6 +257,23 @@ describe('Projects', () => {
     setup(appState({ projects: [project(1, 'Reconciliation', { sample: null }), project(2, 'Payroll')] }));
     expect(await screen.findByDisplayValue('Hi Kemi, this is the warm hello.')).toBeInTheDocument();
     expect(mocks.sample).toHaveBeenCalledWith('warm', 1);
+  });
+
+  it('names the person the server wrote the sample to, not whoever is first in the list', async () => {
+    mocks.sample.mockResolvedValue({ body: 'Hi Yaw, a hello.', to: { name: 'Yaw Mensah', company: 'Kumasi Foods' } });
+    setup(appState({ projects: [project(1, 'Reconciliation', { sample: null }), project(2, 'Payroll')] }));
+    expect(await screen.findByLabelText('A first hello to Yaw at Kumasi Foods, in your Warm voice')).toHaveValue('Hi Yaw, a hello.');
+  });
+
+  it('says why a pause did not work, under the pause button and not as a wrap-up problem', async () => {
+    mocks.pauseProject.mockRejectedValue(new ApiError(422, 'Callum could not pause Reconciliation just now.'));
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: 'Pause Reconciliation' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Callum could not pause Reconciliation just now.');
+    // Trying again clears it.
+    mocks.pauseProject.mockResolvedValue(project(1, 'Reconciliation', { state: 'paused' }));
+    await user.click(screen.getByRole('button', { name: 'Pause Reconciliation' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
 
   it('pauses a project and says the other keeps going', async () => {

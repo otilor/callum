@@ -17,7 +17,7 @@ const TONES: { key: Tone; name: string }[] = [
 const LINK = /^(https?:\/\/)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i;
 const noScheme = (url: string | null) => (url ?? '').replace(/^https?:\/\//i, '');
 
-type Field = 'name' | 'cal' | 'offer' | 'tone' | 'sample' | 'wrap';
+type Field = 'name' | 'cal' | 'offer' | 'tone' | 'sample' | 'pause' | 'wrap';
 
 export interface ProjectCardProps {
   project: Project;
@@ -64,6 +64,8 @@ export function ProjectCard({
   const [tone, setTone] = useState<Tone>(project.tone);
   const [sample, setSample] = useState<string | null>(project.sample);
   const [sampleEdited, setSampleEdited] = useState(false);
+  /** Who the sample was written to, as the server named them. */
+  const [sampleTo, setSampleTo] = useState<{ name: string; company: string | null } | null>(null);
   const [writing, setWriting] = useState(false);
   const [err, setErr] = useState<{ field: Field; text: string } | null>(null);
   const [offerSaved, setOfferSaved] = useState(false);
@@ -92,7 +94,10 @@ export function ProjectCard({
     asked.current = true;
     api
       .sample(tone, project.id)
-      .then((res) => setSample((s) => s ?? res.body))
+      .then((res) => {
+        setSample((s) => s ?? res.body);
+        setSampleTo(res.to);
+      })
       .catch(() => {
         // Nothing to show yet; choosing a voice asks again.
         asked.current = false;
@@ -168,6 +173,7 @@ export function ProjectCard({
       const res = await api.sample(next, project.id);
       if (mine !== ticket.current) return;
       setSample(res.body);
+      setSampleTo(res.to);
       setSampleEdited(false);
       setBubbleKey((k) => k + 1);
       await api.updateProject(project.id, { tone: next, sample: res.body });
@@ -191,6 +197,7 @@ export function ProjectCard({
   };
 
   const togglePause = async () => {
+    clear();
     try {
       if (paused) {
         await api.resumeProject(project.id);
@@ -202,7 +209,7 @@ export function ProjectCard({
       }
       await onChanged();
     } catch (e) {
-      fail('wrap', messageOf(e));
+      fail('pause', messageOf(e));
     }
   };
 
@@ -227,7 +234,8 @@ export function ProjectCard({
   ).length;
   const canWrap = othersLive > 0 && project.state !== 'wrapped';
   const bad = (f: Field) => (err?.field === f ? true : undefined);
-  const sampleFor = `A first hello${first ? ` to ${first.firstName}${first.company ? ` at ${first.company}` : ''}` : ''}, in your ${TONES.find((t) => t.key === tone)?.name ?? ''} voice`;
+  const addressed = sampleTo ? { firstName: sampleTo.name.split(/\s+/)[0] ?? sampleTo.name, company: sampleTo.company } : first;
+  const sampleFor = `A first hello${addressed ? ` to ${addressed.firstName}${addressed.company ? ` at ${addressed.company}` : ''}` : ''}, in your ${TONES.find((t) => t.key === tone)?.name ?? ''} voice`;
 
   return (
     <div className="yc-proj" data-open={open}>
@@ -367,7 +375,7 @@ export function ProjectCard({
               {canWrap ? null : <span className="yc-hint">Callum keeps at least one project. Use Take a break to pause everything.</span>}
             </div>
           )}
-          {err?.field === 'wrap' ? <p className="yc-alert fade-in" role="alert"><span className="yc-alert-dot" aria-hidden="true" />{err.text}</p> : null}
+          {err?.field === 'wrap' || err?.field === 'pause' ? <p className="yc-alert fade-in" role="alert"><span className="yc-alert-dot" aria-hidden="true" />{err.text}</p> : null}
         </div>
       ) : null}
     </div>
