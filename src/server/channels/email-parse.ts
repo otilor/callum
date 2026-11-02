@@ -8,14 +8,20 @@ export interface ProviderPreset {
   imapPort: number;
 }
 
-export const PROVIDER_PRESETS: Record<'google' | 'microsoft', ProviderPreset> = {
+/** App-password presets. Microsoft is absent on purpose: Exchange Online refuses app passwords, so it signs in with OAuth. */
+export const PROVIDER_PRESETS: Record<'google', ProviderPreset> = {
   google: { smtpHost: 'smtp.gmail.com', smtpPort: 465, smtpSecure: true, imapHost: 'imap.gmail.com', imapPort: 993 },
-  microsoft: { smtpHost: 'smtp.office365.com', smtpPort: 587, smtpSecure: false, imapHost: 'outlook.office365.com', imapPort: 993 },
 };
 
+/** Microsoft's servers, used with OAuth2 (XOAUTH2) rather than a password. */
+export const MICROSOFT_HOSTS: ProviderPreset = { smtpHost: 'smtp.office365.com', smtpPort: 587, smtpSecure: false, imapHost: 'outlook.office365.com', imapPort: 993 };
+
 const ORIGINAL_MESSAGE = /^\s*-{2,}\s*Original Message\s*-{2,}\s*$/i;
-const GMAIL_HEADER = /^On\s.*\bwrote:\s*$/;
-const GMAIL_HEADER_START = /^On\s.*(\d|@)/;
+// "On ... wrote:" and its French, German, Spanish and Portuguese forms.
+const WROTE = '(?:wrote|a écrit|à écrit|schrieb|escribió|escreveu)';
+const QUOTE_HEADER = new RegExp(`^(?:On|Le|Am|El|Em)\\s.*${WROTE}[^\\n]*:\\s*$`);
+const QUOTE_HEADER_START = /^(?:On|Le|Am|El|Em)\s.*(\d|@)/;
+const QUOTE_HEADER_END = new RegExp(`^(?:\\S.*\\s)?${WROTE}[^\\n]*:$`);
 const OUTLOOK_FROM = /^From:\s/i;
 const OUTLOOK_SENT = /^(Sent|Date):\s/i;
 const SEPARATOR = /^\s*_{3,}\s*$/;
@@ -33,8 +39,8 @@ export function stripQuoted(text: string): string {
     const next = (lines[i + 1] ?? '').trim();
     const startsQuote =
       ORIGINAL_MESSAGE.test(line) ||
-      GMAIL_HEADER.test(line.trim()) ||
-      (GMAIL_HEADER_START.test(line.trim()) && /^(\S.*\s)?wrote:$/.test(next)) ||
+      QUOTE_HEADER.test(line.trim()) ||
+      (QUOTE_HEADER_START.test(line.trim()) && QUOTE_HEADER_END.test(next)) ||
       (OUTLOOK_FROM.test(line) && [1, 2, 3].some((n) => OUTLOOK_SENT.test(lines[i + n] ?? '')));
     if (startsQuote) break;
     if (/^\s*>/.test(line)) continue;
@@ -61,6 +67,23 @@ function recipientHeader(text: string, name: 'Final' | 'Original'): string | nul
   return re.exec(text)?.[1]?.toLowerCase() ?? null;
 }
 
+/**
+ * The recipients a delivery-status report says failed. A block counts when its Action is
+ * "failed", or its Status is 5.x.x and the Action is not delayed, delivered, relayed or expanded.
+ */
+export function failedRecipients(deliveryStatus: string): string[] {
+  const failed: string[] = [];
+  for (const block of deliveryStatus.split(/\r?\n[ \t]*\r?\n/)) {
+    const recipient = recipientHeader(block, 'Final') ?? recipientHeader(block, 'Original');
+    if (!recipient) continue;
+    const action = /^Action:\s*(\S+)/im.exec(block)?.[1]?.toLowerCase() ?? '';
+    const status = /^Status:\s*(\d)\.\d+\.\d+/im.exec(block)?.[1];
+    if (['delayed', 'delivered', 'relayed', 'expanded'].includes(action)) continue;
+    if ((action === 'failed' || status === '5') && !failed.includes(recipient)) failed.push(recipient);
+  }
+  return failed;
+}
+
 /** The address a bounce is about. `sender` is excluded from the free-text fallback. */
 export function bouncedRecipient(text: string, sender?: string): string | null {
   const fromHeaders = recipientHeader(text, 'Final') ?? recipientHeader(text, 'Original');
@@ -74,21 +97,36 @@ export function bouncedRecipient(text: string, sender?: string): string | null {
   return null;
 }
 
-/** Maps an nodemailer error to a ChannelError. */
+const CONNECTION_CODES = [
+  'ECONNECTION', 'ETIMEDOUT', 'ECONNREFUSED', 'ECONNRESET', 'ESOCKET', 'EDNS', 'ENOTFOUND', 'EHOSTUNREACH', 'EPROTOCOL', 'ETLS',
+  'CONNECT_TIMEOUT', 'GREETING_TIMEOUT', 'ETIMEOUT', 'NoConnection', 'ClosedAfterConnectTLS', 'ClosedAfterConnectText',
+  'CERT_HAS_EXPIRED', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+];
+
+/** True for errors about reaching the server or negotiating TLS, as opposed to being refused. */
+export function isConnectionError(err: unknown): boolean {
+  const code = typeof err === 'object' && err !== null && typeof (err as { code?: unknown }).code === 'string' ? (err as { code: string }).code : '';
+  return CONNECTION_CODES.includes(code) || code.startsWith('ERR_SSL') || code.startsWith('ERR_TLS');
+}
+
+/** Maps a nodemailer error to a ChannelError, using the SMTP reply code and its enhanced status (RFC 3463). */
 export function mapSmtpError(err: unknown): ChannelError {
   const obj = typeof err === 'object' && err !== null ? (err as { code?: unknown; responseCode?: unknown; response?: unknown; message?: unknown }) : {};
   const message = typeof err === 'string' ? err : typeof obj.message === 'string' && obj.message ? obj.message : 'Unknown mail error';
   const code = typeof obj.code === 'string' ? obj.code : '';
+  const response = typeof obj.response === 'string' ? obj.response : '';
   let status = typeof obj.responseCode === 'number' ? obj.responseCode : 0;
-  if (!status && typeof obj.response === 'string') status = Number(/^\d{3}/.exec(obj.response)?.[0] ?? 0);
+  if (!status) status = Number(/^\d{3}/.exec(response)?.[0] ?? 0);
+  const enhanced = /\b\d{3}[ -]([245]\.\d{1,3}\.\d{1,3})\b/.exec(response)?.[1] ?? /\b\d{3}[ -]([245]\.\d{1,3}\.\d{1,3})\b/.exec(message)?.[1] ?? '';
+  const detail = `${response} ${message}`;
 
   if (code === 'EAUTH' || status === 530 || status === 534 || status === 535) return { code: 'auth', message };
-  if (status === 550 || status === 551 || status === 553) return { code: 'invalid_recipient', message };
-  if (
-    [421, 450, 451, 452].includes(status) ||
-    ['ECONNECTION', 'ETIMEDOUT', 'ECONNREFUSED', 'ECONNRESET', 'ESOCKET', 'EDNS', 'ENOTFOUND'].includes(code)
-  ) {
-    return { code: 'temporary', message };
+  // The sending account is blocked or refused (policy, sender reputation, basic auth switched off).
+  if (/^5\.7\./.test(enhanced) || enhanced === '5.1.8') return { code: 'auth', message };
+  if (enhanced === '5.4.5' || enhanced === '4.5.3' || (/^5\.5\./.test(enhanced) && /quota|limit|exceed/i.test(detail))) {
+    return { code: 'rate_limit', message };
   }
+  if (/^5\.1\./.test(enhanced) || [550, 551, 553].includes(status)) return { code: 'invalid_recipient', message };
+  if ([421, 450, 451, 452].includes(status) || isConnectionError(err)) return { code: 'temporary', message };
   return { code: 'unknown', message };
 }

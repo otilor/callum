@@ -7,8 +7,10 @@ export type SendResult = { ok: true; externalId: string | null } | { ok: false; 
 export type InboundEvent =
   | { type: 'reply'; from: { email?: string; linkedinUrl?: string; xHandle?: string; name?: string }; text: string; at: string; externalId: string | null }
   | { type: 'accepted'; linkedinUrl: string; at: string }
-  | { type: 'bounce'; email: string; at: string }
-  | { type: 'outbound_seen'; email: string; at: string }
+  /** `externalId` is the DSN's own Message-ID. */
+  | { type: 'bounce'; email: string; at: string; externalId: string | null }
+  /** `externalId` is the Message-ID of the sent mail, so the runner can ignore Callum's own sends. */
+  | { type: 'outbound_seen'; email: string; at: string; externalId: string | null }
   | { type: 'checkpoint'; at: string };
 export class ConnectError extends Error {}
 export interface ChannelAdapter {

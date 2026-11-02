@@ -13,7 +13,7 @@ export function defaultFactory(opts: { demo: boolean; clock: Clock; dataDir: str
     if (opts.demo) return createDemoAdapter(channel, opts.clock);
     switch (channel) {
       case 'email':
-        return createEmailAdapter(secret, { clock: opts.clock });
+        return createEmailAdapter(secret, { clock: opts.clock, ...(hooks ? { onSecretChange: hooks.saveSecret } : {}) });
       case 'x':
         return createXAdapter(secret, { clock: opts.clock, ...(hooks ? { onSecretChange: hooks.saveSecret } : {}) });
       case 'linkedin':

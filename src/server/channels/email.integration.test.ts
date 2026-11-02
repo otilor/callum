@@ -82,7 +82,7 @@ describe.skipIf(!process.env.CALLUM_MAIL_IT)('email adapter against GreenMail', 
   }, 30_000);
 
   it('connect to a port nobody listens on says the server could not be reached', async () => {
-    await expect(createEmailAdapter(null).connect({ ...connectInput, smtpPort: '3999' })).rejects.toThrow(`Couldn't reach ${HOST}. Check the server and port.`);
+    await expect(createEmailAdapter(null).connect({ ...connectInput, smtpPort: '3999' })).rejects.toThrow(`Couldn't reach ${HOST}. Check the server name and port.`);
   }, 30_000);
 
   it('send delivers a message with the From name and List-Unsubscribe header', async () => {
@@ -102,6 +102,7 @@ describe.skipIf(!process.env.CALLUM_MAIL_IT)('email adapter against GreenMail', 
     expect(received.to).toMatchObject({ value: [{ name: 'Kemi Okoye', address: KEMI }] });
     const unsubscribe = received.headerLines.find((h) => h.key === 'list-unsubscribe');
     expect(unsubscribe?.line).toBe(`List-Unsubscribe: <mailto:${YOU}?subject=stop>`);
+    expect(received.headerLines.some((h) => h.key === 'x-callum')).toBe(false);
     expect(received.messageId).toBe(helloId);
     expect(received.text).toContain('I liked your note on payments.');
   }, 30_000);
@@ -170,8 +171,47 @@ describe.skipIf(!process.env.CALLUM_MAIL_IT)('email adapter against GreenMail', 
       return found.length > 0 ? found : undefined;
     }, 'the bounce from poll');
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ type: 'bounce', email: ghost });
+    expect(events[0]).toMatchObject({ type: 'bounce', email: ghost, externalId: `<dsn-${RUN}@okopay.test>` });
     expect(await adapter.poll(testStart)).toEqual([]);
+  }, 30_000);
+
+  it('poll gives no bounce for a delay notice', async () => {
+    const slow = `slow-${RUN}@okopay.test`;
+    const notice = [
+      'From: Mail Delivery Subsystem <mailer-daemon@okopay.test>',
+      `To: ${YOU}`,
+      'Subject: Delivery Status Notification (Delay)',
+      `Message-ID: <delay-${RUN}@okopay.test>`,
+      'Date: Mon, 02 Nov 2026 10:10:00 +0000',
+      'MIME-Version: 1.0',
+      'Content-Type: multipart/report; report-type=delivery-status; boundary="delay-boundary"',
+      '',
+      '--delay-boundary',
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      `Delivery to ${slow} has been delayed. The server will keep trying.`,
+      '',
+      '--delay-boundary',
+      'Content-Type: message/delivery-status',
+      '',
+      'Reporting-MTA: dns; mx.okopay.test',
+      '',
+      `Final-Recipient: rfc822; ${slow}`,
+      'Action: delayed',
+      'Status: 4.4.1',
+      '',
+      '--delay-boundary--',
+      '',
+    ].join('\r\n');
+    await sendAsKemi.sendMail({ envelope: { from: 'mailer-daemon@okopay.test', to: [YOU] }, raw: notice });
+    // A reply sent after the notice proves the notice has been seen: poll returns it, and nothing for the delay.
+    await sendAsKemi.sendMail({ from: `"Kemi Okoye" <${KEMI}>`, to: YOU, subject: `Second note ${RUN}`, text: 'One more thing.' });
+    const events = await eventually(async () => {
+      const found = await adapter.poll(testStart);
+      return found.length > 0 ? found : undefined;
+    }, 'the second note from poll');
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: 'reply', text: 'One more thing.' });
   }, 30_000);
 
   it('a message in the Sent mailbox produces outbound_seen and a known address, but Callum\'s own mail does not', async () => {
@@ -188,6 +228,7 @@ describe.skipIf(!process.env.CALLUM_MAIL_IT)('email adapter against GreenMail', 
         new Date(),
       );
       // Mail clients such as Gmail also file Callum's own sends in Sent; those must not count.
+      // The copy keeps the Message-ID the adapter returned from send().
       const hello = (await mailboxMessages(KEMI, 'INBOX')).find((m) => m.subject === subject);
       expect(hello).toBeDefined();
       const copy = await eventually(async () => {
@@ -206,7 +247,7 @@ describe.skipIf(!process.env.CALLUM_MAIL_IT)('email adapter against GreenMail', 
 
       const events = await adapter.poll(testStart);
       expect(events).toHaveLength(1);
-      expect(events[0]).toMatchObject({ type: 'outbound_seen', email: amara });
+      expect(events[0]).toMatchObject({ type: 'outbound_seen', email: amara, externalId: `<sent-${RUN}@yourcompany.test>` });
       expect(await adapter.poll(testStart)).toEqual([]);
 
       const known = (await adapter.knownAddresses?.()) ?? [];
