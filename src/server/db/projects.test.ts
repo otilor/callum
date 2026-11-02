@@ -143,7 +143,7 @@ describe('settings and the current project', () => {
 });
 
 describe('migration V3', () => {
-  const V3 = 3;
+  const LATEST = 4;
   function dbAt(version: number): DatabaseSync {
     const db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON');
@@ -169,7 +169,7 @@ describe('migration V3', () => {
     migrate(db);
 
     const migrated = new Repo(db);
-    expect(db.prepare('PRAGMA user_version').get()).toEqual({ user_version: V3 });
+    expect(db.prepare('PRAGMA user_version').get()).toEqual({ user_version: LATEST });
     expect(migrated.listProjects()).toEqual([
       {
         id: 1, name: 'My first project', offer: 'You help fintech teams take reconciliation off their ops team.',
@@ -227,7 +227,7 @@ describe('migration V3', () => {
     migrate(db);
     expect(db.prepare('SELECT COUNT(*) AS n FROM projects').get()).toEqual({ n: 0 });
     expect(db.prepare('SELECT COUNT(*) AS n FROM settings').get()).toEqual({ n: 0 });
-    expect(db.prepare('PRAGMA user_version').get()).toEqual({ user_version: V3 });
+    expect(db.prepare('PRAGMA user_version').get()).toEqual({ user_version: LATEST });
   });
 
   it('is safe to run again', () => {

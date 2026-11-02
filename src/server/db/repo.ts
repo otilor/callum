@@ -39,6 +39,7 @@ const PROJECT_KEYS = [
 const MESSAGE_KEYS = ['personId', 'channel', 'direction', 'kind', 'subject', 'body', 'at', 'externalId'] as const;
 const OUTBOX_KEYS = [
   'personId', 'channel', 'kind', 'subject', 'body', 'state', 'origin', 'sendAfter', 'undoUntil', 'error', 'approvalCounted',
+  'claimedAt', 'detail',
 ] as const;
 const INCIDENT_KEYS = ['channel', 'kind', 'state', 'message', 'detail', 'personId', 'resolvedAt'] as const;
 const CHANNEL_KEYS = [
@@ -63,6 +64,12 @@ function normalizeHandles<T extends { email?: string | null; linkedinUrl?: strin
   if (out.linkedinUrl !== undefined) out.linkedinUrl = normalizeLinkedinUrl(out.linkedinUrl);
   if (out.xHandle !== undefined) out.xHandle = normalizeXHandle(out.xHandle);
   return out;
+}
+
+/** An inbound event that could not be handled. Kept so it is tried again instead of being lost. */
+export interface InboundFailure {
+  id: number; channel: Channel; externalId: string | null; personId: number | null;
+  event: string; error: string; attempts: number; createdAt: string; updatedAt: string;
 }
 
 export class DuplicateProjectName extends Error {
@@ -287,6 +294,14 @@ export class Repo {
     return this.select<Message>('SELECT * FROM messages WHERE person_id = ? ORDER BY at, id', [personId]);
   }
 
+  /** True when a message with this provider id is stored on the channel in that direction. */
+  hasMessageWithExternalId(channel: Channel, externalId: string, direction: 'in' | 'out'): boolean {
+    const row = this.db
+      .prepare('SELECT 1 AS found FROM messages WHERE channel = ? AND external_id = ? AND direction = ? LIMIT 1')
+      .get(channel, externalId, direction);
+    return row !== undefined;
+  }
+
   /** Outbound messages on a channel sent at or after `sinceIso`; `kinds` null means any kind. */
   countOut(channel: Channel, kinds: OutKind[] | null, sinceIso: string): number {
     if (kinds && kinds.length === 0) return 0;
@@ -354,6 +369,28 @@ export class Repo {
     return this.select<Incident>('SELECT * FROM incidents WHERE state = ? ORDER BY id', [filter.open ? 'open' : 'resolved']);
   }
 
+  // ---- inbound events that failed -----------------------------------------
+
+  insertInboundFailure(f: Pick<InboundFailure, 'channel' | 'externalId' | 'personId' | 'event' | 'error'>): InboundFailure {
+    const t = this.now();
+    const res = this.db
+      .prepare('INSERT INTO inbound_failed (channel, external_id, person_id, event, error, attempts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)')
+      .run(f.channel, f.externalId, f.personId, f.event, f.error, t, t);
+    return this.require(this.selectOne<InboundFailure>('SELECT * FROM inbound_failed WHERE id = ?', [Number(res.lastInsertRowid)]), 'inbound failure', Number(res.lastInsertRowid));
+  }
+
+  listInboundFailures(): InboundFailure[] {
+    return this.select<InboundFailure>('SELECT * FROM inbound_failed ORDER BY id');
+  }
+
+  updateInboundFailure(id: number, patch: { attempts: number; error: string }): void {
+    this.db.prepare('UPDATE inbound_failed SET attempts = ?, error = ?, updated_at = ? WHERE id = ?').run(patch.attempts, patch.error, this.now(), id);
+  }
+
+  deleteInboundFailure(id: number): void {
+    this.db.prepare('DELETE FROM inbound_failed WHERE id = ?').run(id);
+  }
+
   // ---- transactions ------------------------------------------------------
 
   /** Run `fn` so that all of its writes land together or not at all. Nests as a savepoint. */
@@ -376,10 +413,10 @@ export class Repo {
   deleteAll(): void {
     this.db.exec('BEGIN');
     try {
-      for (const t of ['messages', 'outbox', 'incidents', 'people', 'projects', 'channels', 'channel_secrets', 'settings']) {
+      for (const t of ['messages', 'outbox', 'incidents', 'inbound_failed', 'people', 'projects', 'channels', 'channel_secrets', 'settings']) {
         this.db.exec(`DELETE FROM ${t}`);
       }
-      this.db.exec("DELETE FROM sqlite_sequence WHERE name IN ('messages','outbox','incidents','people','projects')");
+      this.db.exec("DELETE FROM sqlite_sequence WHERE name IN ('messages','outbox','incidents','inbound_failed','people','projects')");
       this.db.exec('COMMIT');
     } catch (e) {
       this.db.exec('ROLLBACK');

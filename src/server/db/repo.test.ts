@@ -150,6 +150,18 @@ describe('messages', () => {
     expect(repo.countOut('x', null, since)).toBe(0);
     expect(repo.countOut('email', [], since)).toBe(0);
   });
+
+  it('finds a message by its provider id, channel and direction', () => {
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });
+    const base = { personId: p.id, subject: null, body: 'x', at: '2026-01-02T00:00:00.000Z' };
+    repo.insertMessage({ ...base, channel: 'email', direction: 'in', kind: 'inbound', externalId: '<in@x>' });
+    repo.insertMessage({ ...base, channel: 'email', direction: 'out', kind: 'hello', externalId: '<out@x>' });
+    expect(repo.hasMessageWithExternalId('email', '<in@x>', 'in')).toBe(true);
+    expect(repo.hasMessageWithExternalId('email', '<in@x>', 'out')).toBe(false);
+    expect(repo.hasMessageWithExternalId('email', '<out@x>', 'out')).toBe(true);
+    expect(repo.hasMessageWithExternalId('x', '<in@x>', 'in')).toBe(false);
+    expect(repo.hasMessageWithExternalId('email', '<nope@x>', 'in')).toBe(false);
+  });
 });
 
 describe('outbox', () => {
@@ -201,6 +213,32 @@ describe('incidents', () => {
     expect(repo.listIncidents().map((i) => i.id)).toEqual([a.id, b.id]);
     expect(repo.listIncidents({ open: true }).map((i) => i.id)).toEqual([b.id]);
     expect(repo.listIncidents({ open: false }).map((i) => i.id)).toEqual([a.id]);
+  });
+});
+
+describe('inbound failures', () => {
+  it('keeps, updates and drops events that could not be handled', () => {
+    const f = repo.insertInboundFailure({ channel: 'email', externalId: '<a@x>', personId: null, event: '{"type":"reply"}', error: 'down' });
+    expect(f).toMatchObject({ channel: 'email', externalId: '<a@x>', attempts: 1, error: 'down' });
+    repo.updateInboundFailure(f.id, { attempts: 2, error: 'still down' });
+    expect(repo.listInboundFailures()).toMatchObject([{ id: f.id, attempts: 2, error: 'still down' }]);
+    repo.deleteInboundFailure(f.id);
+    expect(repo.listInboundFailures()).toEqual([]);
+  });
+  it('are cleared with everything else', () => {
+    repo.insertInboundFailure({ channel: 'x', externalId: null, personId: null, event: '{}', error: 'e' });
+    repo.deleteAll();
+    expect(repo.listInboundFailures()).toEqual([]);
+  });
+});
+
+describe('outbox claims', () => {
+  it('stores the claim time and the detail', () => {
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv', email: 'k@x.com', channel: 'email' });
+    const item = repo.insertOutbox({ personId: p.id, channel: 'email', kind: 'hello', body: 'x', state: 'scheduled', origin: 'auto', sendAfter: '2026-01-01T00:00:00.000Z' });
+    expect(item).toMatchObject({ claimedAt: null, detail: null });
+    expect(repo.updateOutbox(item.id, { state: 'sending', claimedAt: '2026-01-01T00:00:01.000Z', detail: '{"maybeSent":true}' }))
+      .toMatchObject({ state: 'sending', claimedAt: '2026-01-01T00:00:01.000Z', detail: '{"maybeSent":true}' });
   });
 });
 

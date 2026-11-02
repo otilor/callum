@@ -167,8 +167,25 @@ function v3(db: Db): void {
   }
 }
 
+const V4 = `
+ALTER TABLE outbox ADD COLUMN claimed_at TEXT;
+ALTER TABLE outbox ADD COLUMN detail TEXT;
+CREATE INDEX idx_messages_channel_external_id ON messages(channel, external_id);
+CREATE TABLE inbound_failed (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel TEXT NOT NULL,
+  external_id TEXT,
+  person_id INTEGER,
+  event TEXT NOT NULL,
+  error TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+`;
+
 type Step = string | ((db: Db) => void);
-const STEPS: Step[] = [V1, V2, v3];
+const STEPS: Step[] = [V1, V2, v3, V4];
 
 /** Bring the database up to date, or up to version `upTo` (tests build older databases this way). */
 export function migrate(db: Db, upTo: number = STEPS.length): void {

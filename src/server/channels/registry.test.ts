@@ -30,6 +30,15 @@ function stubAdapter(channel: ChannelAdapter['channel'], over: Partial<ChannelAd
   };
 }
 
+describe('AdapterRegistry sign-out notices', () => {
+  it.each([['email', 'mailbox_signed_out'], ['x', 'x_signed_out'], ['linkedin', 'linkedin_signed_out']] as const)('connecting %s again settles %s', async (ch, kind) => {
+    const registry = new AdapterRegistry(repo, (c) => stubAdapter(c), bus);
+    repo.insertIncident({ channel: ch, kind, message: 'out' });
+    await registry.connect(ch, {}, new Date('2026-11-02T10:00:00Z'));
+    expect(repo.listIncidents({ open: true })).toEqual([]);
+  });
+});
+
 describe('AdapterRegistry', () => {
   it('connect stores the secret, marks the channel connected and tells the bus', async () => {
     const registry = new AdapterRegistry(repo, (ch) => stubAdapter(ch), bus);

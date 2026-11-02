@@ -8,6 +8,9 @@ import { createLinkedinAdapter } from './linkedin.js';
 import type { AdapterFactory, AdapterHooks, ChannelAdapter } from './types.js';
 import { createXAdapter } from './x.js';
 
+/** The notice that goes with a channel the account signed out of; connecting again settles it. */
+const SIGNED_OUT_KIND = { email: 'mailbox_signed_out', linkedin: 'linkedin_signed_out', x: 'x_signed_out' } as const;
+
 export function defaultFactory(opts: { demo: boolean; clock: Clock; dataDir: string }): AdapterFactory {
   return (channel, secret, hooks) => {
     if (opts.demo) return createDemoAdapter(channel, opts.clock);
@@ -100,12 +103,11 @@ export class AdapterRegistry {
       connectedAt: this.repo.getChannel(ch).connectedAt ?? now.toISOString(),
     });
     let resolvedIncident = false;
-    if (ch === 'email') {
-      for (const incident of this.repo.listIncidents({ open: true })) {
-        if (incident.channel === 'email' && incident.kind === 'mailbox_signed_out') {
-          this.repo.updateIncident(incident.id, { state: 'resolved', resolvedAt: now.toISOString() });
-          resolvedIncident = true;
-        }
+    const signedOut = SIGNED_OUT_KIND[ch];
+    for (const incident of this.repo.listIncidents({ open: true })) {
+      if (incident.channel === ch && incident.kind === signedOut) {
+        this.repo.updateIncident(incident.id, { state: 'resolved', resolvedAt: now.toISOString() });
+        resolvedIncident = true;
       }
     }
     this.bus.emit('channels');

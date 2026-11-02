@@ -5,11 +5,13 @@ export type PersonStatus = 'active' | 'waiting' | 'snoozed' | 'held' | 'resting'
 export type LeadSource = 'csv' | 'paste' | 'linkedin_search' | 'apollo' | 'referral' | 'demo';
 export type MessageKind = 'hello' | 'invite' | 'thanks' | 'follow_up' | 'reply' | 'booking' | 'close' | 'inbound';
 export type OutKind = Exclude<MessageKind, 'inbound'>;
-export type OutboxState = 'awaiting_ok' | 'scheduled' | 'sent' | 'cancelled' | 'failed' | 'blocked';
+export type OutboxState = 'awaiting_ok' | 'scheduled' | 'sending' | 'sent' | 'cancelled' | 'failed' | 'blocked';
 export type ReplyKind = 'interested' | 'question' | 'not_now' | 'not_interested' | 'stop' | 'hostile' | 'out_of_office' | 'referral';
 export type SuggestedAction = 'reply' | 'book' | 'snooze' | 'close';
 export type Tone = 'warm' | 'direct' | 'playful';
-export type IncidentKind = 'linkedin_check' | 'linkedin_weekly_limit' | 'mailbox_signed_out' | 'bounces' | 'x_limit' | 'send_failed';
+export type IncidentKind =
+  | 'linkedin_check' | 'linkedin_weekly_limit' | 'mailbox_signed_out' | 'x_signed_out' | 'linkedin_signed_out'
+  | 'bounces' | 'x_limit' | 'send_failed' | 'reply_unread' | 'not_answering';
 export type Correction = 'auto_reply' | 'wrong_person' | 'never_contact';
 export type ProjectState = 'running' | 'paused' | 'wrapped';
 
@@ -56,9 +58,11 @@ export interface OutboxItem {
   subject: string | null; body: string; state: OutboxState; origin: 'auto' | 'user';
   sendAfter: string; undoUntil: string | null; error: string | null;
   approvalCounted: boolean;           // an approval was spent on this item (so undo gives it back)
+  claimedAt: string | null;           // set just before the channel is asked to send; an item left `sending` may have gone out
+  detail: string | null;              // JSON the retry route reads: {"maybeSent":true} or {"thrown":true}
   createdAt: string; updatedAt: string;
 }
-export type NewOutboxItem = Pick<OutboxItem, 'personId' | 'channel' | 'kind' | 'body' | 'state' | 'origin' | 'sendAfter'> & Partial<Pick<OutboxItem, 'subject' | 'undoUntil' | 'error' | 'approvalCounted'>>;
+export type NewOutboxItem = Pick<OutboxItem, 'personId' | 'channel' | 'kind' | 'body' | 'state' | 'origin' | 'sendAfter'> & Partial<Pick<OutboxItem, 'subject' | 'undoUntil' | 'error' | 'approvalCounted' | 'claimedAt' | 'detail'>>;
 
 export interface Incident {
   id: number; channel: Channel; kind: IncidentKind; state: 'open' | 'resolved';
