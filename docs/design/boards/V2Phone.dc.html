@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Callum v2 on phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1D2140}
+button,textarea{font-family:inherit}
+button:focus-visible,textarea:focus-visible{outline:2px solid #3F52D9;outline-offset:3px}
+.current{stroke-dasharray:1 14;animation:flow 2.4s linear infinite}
+.current-slow{animation-duration:3.8s}
+@keyframes flow{to{stroke-dashoffset:-15}}
+.pface{position:absolute;border:2px solid #FFFFFF;border-radius:50%;box-sizing:border-box;transition:left 1.2s cubic-bezier(.45,0,.2,1),top 1.2s cubic-bezier(.45,0,.2,1),width .9s ease,height .9s ease,margin .9s ease,box-shadow .6s ease,filter .9s ease,opacity .6s ease}
+.badge{position:absolute;right:-5px;bottom:-5px;width:15px;height:15px;border-radius:50%;border:2px solid #FFFFFF;box-sizing:border-box;background:#1D2140;display:flex;align-items:center;justify-content:center}
+.deck-card{transition:transform .42s cubic-bezier(.55,0,.75,.2),opacity .42s ease}
+.card-in-a{animation:card-in-a .5s cubic-bezier(.2,.8,.2,1) backwards}
+.card-in-b{animation:card-in-b .5s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes card-in-a{from{opacity:0;transform:translateY(40px) scale(.95)}}
+@keyframes card-in-b{from{opacity:0;transform:translateY(40px) scale(.95)}}
+.toast-a{animation:toast-a .4s cubic-bezier(.2,.8,.2,1) backwards}
+.toast-b{animation:toast-b .4s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes toast-a{from{opacity:0;transform:translateY(12px)}}
+@keyframes toast-b{from{opacity:0;transform:translateY(12px)}}
+.ring-a{animation:ring-a 10s linear forwards}
+.ring-b{animation:ring-b 10s linear forwards}
+@keyframes ring-a{to{stroke-dashoffset:53.41}}
+@keyframes ring-b{to{stroke-dashoffset:53.41}}
+.fade-in{animation:fade-in .4s ease backwards}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}}
+.draft{transition:background-color .2s ease,box-shadow .2s ease}
+.draft:focus{box-shadow:0 0 0 2px #3F52D9}
+@media (prefers-reduced-motion: reduce){
+.pface,.deck-card,.draft{transition:none!important}
+.card-in-a,.card-in-b,.toast-a,.toast-b,.fade-in{animation:none!important}
+.current{animation:none}
+}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #FFFFFF; color: #1D2140; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums">
+
+<header style="position: absolute; left: 20px; right: 12px; top: 14px; height: 44px; display: flex; align-items: center; justify-content: space-between">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 700; letter-spacing: -0.03em"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #FFB020"></span>callum</span>
+<div style="display: flex; align-items: center; gap: 4px">
+<span style="display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 12px; border-radius: 16px; background: #F4F5F9; font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #22B07D"></span>Running</span>
+<a href="V2Leave.dc.html" aria-label="Your account" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center"><span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #E7E9F0; background: radial-gradient(circle at 30% 30%, #8C6CFF 0 22%, transparent 58%), radial-gradient(circle at 72% 70%, #FFC145 0 18%, transparent 55%), #4CB5F5"></span></a>
+</div>
+</header>
+
+<section aria-labelledby="brief-title" style="position: absolute; left: 20px; right: 20px; top: 68px; display: flex; flex-direction: column; gap: 10px">
+<h1 id="brief-title" style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1">Good morning</h1>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<span style="display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 11px 0 9px; border-radius: 14px; background: #F4F5F9; font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; border: 2.5px solid #A9B8F5; box-sizing: border-box"></span>12 hellos sent</span>
+<span style="display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 11px 0 6px; border-radius: 14px; background: #F4F5F9; font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 18px; height: 18px; border-radius: 50%; filter: grayscale(0.28); {{adaAvatar}}"></span>Ada accepted</span>
+<span style="display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 11px 0 9px; border-radius: 14px; background: #F4F5F9; font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #22B07D"></span>All fine</span>
+</div>
+</section>
+
+<section aria-label="Your river" style="position: absolute; left: 0; right: 0; top: 150px; height: 108px">
+<svg aria-hidden="true" viewBox="0 0 390 100" preserveAspectRatio="none" style="position: absolute; left: 0; top: 34px; width: 100%; height: 74px; overflow: visible">
+<defs>
+<linearGradient id="v2-phone-bed" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#EEF0F6" stop-opacity="0"></stop>
+<stop offset="0.07" stop-color="#EEF0F6" stop-opacity="1"></stop>
+<stop offset="0.5" stop-color="#ECEFFB" stop-opacity="1"></stop>
+<stop offset="0.82" stop-color="#FFF4DD" stop-opacity="1"></stop>
+<stop offset="1" stop-color="#FFEBC2" stop-opacity="1"></stop>
+</linearGradient>
+</defs>
+<path d="M0,16.7 C62.4,8.3 124.8,23.3 195,15 C265.2,6.7 327.6,21.7 390,11.7 L390,87.3 C327.6,95 265.2,80 195,87.3 C124.8,94.7 62.4,81.7 0,86 Z" fill="url(#v2-phone-bed)"></path>
+<path class="current" d="M0,35 C70.2,27.3 132.6,43.3 195,34.7 C257.4,26.7 319.8,41.3 390,32" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"></path>
+<path class="current current-slow" d="M0,51.7 C66.3,45.3 128.7,60 195,51.3 C261.3,43.3 323.7,58 390,48.7" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"></path>
+<path class="current" d="M0,68.3 C70.2,64 132.6,76 195,68 C257.4,61.3 319.8,74 390,65.3" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"></path>
+</svg>
+<sc-for list="{{faces}}" as="f" hint-placeholder-count="24"><span role="img" aria-label="{{f.label}}" class="pface" style="{{f.style}}"><sc-if value="{{f.isSent}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" class="badge"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span></sc-if></span></sc-for>
+</section>
+
+<div style="position: absolute; left: 20px; right: 20px; top: 268px; height: 24px; display: flex; align-items: center; justify-content: space-between">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; color: #646B85"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #FFB020"></span>{{waitingText}}</span>
+<span aria-hidden="true" style="display: flex; gap: 5px; align-items: center">
+<sc-for list="{{dots}}" as="dd" hint-placeholder-count="3"><span style="height: 7px; border-radius: 4px; transition: width .3s ease, background-color .3s ease; {{dd.style}}"></span></sc-for>
+</span>
+</div>
+
+<div style="position: absolute; left: 16px; right: 16px; top: 304px; height: 474px">
+<sc-if value="{{hasCard}}" hint-placeholder-val="{{true}}">
+<sc-if value="{{hasBack}}" hint-placeholder-val="{{true}}"><span aria-hidden="true" style="position: absolute; inset: 10px 6px -6px; border-radius: 32px; background: #EFF0F5; transform: rotate(2.2deg)"></span></sc-if>
+<article class="deck-card {{cardCls}}" aria-label="{{cardLabel}}" style="position: absolute; inset: 0; background: #FFFFFF; border-radius: 32px; box-shadow: 0 34px 70px -34px rgba(29,33,64,0.45), 0 0 0 1px rgba(29,33,64,0.06); padding: 18px 18px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; {{cardMotion}}">
+<div style="display: flex; align-items: center; gap: 12px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 3.5px #FFB020, 0 12px 26px -12px rgba(255,176,32,0.8); {{card.avatar}}"></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column"><span style="font-size: 18px; font-weight: 600; letter-spacing: -0.01em">{{card.name}}</span><span style="font-size: 13px; color: #646B85">{{card.role}}</span></span>
+<span style="flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 3px"><span style="display: inline-flex; align-items: center; min-height: 24px; padding: 0 9px; border-radius: 12px; background: #F4F5F9; font-size: 12px; font-weight: 600">{{card.ch}}</span><span style="font-size: 12px; color: #646B85">{{card.when}}</span></span>
+</div>
+<p style="margin: 0; background: #FFF3D6; border-radius: 22px 22px 22px 6px; padding: 12px 15px; font-size: 17px; line-height: 1.38; font-weight: 500">{{card.quote}}</p>
+<label for="pdraft" style="display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; margin-top: 2px"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #FFB020"></span>Callum's draft, in your voice</label>
+<textarea id="pdraft" class="draft" value="{{draft}}" onChange="{{onDraft}}" style="flex: 1 1 auto; min-height: 84px; resize: none; border: none; border-radius: 18px; background: #F4F5F9; padding: 12px 14px; font-size: 15px; line-height: 1.45; color: #1D2140; box-sizing: border-box"></textarea>
+<sc-if value="{{hasHole}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" role="alert" style="display: flex; align-items: center; gap: 8px; background: #FFF1EC; border-radius: 16px; padding: 6px 6px 6px 12px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D9480F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="flex: 0 0 auto"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5M12 16.6v.01"></path></svg>
+<span style="flex: 1 1 auto; font-size: 13px; line-height: 1.3">Add your price first.</span>
+<button type="button" onClick="{{leaveOut}}" style="flex: 0 0 auto; min-height: 34px; padding: 0 12px; border-radius: 17px; border: none; background: #FFFFFF; color: #1D2140; font-size: 13px; font-weight: 600; cursor: pointer">Leave it out</button>
+</div>
+</sc-if>
+<button type="button" onClick="{{send}}" aria-disabled="{{sendDisabled}}" style="min-height: 50px; border-radius: 25px; border: none; font-size: 16px; font-weight: 600; {{sendStyle}}">{{sendLabel}}</button>
+<div style="display: flex; justify-content: space-between; gap: 6px">
+<button type="button" onClick="{{snooze}}" style="flex: 1 1 0; min-height: 44px; padding: 0 6px; border-radius: 22px; border: none; background: #F4F5F9; color: #1D2140; font-size: 13px; font-weight: 600; cursor: pointer; {{sg.snooze}}">Snooze</button>
+<button type="button" onClick="{{book}}" style="flex: 1 1 0; min-height: 44px; padding: 0 6px; border-radius: 22px; border: none; background: #FFF3D6; color: #1D2140; font-size: 13px; font-weight: 600; cursor: pointer; {{sg.book}}">Book a call</button>
+<button type="button" onClick="{{closeNice}}" style="flex: 1 1 0; min-height: 44px; padding: 0 6px; border-radius: 22px; border: none; background: #F4F5F9; color: #1D2140; font-size: 13px; font-weight: 600; cursor: pointer; {{sg.close}}">Close politely</button>
+</div>
+</article>
+</sc-if>
+<sc-if value="{{noCard}}" hint-placeholder-val="{{false}}">
+<div class="card-in-a" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; padding: 0 20px">
+<span aria-hidden="true" style="width: 76px; height: 76px; border-radius: 50%; background: #FFB020; box-shadow: 0 0 0 16px #FFF3D6, 0 0 0 32px #FFF9EC; margin-bottom: 34px"></span>
+<h2 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em">All caught up</h2>
+<p style="margin: 0; font-size: 15px; line-height: 1.45; color: #646B85">Callum keeps the river moving. You'll get a tap when the next person replies.</p>
+</div>
+</sc-if>
+</div>
+
+<p aria-live="polite" style="position: absolute; left: 16px; right: 16px; bottom: 16px; margin: 0; display: flex; justify-content: center; pointer-events: none">
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{false}}"><span class="{{toastCls}}" style="display: inline-flex; align-items: center; gap: 10px; background: #1D2140; color: #FFFFFF; border-radius: 24px; min-height: 46px; box-sizing: border-box; padding: 5px 16px 5px 12px; font-size: 14px; font-weight: 500; box-shadow: 0 18px 40px -18px rgba(29,33,64,0.55); pointer-events: auto; {{toastPad}}"><sc-if value="{{toastRing}}" hint-placeholder-val="{{false}}"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true" style="flex: 0 0 auto"><circle cx="11" cy="11" r="8.5" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2.5"></circle><circle class="{{ringCls}}" cx="11" cy="11" r="8.5" fill="none" stroke="#FFB020" stroke-width="2.5" stroke-linecap="round" transform="rotate(-90 11 11)" style="stroke-dasharray: 53.41; stroke-dashoffset: 0"></circle></svg></sc-if>{{toast}}<sc-if value="{{canUndo}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{undo}}" style="min-height: 36px; padding: 0 14px; border-radius: 18px; border: none; background: rgba(255,255,255,0.14); color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">Undo</button></sc-if></span></sc-if>
+</p>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { handled: {}, sent: {}, pending: null, leaving: '', cardKey: 0, drafts: {}, toast: '', toastKey: 0, toastKind: '' };
+    this._to = [];
+    this._tk = 0;
+  }
+
+  componentWillUnmount() { this._to.forEach(function (h) { clearTimeout(h); }); }
+
+  later(fn, ms) { this._to.push(setTimeout(fn, ms)); }
+
+  d() {
+    if (this._d) return this._d;
+    function hash(n) { var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+    var PAL = ['#FF7A59', '#FFC145', '#4CB5F5', '#7BC67E', '#8C6CFF', '#F26CA7', '#2EC4B6', '#FF9F1C'];
+    function marble(n) {
+      var a = PAL[n % 8], b = PAL[(n * 3 + 2) % 8], c = PAL[(n * 5 + 5) % 8];
+      if (b === a) b = PAL[(n + 3) % 8];
+      if (c === a || c === b) c = PAL[(n + 6) % 8];
+      var ax = Math.round(18 + hash(n * 1.7) * 44), ay = Math.round(14 + hash(n * 2.3) * 44);
+      return 'background: radial-gradient(circle at ' + ax + '% ' + ay + '%, ' + b + ' 0 20%, transparent 58%), radial-gradient(circle at ' + (100 - ax) + '% ' + (100 - ay) + '%, ' + c + ' 0 16%, transparent 54%), ' + a + ';';
+    }
+    var Z = [
+      { ids: [24, 25, 26, 27, 28, 29], x0: 4, x1: 24, size: 14, ring: '#D5D9E4', filter: 'grayscale(1) brightness(1.12)', op: 0.62, name: 'stranger' },
+      { ids: [5, 6, 7, 9, 10, 11, 12, 13], x0: 27, x1: 50, size: 17, ring: '#A9B8F5', filter: 'grayscale(0.62)', op: 0.9, name: 'said hello' },
+      { ids: [2, 8], x0: 53, x1: 66, size: 21, ring: '#6E86F2', filter: 'grayscale(0.28)', op: 1, name: 'following up' },
+      { ids: [1], x0: 69, x1: 78, size: 24, ring: '#3F52D9', filter: 'none', op: 1, name: 'talking' }
+    ];
+    var river = [];
+    Z.forEach(function (z, zi) {
+      var cols = Math.max(1, Math.ceil(z.ids.length / 2)), cw = (z.x1 - z.x0) / cols;
+      z.ids.forEach(function (id, k) {
+        var col = Math.floor(k / 2), row = z.ids.length === 1 ? 0.5 : k % 2;
+        river.push({ id: id, zi: zi, x: z.x0 + (col + 0.5) * cw + (hash(id * 3.1 + 1) - 0.5) * cw * 0.3, y: 58 + row * 26 + (col % 2) * 6 + (hash(id * 5.7) - 0.5) * 6, z: z, avatar: marble(300 + id) });
+      });
+    });
+    var TALK = [{ x: 73.5, y: 62 }, { x: 77, y: 88 }, { x: 70.5, y: 90 }];
+    this._d = {
+      Z: Z, river: river, TALK: TALK, ada: marble(302),
+      order: [0, 3, 4],
+      dockPos: { 0: { x: 84, y: 22 }, 3: { x: 93.5, y: 40 }, 4: { x: 89, y: 4 } },
+      people: {
+        0: { first: 'Kemi', name: 'Kemi Eze', role: 'Founder at Oko Pay', ch: 'Email', when: '7:40', avatar: marble(300), quote: "This is timely. We're rebuilding our month-end close in December. Could you send a short deck before Monday?", draft: "Thanks Kemi, glad the timing works. I'll send a short deck tonight, and I'm happy to walk you through it on Monday.", sug: '', snoozeTo: 'next Thursday' },
+        3: { first: 'Femi', name: 'Femi Adeyemi', role: 'Founder at Eko Wallet', ch: 'Email', when: 'Yesterday', avatar: marble(303), quote: 'What does pricing look like for a team of six?', draft: "Hi Femi, for a team of six it's [YOUR PRICE] a month, and setup is included. Want a short walkthrough video first?", noPrice: "Hi Femi, pricing depends on your volume, so I'd rather give you an exact number than a guess. Could we take 15 minutes on Monday?", sug: '', snoozeTo: 'next Thursday' },
+        4: { first: 'Zainab', name: 'Zainab Musa', role: 'CEO at Lagoon Pay', ch: 'Email', when: 'Yesterday', avatar: marble(304), quote: 'Not right now. Try me again in the new year.', draft: "Totally fair, Zainab. I'll check back in early January. Good luck with the year-end rush.", sug: 'snooze', snoozeTo: 'January 6' }
+      }
+    };
+    return this._d;
+  }
+
+  current(s) {
+    var o = this.d().order;
+    for (var i = 0; i < o.length; i++) if (!s.handled[o[i]]) return o[i];
+    return -1;
+  }
+
+  draftFor(s, id) { var p = this.d().people[id]; return s.drafts[id] !== undefined ? s.drafts[id] : p.draft; }
+
+  holeIn(t) { return /\[[A-Z][A-Z ]*\]/.test(t || ''); }
+
+  showToast(text, kind, ms) {
+    var self = this;
+    this._tk += 1;
+    var key = this._tk;
+    this.setState({ toast: text, toastKey: key, toastKind: kind || 'info' });
+    if (ms) this.later(function () { if (self.state.toastKey === key) self.setState({ toast: '' }); }, ms);
+    return key;
+  }
+
+  commit(silent) {
+    var pd = this.state.pending;
+    if (!pd) return;
+    var self = this, p = this.d().people[pd.id];
+    this.setState(function (s) { var se = Object.assign({}, s.sent); se[pd.id] = pd.kind; return { pending: null, sent: se }; });
+    if (!silent) {
+      var txt = { reply: 'Sent to ' + p.first, book: 'Calendar link sent to ' + p.first, close: 'Sent. No more follow-ups for ' + p.first, snooze: p.first + ' comes back on ' + p.snoozeTo }[pd.kind];
+      this.showToast(txt, 'info', 2600);
+    }
+  }
+
+  act(kind) {
+    var self = this, s = this.state, id = this.current(s);
+    if (id < 0 || s.leaving) return;
+    if (kind === 'reply' && this.holeIn(this.draftFor(s, id))) return;
+    this.commit(true);
+    this.setState({ leaving: kind === 'snooze' ? 'left' : kind === 'book' ? 'right' : kind === 'close' ? 'down' : 'up' });
+    this.later(function () {
+      var p = self.d().people[id];
+      self.setState(function (s2) { var h = Object.assign({}, s2.handled); h[id] = kind; return { handled: h, leaving: '', cardKey: s2.cardKey + 1 }; });
+      var text = { reply: 'Sending your reply to ' + p.first, book: 'Sending ' + p.first + ' your calendar link', close: 'Thanking ' + p.first + '. No more follow-ups.', snooze: p.first + ' rests until ' + p.snoozeTo }[kind];
+      var key = self.showToast(text, 'pending', 0);
+      self.setState({ pending: { id: id, kind: kind, key: key } });
+      self.later(function () { var cur = self.state.pending; if (cur && cur.key === key) self.commit(false); }, 10000);
+    }, 420);
+  }
+
+  undo() {
+    var pd = this.state.pending;
+    if (!pd) return;
+    var p = this.d().people[pd.id];
+    this.setState(function (s) { var h = Object.assign({}, s.handled); delete h[pd.id]; return { handled: h, pending: null, cardKey: s.cardKey + 1 }; });
+    this.showToast(pd.kind === 'reply' ? 'Not sent. Your reply to ' + p.first + ' is back.' : p.first + ' is back with you.', 'info', 2600);
+  }
+
+  renderVals() {
+    var self = this, D = this.d(), s = this.state, pd = s.pending;
+    var talkIdx = 1;
+    var faces = D.river.map(function (f) {
+      var hz = f.z.size / 2;
+      return { isSent: f.id === 1, label: 'Person, ' + f.z.name, style: 'left: ' + f.x.toFixed(2) + '%; top: ' + f.y.toFixed(1) + 'px; width: ' + f.z.size + 'px; height: ' + f.z.size + 'px; margin: -' + hz + 'px 0 0 -' + hz + 'px; ' + f.avatar + ' filter: ' + f.z.filter + '; opacity: ' + f.z.op + '; box-shadow: 0 0 0 1.5px ' + f.z.ring + ';' };
+    });
+    D.order.forEach(function (id) {
+      var p = D.people[id], h = s.handled[id];
+      var x, y, size, look, op = 1;
+      if (!h) { var dp = D.dockPos[id]; x = dp.x; y = dp.y + 20; size = 34; look = 'box-shadow: 0 0 0 3px #FFB020, 0 10px 22px -10px rgba(255,176,32,0.8); filter: saturate(1.1);'; }
+      else if (h === 'reply' || h === 'book') { var tp = D.TALK[talkIdx % D.TALK.length]; talkIdx += 1; x = tp.x; y = tp.y; size = 24; look = 'box-shadow: 0 0 0 2px #3F52D9;'; }
+      else { var dq = D.dockPos[id]; x = dq.x; y = dq.y + 20; size = 34; look = 'box-shadow: none; transform: scale(0.4);'; op = 0; }
+      var hz = size / 2;
+      faces.push({ isSent: !!s.sent[id] && (h === 'reply' || h === 'book'), label: p.name + (h ? ', ' + (h === 'snooze' ? 'resting' : 'talking') : ', wants to talk'), style: 'left: ' + x + '%; top: ' + y + 'px; width: ' + size + 'px; height: ' + size + 'px; margin: -' + hz + 'px 0 0 -' + hz + 'px; ' + p.avatar + ' opacity: ' + op + '; ' + look });
+    });
+
+    var cid = this.current(s);
+    var waiting = D.order.filter(function (id) { return !s.handled[id]; }).length;
+    var card = { name: '', role: '', ch: '', when: '', avatar: '', quote: '' };
+    var draft = '', hole = false, sendLabel = 'Send', sug = '';
+    if (cid >= 0) {
+      var cp = D.people[cid];
+      card = { name: cp.name, role: cp.role, ch: cp.ch, when: cp.when, avatar: cp.avatar, quote: '“' + cp.quote + '”' };
+      draft = this.draftFor(s, cid);
+      hole = this.holeIn(draft);
+      sendLabel = 'Send to ' + cp.first;
+      sug = cp.sug;
+    }
+    var RING = 'box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #1D2140;';
+    var dots = D.order.map(function (id) {
+      return { style: id === cid ? 'width: 20px; background: #1D2140;' : (s.handled[id] ? 'width: 7px; background: #1D2140; opacity: 0.3;' : 'width: 7px; background: #DADDE6;') };
+    });
+    var motion = { up: 'transform: translateY(-110%) scale(0.92); opacity: 0;', left: 'transform: translateX(-125%) rotate(-10deg); opacity: 0;', right: 'transform: translateX(125%) rotate(10deg); opacity: 0;', down: 'transform: translateY(40%) scale(0.9); opacity: 0;' }[s.leaving] || '';
+    var tk = s.toastKind;
+    return {
+      adaAvatar: D.ada,
+      faces: faces,
+      waitingText: waiting === 0 ? 'Nobody is waiting on you' : (waiting === 1 ? '1 person wants to talk' : waiting + ' people want to talk'),
+      dots: dots,
+      hasCard: cid >= 0, noCard: cid < 0, hasBack: waiting >= 2,
+      card: card, cardLabel: cid >= 0 ? 'Reply from ' + card.name : 'No replies waiting',
+      cardCls: s.cardKey % 2 ? 'card-in-a' : 'card-in-b', cardMotion: motion,
+      draft: draft, hasHole: hole, sendLabel: sendLabel,
+      sendDisabled: hole ? 'true' : 'false',
+      sendStyle: hole ? 'background: #DADDE6; color: #646B85; cursor: not-allowed;' : 'background: #1D2140; color: #FFFFFF; cursor: pointer;',
+      sg: { snooze: sug === 'snooze' ? RING : '', book: sug === 'book' ? RING : '', close: sug === 'close' ? RING : '' },
+      onDraft: function (e) { var v = e.target.value; self.setState(function (s2) { var d2 = Object.assign({}, s2.drafts); d2[cid] = v; return { drafts: d2 }; }); },
+      leaveOut: function () { var p = D.people[cid]; self.setState(function (s2) { var d2 = Object.assign({}, s2.drafts); d2[cid] = p.noPrice || draft.replace(/\s*\[[A-Z][A-Z ]*\]/g, ''); return { drafts: d2 }; }); },
+      send: function () { self.act('reply'); },
+      snooze: function () { self.act('snooze'); },
+      book: function () { self.act('book'); },
+      closeNice: function () { self.act('close'); },
+      hasToast: !!s.toast, toast: s.toast, toastCls: s.toastKey % 2 ? 'toast-a' : 'toast-b',
+      toastRing: tk === 'pending', canUndo: tk === 'pending' && !!pd,
+      toastPad: tk === 'pending' ? 'padding-right: 6px;' : '', ringCls: s.toastKey % 2 ? 'ring-a' : 'ring-b',
+      undo: function () { self.undo(); }
+    };
+  }
+}
+</script>
+</body>
+</html>

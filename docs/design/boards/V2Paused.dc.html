@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Callum v2, LinkedIn paused</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1D2140}a:hover{color:#3F52D9}
+button,input{font-family:inherit}
+button:focus-visible,a:focus-visible{outline:2px solid #3F52D9;outline-offset:3px}
+input:focus{outline:none}
+.ask-pill:focus-within{box-shadow:0 0 0 2px #3F52D9,0 24px 60px -24px rgba(29,33,64,.32)!important}
+input::placeholder{color:#646B85}
+.face{position:absolute;border:2.5px solid #FFFFFF;border-radius:50%;padding:0;box-sizing:border-box;transition:left 1.3s cubic-bezier(.45,0,.2,1),top 1.3s cubic-bezier(.45,0,.2,1),width .9s ease,height .9s ease,margin .9s ease,filter 1.1s ease,opacity .8s ease,box-shadow .6s ease;animation:face-in .9s cubic-bezier(.2,.7,.2,1) backwards}
+@keyframes face-in{from{opacity:0;transform:translateX(-56px) scale(.4)}}
+.ping-a,.ping-b{position:absolute;inset:-7px;border-radius:50%;border:2.5px solid #3F52D9;pointer-events:none;opacity:0}
+.ping-a{animation:ping-a 1.25s ease-out 2}
+.ping-b{animation:ping-b 1.25s ease-out 2}
+@keyframes ping-a{0%{transform:scale(.85);opacity:1}100%{transform:scale(1.8);opacity:0}}
+@keyframes ping-b{0%{transform:scale(.85);opacity:1}100%{transform:scale(1.8);opacity:0}}
+.going-still{animation:face-in .9s cubic-bezier(.2,.7,.2,1) backwards,still-in 1.4s ease backwards}
+@keyframes still-in{from{filter:none;opacity:1}}
+.pz-in{animation:pz-in .5s ease 2.4s backwards}
+@keyframes pz-in{from{opacity:0;transform:scale(.4)}}
+.pz{position:absolute;right:-5px;bottom:-5px;width:17px;height:17px;border-radius:50%;border:2px solid #FFFFFF;box-sizing:border-box;background:#646B85;display:flex;align-items:center;justify-content:center;transition:opacity .5s ease,transform .5s ease}
+.current{stroke-dasharray:1 22;animation:flow 2.4s linear infinite}
+.current-slow{animation-duration:3.8s}
+@keyframes flow{to{stroke-dashoffset:-23}}
+.is-paused .current{animation-play-state:paused;opacity:.45}
+.card-a{animation:card-a .5s cubic-bezier(.2,.8,.2,1) backwards}
+.card-b{animation:card-b .5s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes card-a{from{opacity:0;transform:translateY(14px)}}
+@keyframes card-b{from{opacity:0;transform:translateY(14px)}}
+.fade-in{animation:fade-in .45s ease backwards}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}}
+.toast-a{animation:toast-a .4s cubic-bezier(.2,.8,.2,1) backwards}
+.toast-b{animation:toast-b .4s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes toast-a{from{opacity:0;transform:translateY(-10px)}}
+@keyframes toast-b{from{opacity:0;transform:translateY(-10px)}}
+.panel-a{animation:panel-a .45s cubic-bezier(.2,.8,.2,1) backwards}
+.panel-b{animation:panel-b .45s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes panel-a{from{opacity:0;transform:translateY(14px)}}
+@keyframes panel-b{from{opacity:0;transform:translateY(14px)}}
+.spin{animation:spin 1.1s linear infinite;transform-origin:50% 50%}
+@keyframes spin{to{transform:rotate(360deg)}}
+.opt{transition:box-shadow .2s ease,background-color .2s ease}
+.opt:hover{background:#F4F5F9!important}
+.wait-face{transition:filter .9s ease,opacity .9s ease}
+@media (max-width: 760px){
+.stage{height:860px!important}
+.field{top:380px!important}
+.incident{width:100%!important}
+.legend{display:none!important}
+}
+@media (prefers-reduced-motion: reduce){
+.face,.opt,.wait-face,.pz{transition:none!important}
+.face,.going-still,.pz-in,.card-a,.card-b,.fade-in,.toast-a,.toast-b,.panel-a,.panel-b{animation:none!important}
+.current,.spin{animation:none}
+.ping-a,.ping-b{display:none}
+}
+</style>
+</helmet>
+<div class="callum-root {{rootClass}}" style="position: relative; min-height: 900px; background: #FFFFFF; color: #1D2140; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums; overflow: hidden">
+
+<p aria-live="polite" style="position: absolute; left: 0; right: 0; top: 78px; z-index: 40; margin: 0; display: flex; justify-content: center; pointer-events: none">
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{false}}"><span class="{{toastCls}}" style="display: inline-flex; align-items: center; gap: 10px; background: #1D2140; color: #FFFFFF; border-radius: 22px; padding: 11px 18px; font-size: 15px; font-weight: 500; box-shadow: 0 18px 40px -18px rgba(29,33,64,0.55)"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; {{toastDot}}"></span>{{toast}}</span></sc-if>
+</p>
+
+<div style="padding: 22px 32px 24px; box-sizing: border-box; min-height: 900px; display: flex; flex-direction: column; gap: 10px">
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; position: relative; z-index: 12">
+<span style="display: inline-flex; align-items: center; gap: 9px; font-size: 22px; font-weight: 700; letter-spacing: -0.03em"><span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 50%; background: #FFB020"></span>callum</span>
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: 18px; background: #F4F5F9; font-size: 14px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; {{statusDot}}"></span>{{statusText}}</span>
+<button type="button" onClick="{{toggleRun}}" aria-label="{{runLabel}}" style="width: 44px; height: 44px; border-radius: 50%; border: none; background: #F4F5F9; cursor: pointer; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{running}}" hint-placeholder-val="{{true}}"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="2" y="1" width="3.5" height="12" rx="1.5" fill="#1D2140"></rect><rect x="8.5" y="1" width="3.5" height="12" rx="1.5" fill="#1D2140"></rect></svg></sc-if>
+<sc-if value="{{stopped}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 1.8v10.4a.8.8 0 0 0 1.2.7l8.3-5.2a.8.8 0 0 0 0-1.4L4.7 1.1a.8.8 0 0 0-1.2.7z" fill="#1D2140"></path></svg></sc-if>
+</button>
+<a href="V2Leave.dc.html" aria-label="Your account" style="display: block; width: 40px; height: 40px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #E7E9F0; background: radial-gradient(circle at 30% 30%, #8C6CFF 0 22%, transparent 58%), radial-gradient(circle at 72% 70%, #FFC145 0 18%, transparent 55%), #4CB5F5"></a>
+</div>
+</header>
+
+<div class="stage" style="position: relative; height: 540px">
+
+<div class="incident" style="position: absolute; left: 0; top: 4px; width: min(600px, 50%); z-index: 3">
+
+<sc-if value="{{isAlert}}" hint-placeholder-val="{{true}}">
+<section class="{{cardCls}}" aria-labelledby="inc-title" style="background: #FFFFFF; border-radius: 30px; padding: 20px 22px 20px; box-shadow: 0 30px 70px -34px rgba(29,33,64,0.4), 0 0 0 1px rgba(29,33,64,0.07); display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span aria-hidden="true" style="position: relative; flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700">in<span style="position: absolute; right: -3px; bottom: -3px; width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; background: #646B85; display: flex; align-items: center; justify-content: center"><svg width="8" height="8" viewBox="0 0 8 8"><rect x="1" y="0.5" width="2" height="7" rx="0.8" fill="#FFFFFF"></rect><rect x="5" y="0.5" width="2" height="7" rx="0.8" fill="#FFFFFF"></rect></svg></span></span>
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<h1 id="inc-title" style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.2">LinkedIn wants to check it's you</h1>
+<span style="font-size: 14px; color: #646B85">Today at 10:42</span>
+</div>
+</div>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px">
+<li style="display: flex; align-items: flex-start; gap: 12px"><span aria-hidden="true" style="flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5.5c0 4.4-3 8-7 9.5-4-1.5-7-5.1-7-9.5V6z"></path></svg></span><span style="font-size: 16px; line-height: 1.45; padding-top: 2px">LinkedIn asked you to confirm your account. It does this now and then.</span></li>
+<li style="display: flex; align-items: flex-start; gap: 12px"><span aria-hidden="true" style="flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 8 8"><rect x="1" y="0.5" width="2" height="7" rx="0.8" fill="#1D2140"></rect><rect x="5" y="0.5" width="2" height="7" rx="0.8" fill="#1D2140"></rect></svg></span><span style="font-size: 16px; line-height: 1.45; padding-top: 2px">Callum paused LinkedIn within a second to keep your account safe. Email and X keep going.</span></li>
+<li style="display: flex; align-items: flex-start; gap: 12px"><span aria-hidden="true" style="flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: #1D2140; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span><span style="font-size: 16px; line-height: 1.45; padding-top: 2px; font-weight: 600">Finish the check on LinkedIn, then come back to resume.</span></li>
+</ol>
+<div style="display: flex; align-items: center; gap: 12px; background: #F4F5F9; border-radius: 20px; padding: 10px 14px">
+<span aria-hidden="true" style="display: flex">
+<sc-for list="{{waitFaces}}" as="wf" hint-placeholder-count="6"><span class="wait-face" style="width: 28px; height: 28px; margin-right: -6px; border-radius: 50%; border: 2px solid #F4F5F9; box-sizing: border-box; {{wf.style}}"></span></sc-for>
+</span>
+<span style="font-size: 14px; color: #646B85; padding-left: 8px">{{waitLine}}</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<button type="button" onClick="{{openLinkedIn}}" style="min-height: 48px; padding: 0 22px; border-radius: 24px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px">Open LinkedIn<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 16L16 8M9 8h7v7"></path></svg></button>
+<button type="button" onClick="{{later}}" style="min-height: 48px; padding: 0 20px; border-radius: 24px; border: none; background: #F4F5F9; color: #1D2140; font-size: 16px; font-weight: 600; cursor: pointer">Remind me at 14:00</button>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{isWaiting}}" hint-placeholder-val="{{false}}">
+<section class="{{cardCls}}" aria-labelledby="wait-title" style="background: #FFFFFF; border-radius: 30px; padding: 22px 24px; box-shadow: 0 30px 70px -34px rgba(29,33,64,0.4), 0 0 0 1px rgba(29,33,64,0.07); display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center"><svg class="spin" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="none" stroke="#E7E9F0" stroke-width="3"></circle><path d="M14 3a11 11 0 0 1 11 11" fill="none" stroke="#1D2140" stroke-width="3" stroke-linecap="round"></path></svg></span>
+<div style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px">
+<h1 id="wait-title" style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.2">{{waitTitle}}</h1>
+<span style="font-size: 15px; color: #646B85">{{waitSub}}</span>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<button type="button" onClick="{{imDone}}" style="min-height: 48px; padding: 0 22px; border-radius: 24px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer">I'm done</button>
+<button type="button" onClick="{{openLinkedIn}}" style="min-height: 48px; padding: 0 20px; border-radius: 24px; border: none; background: #F4F5F9; color: #1D2140; font-size: 16px; font-weight: 600; cursor: pointer">Open LinkedIn again</button>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{isClear}}" hint-placeholder-val="{{false}}">
+<section class="{{cardCls}}" aria-labelledby="clear-title" style="background: #FFFFFF; border-radius: 30px; padding: 22px 24px; box-shadow: 0 30px 70px -34px rgba(29,33,64,0.4), 0 0 0 1px rgba(29,33,64,0.07); display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; background: #1D2140; display: flex; align-items: center; justify-content: center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
+<div style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px">
+<h1 id="clear-title" style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.2">All clear</h1>
+<span style="font-size: 15px; color: #646B85">LinkedIn is happy again. How should Callum restart?</span>
+</div>
+</div>
+<div role="radiogroup" aria-label="LinkedIn pace" style="display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{paces}}" as="pc" hint-placeholder-count="2">
+<button type="button" class="opt" role="radio" aria-checked="{{pc.checked}}" onClick="{{pc.pick}}" style="display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 16px; border: none; border-radius: 20px; background: #FFFFFF; cursor: pointer; text-align: left; color: #1D2140; {{pc.ring}}">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; box-sizing: border-box; {{pc.dot}}"></span>
+<span style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 16px; font-weight: 600">{{pc.name}}</span><span style="font-size: 14px; color: #646B85">{{pc.sub}}</span></span>
+<sc-if value="{{pc.rec}}" hint-placeholder-val="{{false}}"><span style="flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: 13px; background: #F4F5F9; font-size: 12px; font-weight: 600">Recommended</span></sc-if>
+</button>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<button type="button" onClick="{{resume}}" style="min-height: 48px; padding: 0 24px; border-radius: 24px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer">Resume LinkedIn</button>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{isLater}}" hint-placeholder-val="{{false}}">
+<div class="{{cardCls}}" style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: inline-flex; align-self: flex-start; flex-wrap: wrap; align-items: center; gap: 12px; background: #F4F5F9; border-radius: 26px; padding: 8px 8px 8px 16px">
+<span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 50%; background: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700">in</span>
+<span style="font-size: 15px; font-weight: 500">LinkedIn waits for you. Email and X keep going.</span>
+<button type="button" onClick="{{reopen}}" style="min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #1D2140; color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">Finish the check</button>
+</div>
+<span style="display: inline-flex; align-items: center; gap: 9px; font-size: 17px; font-weight: 500; color: #646B85"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 50%; background: #FFB020"></span>Nobody is waiting on you.</span>
+<p style="margin: 0; font-size: 23px; line-height: 1.38; font-weight: 500; max-width: 22ch">Callum will tap you at 14:00 if LinkedIn is still waiting.</p>
+</div>
+</sc-if>
+
+<sc-if value="{{isResumed}}" hint-placeholder-val="{{false}}">
+<div class="{{cardCls}}" style="display: flex; flex-direction: column; gap: 16px">
+<span style="display: inline-flex; align-items: center; gap: 9px; font-size: 17px; font-weight: 500; color: #646B85"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 50%; background: #22B07D"></span>LinkedIn is back on</span>
+<p style="margin: 0; font-size: 23px; line-height: 1.38; font-weight: 500; max-width: 24ch">{{resumedLine}}</p>
+</div>
+</sc-if>
+
+</div>
+
+<div class="field" style="position: absolute; left: 0; right: 0; top: 0; height: 540px">
+<svg aria-hidden="true" viewBox="0 0 1000 300" preserveAspectRatio="none" style="position: absolute; left: 0; top: 300px; width: 100%; height: 230px; overflow: visible">
+<defs>
+<linearGradient id="v2-paused-bed" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#EEF0F6" stop-opacity="0"></stop>
+<stop offset="0.07" stop-color="#EEF0F6" stop-opacity="1"></stop>
+<stop offset="0.5" stop-color="#ECEFFB" stop-opacity="1"></stop>
+<stop offset="0.82" stop-color="#FFF4DD" stop-opacity="1"></stop>
+<stop offset="1" stop-color="#FFEBC2" stop-opacity="1"></stop>
+</linearGradient>
+</defs>
+<path d="M0,50 C160,25 320,70 500,45 C680,20 840,65 1000,35 L1000,262 C840,285 680,240 500,262 C320,284 160,245 0,258 Z" fill="url(#v2-paused-bed)"></path>
+<path class="current" d="M0,105 C180,82 340,130 500,104 C660,80 820,124 1000,96" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+<path class="current current-slow" d="M0,155 C170,136 330,180 500,154 C670,130 830,174 1000,146" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+<path class="current" d="M0,205 C180,192 340,228 500,204 C660,184 820,222 1000,196" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+</svg>
+<sc-if value="{{showLegend}}" hint-placeholder-val="{{true}}">
+<div class="legend fade-in" style="position: absolute; right: 1%; top: 248px; display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: #646B85">
+<span aria-hidden="true" style="position: relative; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #D5D9E4; background: #C5CAD6"><span class="pz" style="width: 13px; height: 13px; right: -6px; bottom: -6px; border-width: 1.5px"><svg width="5" height="5" viewBox="0 0 8 8"><rect x="1" y="0.5" width="2" height="7" rx="0.8" fill="#FFFFFF"></rect><rect x="5" y="0.5" width="2" height="7" rx="0.8" fill="#FFFFFF"></rect></svg></span></span>
+LinkedIn people wait in place
+</div>
+</sc-if>
+<sc-for list="{{faces}}" as="f" hint-placeholder-count="38">
+<span role="img" class="face {{f.cls}}" aria-label="{{f.label}}" style="{{f.style}}"><sc-if value="{{f.pinging}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" class="{{f.pingCls}}"></span></sc-if><span aria-hidden="true" class="pz {{f.pzCls}}" style="{{f.pz}}"><svg width="7" height="7" viewBox="0 0 8 8"><rect x="1" y="0.5" width="2" height="7" rx="0.8" fill="#FFFFFF"></rect><rect x="5" y="0.5" width="2" height="7" rx="0.8" fill="#FFFFFF"></rect></svg></span></span>
+</sc-for>
+</div>
+</div>
+
+<div style="position: relative; height: 58px">
+<sc-for list="{{zones}}" as="z" hint-placeholder-count="4">
+<div style="position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; {{z.pos}}">
+<span style="font-size: 28px; font-weight: 600; letter-spacing: -0.03em; line-height: 1">{{z.n}}</span>
+<span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; color: #646B85; white-space: nowrap"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; {{z.dot}}"></span>{{z.name}}</span>
+</div>
+</sc-for>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 18px 28px; padding: 10px 0 4px">
+<div style="display: flex; flex-wrap: wrap; gap: 28px">
+<sc-for list="{{gauges}}" as="g" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 10px; transition: opacity .4s ease; {{g.wrap}}">
+<svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16" fill="none" stroke="#ECEEF3" stroke-width="5"></circle><circle cx="20" cy="20" r="16" fill="none" stroke="#1D2140" stroke-width="5" stroke-linecap="round" transform="rotate(-90 20 20)" style="transition: stroke-dasharray .8s ease; stroke-dasharray: {{g.dash}}"></circle></svg>
+<span style="display: flex; flex-direction: column; gap: 1px"><span style="font-size: 16px; font-weight: 600">{{g.value}}</span><span style="font-size: 13px; color: #646B85">{{g.name}}</span></span>
+</div>
+</sc-for>
+</div>
+<span style="display: inline-flex; align-items: center; gap: 10px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #E7E9F0; {{next.avatar}}"></span>
+<span style="display: flex; flex-direction: column; gap: 1px"><span style="font-size: 16px; font-weight: 600">{{next.title}}</span><span style="font-size: 13px; color: #646B85">{{next.sub}}</span></span>
+</span>
+</div>
+
+<div style="position: relative; width: 100%; max-width: 760px; margin: auto auto 0; padding-top: 16px; z-index: 10">
+<sc-if value="{{hasAnswer}}" hint-placeholder-val="{{false}}">
+<div class="{{panelCls}}" style="position: absolute; left: 0; right: 0; bottom: calc(100% - 4px); background: #FFFFFF; border-radius: 28px; padding: 18px 22px 22px; box-sizing: border-box; box-shadow: 0 30px 70px -28px rgba(29,33,64,0.38), 0 0 0 1px rgba(29,33,64,0.06); display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-start; gap: 12px">
+<p style="margin: 0 0 0 auto; background: #1D2140; color: #FFFFFF; border-radius: 20px 20px 6px 20px; padding: 9px 16px; font-size: 15px; max-width: 70%">{{asked}}</p>
+<button type="button" onClick="{{closeAnswer}}" aria-label="Close" style="flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; border: none; background: #F4F5F9; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="#1D2140" stroke-width="2" stroke-linecap="round"></path></svg></button>
+</div>
+<div style="display: flex; gap: 14px; align-items: flex-start">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: #FFB020; margin-top: 2px"></span>
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+<p style="margin: 0; font-size: 17px; line-height: 1.45">{{answerText}}</p>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<sc-if value="{{isSwitch}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{switchToEmail}}" style="min-height: 46px; padding: 0 22px; border-radius: 23px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Email Nneka and Temi</button></sc-if>
+<button type="button" onClick="{{closeAnswer}}" style="min-height: 46px; padding: 0 20px; border-radius: 23px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">{{closeLabel}}</button>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{showChips}}" hint-placeholder-val="{{false}}">
+<div class="panel-a" style="position: absolute; left: 0; right: 0; bottom: calc(100% - 2px); display: flex; flex-wrap: wrap; justify-content: center; gap: 8px">
+<sc-for list="{{chips}}" as="c" hint-placeholder-count="2"><button type="button" onMouseDown="{{c.pick}}" style="min-height: 44px; padding: 0 18px; border-radius: 22px; border: none; background: #FFFFFF; box-shadow: 0 0 0 1.5px #E7E9F0; color: #1D2140; font-size: 15px; font-weight: 500; cursor: pointer">{{c.text}}</button></sc-for>
+</div>
+</sc-if>
+<div class="ask-pill" style="display: flex; align-items: center; gap: 12px; background: #FFFFFF; border-radius: 34px; padding: 8px 8px 8px 22px; box-shadow: 0 24px 60px -24px rgba(29,33,64,0.32), 0 0 0 1px rgba(29,33,64,0.07)">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; background: #FFB020"></span>
+<label for="ask" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Ask Callum</label>
+<input id="ask" type="text" value="{{q}}" onChange="{{onType}}" onFocus="{{onFocus}}" onBlur="{{onBlur}}" onKeyDown="{{onKey}}" placeholder="Ask Callum, or tell it who to meet" style="flex: 1 1 auto; min-width: 0; height: 52px; border: none; background: transparent; font-size: 18px; color: #1D2140">
+<button type="button" onClick="{{send}}" aria-label="Send" style="flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; border: none; background: #1D2140; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      running: true, tick: 0, ev: 0, frozen: true, phase: 'alert', phaseKey: 0, pace: 'half', checking: false,
+      stageOf: {}, slotOf: {}, switched: {}, ping: -1, pingKey: 0, wakeKey: 0, waking: false,
+      email: 11, li: 4, xc: 2,
+      q: '', chips: false, answer: '', answerKey: 0, asked: '',
+      toast: '', toastKey: 0, toastKind: ''
+    };
+    this._to = [];
+    this._tk = 0;
+  }
+
+  d() {
+    if (this._d) return this._d;
+    function hash(n) { var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+    var PAL = ['#FF7A59', '#FFC145', '#4CB5F5', '#7BC67E', '#8C6CFF', '#F26CA7', '#2EC4B6', '#FF9F1C'];
+    function marble(n) {
+      var a = PAL[n % 8], b = PAL[(n * 3 + 2) % 8], c = PAL[(n * 5 + 5) % 8];
+      if (b === a) b = PAL[(n + 3) % 8];
+      if (c === a || c === b) c = PAL[(n + 6) % 8];
+      var ax = Math.round(18 + hash(n * 1.7) * 44), ay = Math.round(14 + hash(n * 2.3) * 44);
+      return 'background: radial-gradient(circle at ' + ax + '% ' + ay + '%, ' + b + ' 0 20%, transparent 58%), radial-gradient(circle at ' + (100 - ax) + '% ' + (100 - ay) + '%, ' + c + ' 0 16%, transparent 54%), ' + a + ';';
+    }
+    var ZONES = [
+      { name: 'strangers', x0: 5, x1: 24, size: 22, rows: 3, cols: 5, ring: '#D5D9E4', filter: 'grayscale(1) brightness(1.12)', op: 0.62 },
+      { name: 'said hello', x0: 28, x1: 48, size: 26, rows: 3, cols: 8, ring: '#A9B8F5', filter: 'grayscale(0.62)', op: 0.9 },
+      { name: 'following up', x0: 52, x1: 72, size: 32, rows: 3, cols: 7, ring: '#6E86F2', filter: 'grayscale(0.28)', op: 1 },
+      { name: 'talking', x0: 76, x1: 93, size: 40, rows: 3, cols: 4, ring: '#3F52D9', filter: 'none', op: 1 }
+    ];
+    ZONES.forEach(function (z, zi) {
+      var sl = [], cw = (z.x1 - z.x0) / z.cols;
+      for (var c = 0; c < z.cols; c++) {
+        for (var r = 0; r < z.rows; r++) {
+          var k = zi * 100 + c * 10 + r + 7;
+          sl.push({ x: z.x0 + (c + 0.5) * cw + (hash(k * 3.1 + 1) - 0.5) * cw * 0.35, yf: 0.30 + r * 0.17 + (c % 2) * 0.045 + (hash(k * 5.7 + 2) - 0.5) * 0.03, o: hash(k * 13.37 + 5) });
+        }
+      }
+      sl.sort(function (a, b) { return a.o - b.o; });
+      z.slots = sl;
+    });
+    var P = [
+      ['Kemi', 'Eze', 'Email'], ['Tunde', 'Bello', 'Email'], ['Ada', 'Nwosu', 'LinkedIn'], ['Femi', 'Adeyemi', 'Email'], ['Zainab', 'Musa', 'Email'],
+      ['Chidi', 'Okeke', 'LinkedIn'], ['Bisi', 'Alade', 'Email'], ['Emeka', 'Obi', 'Email'], ['Ngozi', 'Ibe', 'LinkedIn'], ['Seun', 'Ojo', 'Email'],
+      ['Tolu', 'Adebayo', 'Email'], ['Ifeoma', 'Okonkwo', 'LinkedIn'], ['Yusuf', 'Danjuma', 'Email'], ['Funke', 'Bakare', 'Email'], ['Dayo', 'Ogunleye', 'X'],
+      ['Amaka', 'Nwankwo', 'Email'], ['Kunle', 'Lawal', 'LinkedIn'], ['Halima', 'Sani', 'Email'], ['Obinna', 'Uzor', 'Email'], ['Sade', 'Afolabi', 'X'],
+      ['Ibrahim', 'Balogun', 'Email'], ['Nneka', 'Okafor', 'LinkedIn'], ['Wale', 'Oyelaran', 'Email'], ['Chioma', 'Chukwu', 'Email'], ['Musa', 'Ajayi', 'Email'],
+      ['Folake', 'Idowu', 'LinkedIn'], ['Uche', 'Onyeka', 'Email'], ['Aisha', 'Mohammed', 'Email'], ['Bayo', 'Fashola', 'X'], ['Efe', 'Omoregie', 'Email'],
+      ['Lola', 'Adeyinka', 'LinkedIn'], ['Gbenga', 'Oladipo', 'Email'], ['Hauwa', 'Garba', 'Email'], ['Ike', 'Nnaji', 'Email'], ['Temi', 'Coker', 'LinkedIn'],
+      ['Segun', 'Ademola', 'Email'], ['Adaeze', 'Eke', 'X'], ['Kola', 'Bankole', 'Email'], ['Ronke', 'Alabi', 'Email'], ['Nnamdi', 'Okoro', 'LinkedIn']
+    ];
+    var STAGES = [[36, 37, 38, 39], [11, 12, 18, 20, 21, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35], [2, 5, 7, 9, 10, 13, 14, 15, 16, 19, 22, 23, 26], [1, 0, 3, 8, 17, 24]];
+    var people = [], byId = {}, initSlot = {};
+    STAGES.forEach(function (ids, zi) {
+      ids.forEach(function (id, k) {
+        var r = P[id];
+        var p = { id: id, first: r[0], last: r[1], ch: r[2], stage: zi, avatar: marble(300 + id) };
+        people.push(p); byId[id] = p; initSlot[id] = k;
+      });
+    });
+    this._d = {
+      hash: hash, ZONES: ZONES, people: people, byId: byId, initSlot: initSlot,
+      RT: 300, RH: 230,
+      WAIT: [39, 2, 5, 16, 21, 34], EMAILABLE: [21, 34],
+      script: [{ id: 37, to: 1 }, { id: 12, to: 2 }, { id: 36, to: 1 }, { id: 18, to: 2 }, { id: 38, to: 1 }, { id: 20, to: 2 }, { id: 27, to: 2 }, { id: 29, to: 2 }],
+      UP: { 1: { Email: 'first email', X: 'hello on X', LinkedIn: 'connection invite' }, 2: { Email: 'follow-up email', X: 'follow-up on X', LinkedIn: 'follow-up on LinkedIn' } }
+    };
+    return this._d;
+  }
+
+  later(fn, ms) { this._to.push(setTimeout(fn, ms)); }
+
+  componentDidMount() {
+    var self = this;
+    this._timer = setInterval(function () {
+      if (!self.state.running) return;
+      var t = self.state.tick + 1;
+      self.setState({ tick: t });
+      if (t % 6 === 0) self.doSend();
+    }, 1000);
+  }
+
+  componentWillUnmount() {
+    clearInterval(this._timer);
+    this._to.forEach(function (h) { clearTimeout(h); });
+  }
+
+  showToast(text, kind) {
+    var self = this;
+    this._tk += 1;
+    var key = this._tk;
+    this.setState({ toast: text, toastKey: key, toastKind: kind || 'info' });
+    this.later(function () { if (self.state.toastKey === key) self.setState({ toast: '' }); }, 3200);
+  }
+
+  stageOf(s, id) { var v = s.stageOf[id]; return v === undefined ? this.d().byId[id].stage : v; }
+
+  slotFor(s, id) { var v = s.slotOf[id]; return v === undefined ? this.d().initSlot[id] : v; }
+
+  isLinked(s, id) { return this.d().byId[id].ch === 'LinkedIn' && !s.switched[id]; }
+
+  moveUpd(s, id, zone) {
+    var self = this, D = this.d(), used = {};
+    D.people.forEach(function (p) { if (p.id !== id && self.stageOf(s, p.id) === zone) used[self.slotFor(s, p.id)] = true; });
+    var free = 0;
+    while (used[free] && free < D.ZONES[zone].slots.length - 1) free += 1;
+    var so = Object.assign({}, s.stageOf); so[id] = zone;
+    var sl = Object.assign({}, s.slotOf); sl[id] = free;
+    return { stageOf: so, slotOf: sl };
+  }
+
+  nextSend(s) {
+    var D = this.d();
+    for (var i = s.ev; i < D.script.length; i++) {
+      var e = D.script[i];
+      if (this.stageOf(s, e.id) === e.to - 1) return { id: e.id, to: e.to, ev: i + 1 };
+    }
+    return null;
+  }
+
+  doSend() {
+    var self = this, D = this.d();
+    this.setState(function (s) {
+      var e = self.nextSend(s);
+      if (!e) return null;
+      var u = self.moveUpd(s, e.id, e.to);
+      var ch = D.byId[e.id].ch;
+      if (ch === 'Email') u.email = s.email + 1; else if (ch === 'X') u.xc = s.xc + 1;
+      u.ev = e.ev; u.ping = e.id; u.pingKey = s.pingKey + 1;
+      return u;
+    });
+  }
+
+  go(phase) { this.setState(function (s) { return { phase: phase, phaseKey: s.phaseKey + 1 }; }); }
+
+  openLinkedIn() {
+    var self = this;
+    this.go('waiting');
+    this.setState({ checking: false });
+    this.showToast('LinkedIn opened in a new tab');
+    this.later(function () { if (self.state.phase === 'waiting' && !self.state.checking) self.go('clear'); }, 7000);
+  }
+
+  imDone() {
+    var self = this;
+    this.setState({ checking: true });
+    this.later(function () { if (self.state.phase === 'waiting') { self.setState({ checking: false }); self.go('clear'); } }, 1200);
+  }
+
+  resume() {
+    var self = this, D = this.d(), half = this.state.pace === 'half';
+    this.setState(function (s) { return { frozen: false, waking: true, wakeKey: s.wakeKey + 1, phase: 'resumed', phaseKey: s.phaseKey + 1 }; });
+    this.showToast(half ? 'LinkedIn is back on at half pace until next Tuesday' : 'LinkedIn is back on at full pace', 'good');
+    this.later(function () {
+      self.setState(function (s) {
+        if (self.stageOf(s, 39) !== 0) return null;
+        var u = self.moveUpd(s, 39, 1);
+        u.li = s.li + 1; u.ping = 39; u.pingKey = s.pingKey + 1; u.waking = false;
+        return u;
+      });
+    }, 1800);
+  }
+
+  ask(text) {
+    var t = (text || '').trim();
+    if (!t) t = 'Why did LinkedIn pause?';
+    var type = /email|move|switch|instead/.test(t.toLowerCase()) ? 'switch' : 'why';
+    this.setState({ asked: t, answer: type, answerKey: this.state.answerKey + 1, q: '', chips: false });
+  }
+
+  switchToEmail() {
+    var D = this.d();
+    this.setState(function (s) {
+      var sw = Object.assign({}, s.switched);
+      D.EMAILABLE.forEach(function (id) { sw[id] = true; });
+      return { switched: sw, answer: '', ping: 21, pingKey: s.pingKey + 1 };
+    });
+    this.showToast('Nneka and Temi get their next step by email instead');
+  }
+
+  renderVals() {
+    var self = this, D = this.d(), s = this.state;
+    var stillLi = s.frozen;
+
+    var faces = D.people.map(function (p) {
+      var z = self.stageOf(s, p.id), Z = D.ZONES[z];
+      var slot = Z.slots[self.slotFor(s, p.id) % Z.slots.length];
+      var x = slot.x, cy = D.RT + slot.yf * D.RH, size = Z.size, half = size / 2;
+      var li = self.isLinked(s, p.id);
+      var still = stillLi && li && z < 3;
+      var filter = still ? 'grayscale(1) brightness(1.05)' : Z.filter;
+      var op = still ? 0.5 : Z.op;
+      var shadow = '0 0 0 ' + (z >= 2 ? 2 : 1.5) + 'px ' + (still ? '#D5D9E4' : Z.ring);
+      var pinging = false, pingCls = '';
+      if (s.ping === p.id) { pinging = true; pingCls = s.pingKey % 2 ? 'ping-a' : 'ping-b'; }
+      else if (s.waking && li && z < 3) { pinging = true; pingCls = s.wakeKey % 2 ? 'ping-a' : 'ping-b'; }
+      var delay = Math.round(x * 11);
+      return {
+        cls: still ? 'going-still' : '', pzCls: still ? 'pz-in' : '',
+        style: 'left: ' + x.toFixed(2) + '%; top: ' + cy.toFixed(1) + 'px; width: ' + size + 'px; height: ' + size + 'px; margin: -' + half + 'px 0 0 -' + half + 'px; ' + p.avatar + ' filter: ' + filter + '; opacity: ' + op + '; box-shadow: ' + shadow + '; animation-delay: ' + delay + 'ms' + (still ? ', ' + (delay + 1300) + 'ms' : '') + ';',
+        pz: still ? 'opacity: 1; transform: scale(1);' : 'opacity: 0; transform: scale(0.4);',
+        pinging: pinging, pingCls: pingCls,
+        label: p.first + ' ' + p.last + ', ' + Z.name + ' ' + (p.ch === 'Email' || s.switched[p.id] ? 'by email' : 'on ' + p.ch) + (still ? ', waiting for LinkedIn' : '')
+      };
+    });
+
+    var counts = [0, 0, 0, 0];
+    D.people.forEach(function (p) { counts[self.stageOf(s, p.id)] += 1; });
+    var centers = [14.5, 38, 62, 84.5];
+    var zones = D.ZONES.map(function (z, i) {
+      return { n: String(counts[i]), name: z.name, pos: 'left: ' + centers[i] + '%;', dot: 'background: #FFFFFF; border: 3px solid ' + z.ring + ';' };
+    });
+
+    var waitIds = D.WAIT.filter(function (id) { return !s.switched[id]; });
+    var waitFaces = waitIds.map(function (id) { return { style: D.byId[id].avatar + ' filter: grayscale(1); opacity: 0.6;' }; });
+    var nw = waitIds.length;
+
+    var C = 100.53;
+    function dash(v, max) { return (Math.min(v / max, 1) * C).toFixed(1) + ' ' + C; }
+    var liMax = s.phase === 'resumed' && s.pace === 'half' ? 7 : 15;
+    var gauges = [
+      { name: 'emails today', value: s.email + ' of 60', dash: dash(s.email, 60), wrap: '' },
+      { name: stillLi ? 'LinkedIn, paused' : (liMax === 7 ? 'LinkedIn, half pace' : 'LinkedIn invites'), value: s.li + ' of ' + liMax, dash: dash(s.li, liMax), wrap: stillLi ? 'opacity: 0.45;' : '' },
+      { name: 'X today', value: s.xc + ' of 20', dash: dash(s.xc, 20), wrap: '' }
+    ];
+    var ne = this.nextSend(s);
+    var left = 6 - (s.tick % 6);
+    var next = ne
+      ? { avatar: D.byId[ne.id].avatar, title: D.byId[ne.id].first + ', ' + D.UP[ne.to][D.byId[ne.id].ch], sub: s.running ? 'goes out in 0:0' + left : 'waiting while Callum is paused' }
+      : { avatar: 'background: #F4F5F9;', title: 'Nothing queued', sub: 'Callum is done for the morning' };
+
+    var paces = [
+      { key: 'half', name: 'Half pace for a week', sub: '7 invites a day until next Tuesday, then back to 15', rec: true },
+      { key: 'full', name: 'Full pace', sub: '15 invites a day from now', rec: false }
+    ].map(function (o) {
+      var on = s.pace === o.key;
+      return {
+        name: o.name, sub: o.sub, rec: o.rec, checked: on ? 'true' : 'false',
+        ring: on ? 'box-shadow: 0 0 0 2px #1D2140;' : 'box-shadow: 0 0 0 1.5px #E7E9F0;',
+        dot: on ? 'border: 6px solid #1D2140; background: #FFFFFF;' : 'border: 2px solid #C5CAD6; background: #FFFFFF;',
+        pick: function () { self.setState({ pace: o.key }); }
+      };
+    });
+
+    var chips = ['Why did LinkedIn pause?', 'Can the waiting people get email instead?'].map(function (t) {
+      return { text: t, pick: function (e) { if (e && e.preventDefault) e.preventDefault(); self.ask(t); } };
+    });
+    var switchedAll = D.EMAILABLE.every(function (id) { return !!s.switched[id]; });
+    var answerText = s.answer === 'switch'
+      ? (switchedAll ? 'Done already. Nneka and Temi get their next step by email.' : 'Nneka and Temi have work emails, so they can get their next step by email today. The other four wait for LinkedIn, and nobody gets a double message.')
+      : 'LinkedIn asks people to confirm their account now and then, often after a new sign-in or a busy week. Callum stopped within a second of the request, and your account has no warnings.';
+
+    var ph = s.phase;
+    return {
+      rootClass: s.running ? '' : 'is-paused',
+      hasToast: !!s.toast, toast: s.toast, toastCls: s.toastKey % 2 ? 'toast-a' : 'toast-b',
+      toastDot: s.toastKind === 'good' ? 'background: #22B07D;' : 'background: #C5CAD6;',
+      statusText: !s.running ? 'Paused' : (stillLi ? 'Running, LinkedIn paused' : 'Running'),
+      statusDot: s.running ? 'background: #22B07D;' : 'background: #C5CAD6;',
+      running: s.running, stopped: !s.running,
+      runLabel: s.running ? 'Pause Callum' : 'Resume Callum',
+      toggleRun: function () {
+        var on = !self.state.running;
+        self.setState({ running: on });
+        self.showToast(on ? 'Callum is back to work' : 'Paused. Nothing goes out until you resume.');
+      },
+      isAlert: ph === 'alert', isWaiting: ph === 'waiting', isClear: ph === 'clear', isLater: ph === 'later', isResumed: ph === 'resumed',
+      cardCls: s.phaseKey % 2 ? 'card-a' : 'card-b',
+      waitFaces: waitFaces,
+      waitLine: nw + (nw === 1 ? ' person waits' : ' people wait') + ' for LinkedIn. Nothing is lost.',
+      openLinkedIn: function () { self.openLinkedIn(); },
+      later: function () { self.go('later'); self.showToast('Callum will remind you at 14:00'); },
+      reopen: function () { self.go('alert'); },
+      waitTitle: s.checking ? 'Checking with LinkedIn' : 'Finish the check on LinkedIn',
+      waitSub: s.checking ? 'This takes a second.' : "Callum is watching and picks up the moment you're done.",
+      imDone: function () { self.imDone(); },
+      paces: paces,
+      resume: function () { self.resume(); },
+      resumedLine: s.pace === 'half' ? 'The ' + nw + ' people who waited go first. 7 invites a day until next Tuesday, then 15.' : 'The ' + nw + ' people who waited go first, at 15 invites a day.',
+      showLegend: stillLi,
+      faces: faces, zones: zones, gauges: gauges, next: next,
+      q: s.q, showChips: s.chips && !s.answer, chips: chips,
+      onType: function (e) { self.setState({ q: e.target.value }); },
+      onFocus: function () { self.setState({ chips: true }); },
+      onBlur: function () { self.later(function () { self.setState({ chips: false }); }, 160); },
+      onKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.ask(self.state.q); } },
+      send: function () { self.ask(self.state.q); },
+      hasAnswer: !!s.answer, asked: s.asked, panelCls: s.answerKey % 2 ? 'panel-a' : 'panel-b',
+      answerText: answerText, isSwitch: s.answer === 'switch' && !switchedAll,
+      closeLabel: s.answer === 'switch' && !switchedAll ? 'Not now' : 'Got it',
+      switchToEmail: function () { self.switchToEmail(); },
+      closeAnswer: function () { self.setState({ answer: '' }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

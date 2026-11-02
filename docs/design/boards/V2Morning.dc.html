@@ -1,0 +1,1186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Callum v2, a morning with replies</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1D2140}a:hover{color:#3F52D9}
+button,input,textarea{font-family:inherit}
+button:focus-visible,a:focus-visible,textarea:focus-visible{outline:2px solid #3F52D9;outline-offset:3px}
+input:focus{outline:none}
+.ask-pill:focus-within{box-shadow:0 0 0 2px #3F52D9,0 24px 60px -24px rgba(29,33,64,.32)!important}
+input::placeholder,textarea::placeholder{color:#646B85}
+.face{position:absolute;border:2.5px solid #FFFFFF;border-radius:50%;padding:0;cursor:pointer;box-sizing:border-box;transition:left 1.3s cubic-bezier(.45,0,.2,1),top 1.3s cubic-bezier(.45,0,.2,1),width .9s ease,height .9s ease,margin .9s ease,filter 1.1s ease,opacity .6s ease,box-shadow .6s ease,transform .25s ease;animation:face-in .9s cubic-bezier(.2,.7,.2,1) backwards}
+.face:hover{transform:scale(1.14);z-index:4}
+@keyframes face-in{from{opacity:0;transform:translateX(-56px) scale(.4)}}
+.ping-a,.ping-b{position:absolute;inset:-7px;border-radius:50%;border:2.5px solid #FFB020;pointer-events:none;opacity:0}
+.ping-a{animation:ping-a 1.25s ease-out 2}
+.ping-b{animation:ping-b 1.25s ease-out 2}
+@keyframes ping-a{0%{transform:scale(.85);opacity:1}100%{transform:scale(1.8);opacity:0}}
+@keyframes ping-b{0%{transform:scale(.85);opacity:1}100%{transform:scale(1.8);opacity:0}}
+.badge{position:absolute;right:-5px;bottom:-5px;width:19px;height:19px;border-radius:50%;border:2px solid #FFFFFF;box-sizing:border-box;display:flex;align-items:center;justify-content:center;background:#1D2140}
+.badge-sending{background:#FFB020;animation:sending 1.1s ease-in-out infinite}
+@keyframes sending{50%{transform:scale(.78)}}
+.current{stroke-dasharray:1 22;animation:flow 2.4s linear infinite}
+.current-slow{animation-duration:3.8s}
+@keyframes flow{to{stroke-dashoffset:-23}}
+.is-paused .current{animation-play-state:paused;opacity:.45}
+.meta-in{animation:meta-in .6s ease .9s backwards}
+@keyframes meta-in{from{opacity:0;transform:translateY(6px)}}
+.bubble-a{animation:bubble-a .55s cubic-bezier(.2,.8,.2,1) backwards}
+.bubble-b{animation:bubble-b .55s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes bubble-a{from{opacity:0;transform:translateY(10px)}}
+@keyframes bubble-b{from{opacity:0;transform:translateY(10px)}}
+.fade-in{animation:fade-in .4s ease backwards}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}}
+.main-layer{transition:opacity .45s ease,filter .45s ease,transform .45s ease}
+.veil-in{animation:veil-in .35s ease backwards}
+@keyframes veil-in{from{opacity:0}}
+.deck-card{transition:transform .42s cubic-bezier(.55,0,.75,.2),opacity .42s ease}
+.card-in-a{animation:card-in-a .55s cubic-bezier(.2,.8,.2,1) backwards}
+.card-in-b{animation:card-in-b .55s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes card-in-a{from{opacity:0;transform:translateY(48px) scale(.94)}}
+@keyframes card-in-b{from{opacity:0;transform:translateY(48px) scale(.94)}}
+.panel-a{animation:panel-a .45s cubic-bezier(.2,.8,.2,1) backwards}
+.panel-b{animation:panel-b .45s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes panel-a{from{opacity:0;transform:translateY(14px)}}
+@keyframes panel-b{from{opacity:0;transform:translateY(14px)}}
+.toast-a{animation:toast-a .4s cubic-bezier(.2,.8,.2,1) backwards}
+.toast-b{animation:toast-b .4s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes toast-a{from{opacity:0;transform:translateY(-10px)}}
+@keyframes toast-b{from{opacity:0;transform:translateY(-10px)}}
+.ring-a{animation:ring-a 10s linear forwards}
+.ring-b{animation:ring-b 10s linear forwards}
+@keyframes ring-a{to{stroke-dashoffset:53.41}}
+@keyframes ring-b{to{stroke-dashoffset:53.41}}
+.row{transition:background-color .2s ease}
+.row:hover{background:#F4F5F9!important}
+.menu-item{display:flex;align-items:center;gap:12px;min-height:46px;padding:0 14px;border-radius:16px;font-size:15px;font-weight:500;color:#1D2140;text-decoration:none}
+.menu-item:hover{background:#F4F5F9;color:#1D2140}
+.list-scroll{scrollbar-width:thin;scrollbar-color:#D5D9E4 transparent}
+@media (max-width: 760px){
+.stage{height:920px!important}
+.field{top:330px!important}
+.stage-preview{width:100%!important}
+.list-panel{left:0!important;top:350px!important;height:560px!important}
+.is-dock{width:52px!important;height:52px!important;margin:-26px 0 0 -26px!important}
+.dock-name{display:none}
+.hdr-extra{display:none!important}
+}
+@media (prefers-reduced-motion: reduce){
+.face,.deck-card,.main-layer,.row{transition:none!important}
+.face,.meta-in,.bubble-a,.bubble-b,.fade-in,.veil-in,.card-in-a,.card-in-b,.panel-a,.panel-b,.toast-a,.toast-b,.badge-sending{animation:none!important}
+.current{animation:none}
+.ping-a,.ping-b{display:none}
+}
+</style>
+</helmet>
+<div class="callum-root {{rootClass}}" style="position: relative; min-height: 960px; background: #FFFFFF; color: #1D2140; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums; overflow: hidden">
+
+<p aria-live="polite" style="position: absolute; left: 0; right: 0; top: 78px; z-index: 40; margin: 0; display: flex; justify-content: center; pointer-events: none">
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{false}}"><span class="{{toastCls}}" style="display: inline-flex; align-items: center; gap: 11px; background: #1D2140; color: #FFFFFF; border-radius: 24px; min-height: 46px; box-sizing: border-box; padding: 5px 18px 5px 14px; font-size: 15px; font-weight: 500; box-shadow: 0 18px 40px -18px rgba(29,33,64,0.55); pointer-events: auto; {{toastPad}}"><sc-if value="{{toastRing}}" hint-placeholder-val="{{false}}"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.5" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2.5"></circle><circle class="{{ringCls}}" cx="11" cy="11" r="8.5" fill="none" stroke="#FFB020" stroke-width="2.5" stroke-linecap="round" transform="rotate(-90 11 11)" style="stroke-dasharray: 53.41; stroke-dashoffset: 0"></circle></svg></sc-if><sc-if value="{{toastDot}}" hint-placeholder-val="{{true}}"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #FFB020"></span></sc-if>{{toast}}<sc-if value="{{canUndo}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{undo}}" style="min-height: 36px; padding: 0 15px; border-radius: 18px; border: none; background: rgba(255,255,255,0.14); color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">Undo</button></sc-if></span></sc-if>
+</p>
+
+<div class="main-layer" style="padding: 22px 32px 24px; box-sizing: border-box; min-height: 960px; display: flex; flex-direction: column; gap: 10px; {{dimStyle}}">
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; position: relative; z-index: 12">
+<span style="display: inline-flex; align-items: center; gap: 9px; font-size: 22px; font-weight: 700; letter-spacing: -0.03em"><span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 50%; background: #FFB020"></span>callum</span>
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: 18px; background: #F4F5F9; font-size: 14px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; {{statusDot}}"></span>{{statusText}}</span>
+<div class="hdr-extra" role="group" aria-label="How to show people" style="display: inline-flex; padding: 3px; border-radius: 21px; background: #F4F5F9">
+<button type="button" onClick="{{viewRiver}}" aria-pressed="{{riverPressed}}" style="min-height: 36px; padding: 0 16px; border-radius: 18px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: background-color .2s ease, color .2s ease; {{riverBtn}}">River</button>
+<button type="button" onClick="{{viewList}}" aria-pressed="{{listPressed}}" style="min-height: 36px; padding: 0 16px; border-radius: 18px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: background-color .2s ease, color .2s ease; {{listBtn}}">List</button>
+</div>
+<button type="button" onClick="{{toggleRun}}" aria-label="{{runLabel}}" style="width: 44px; height: 44px; border-radius: 50%; border: none; background: #F4F5F9; cursor: pointer; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{running}}" hint-placeholder-val="{{true}}"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="2" y="1" width="3.5" height="12" rx="1.5" fill="#1D2140"></rect><rect x="8.5" y="1" width="3.5" height="12" rx="1.5" fill="#1D2140"></rect></svg></sc-if>
+<sc-if value="{{paused}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 1.8v10.4a.8.8 0 0 0 1.2.7l8.3-5.2a.8.8 0 0 0 0-1.4L4.7 1.1a.8.8 0 0 0-1.2.7z" fill="#1D2140"></path></svg></sc-if>
+</button>
+<div style="position: relative">
+<button type="button" onClick="{{toggleMenu}}" aria-label="Your account" aria-expanded="{{menuExpanded}}" style="width: 40px; height: 40px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #E7E9F0; cursor: pointer; background: radial-gradient(circle at 30% 30%, #8C6CFF 0 22%, transparent 58%), radial-gradient(circle at 72% 70%, #FFC145 0 18%, transparent 55%), #4CB5F5"></button>
+<sc-if value="{{menuOpen}}" hint-placeholder-val="{{false}}">
+<div class="panel-a" style="position: absolute; right: 0; top: calc(100% + 10px); width: 250px; background: #FFFFFF; border-radius: 22px; padding: 8px; box-sizing: border-box; box-shadow: 0 30px 70px -28px rgba(29,33,64,0.38), 0 0 0 1px rgba(29,33,64,0.06); display: flex; flex-direction: column; gap: 2px">
+<a class="menu-item" href="V2Leave.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg>Pause until a date</a>
+<a class="menu-item" href="V2Leave.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14"></path><path d="M10 16l-4-4 4-4M6 12h10"></path></svg>Wrap up and leave</a>
+</div>
+</sc-if>
+</div>
+</div>
+</header>
+
+<div class="stage" style="position: relative; height: 585px">
+
+<div class="stage-preview" style="position: absolute; left: 0; top: 22px; width: min(520px, 48%); z-index: 3; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="font-size: 14px; color: #646B85; margin-right: 2px">Since yesterday</span>
+<sc-for list="{{brief}}" as="b" hint-placeholder-count="3"><span style="display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 12px 0 10px; border-radius: 15px; background: #F4F5F9; font-size: 14px; font-weight: 500"><span aria-hidden="true" style="flex: 0 0 auto; border-radius: 50%; box-sizing: border-box; {{b.dot}}"></span>{{b.text}}</span></sc-for>
+</div>
+<span style="display: inline-flex; align-items: center; gap: 9px; font-size: 17px; font-weight: 500; color: #646B85"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 50%; background: #FFB020"></span>{{waitingText}}</span>
+<sc-if value="{{hasWaiting}}" hint-placeholder-val="{{true}}">
+<p class="{{bubbleCls}}" style="margin: 0; background: #FFF3D6; border-radius: 30px 30px 30px 8px; padding: 20px 26px; font-size: 23px; line-height: 1.38; font-weight: 500; letter-spacing: -0.01em; color: #1D2140">{{latest.quote}}</p>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px">
+<button type="button" onClick="{{openDeck}}" style="min-height: 48px; padding: 0 24px; border-radius: 24px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer">{{openLabel}}</button>
+<span style="font-size: 14px; color: #646B85">{{latest.meta}}</span>
+</div>
+</sc-if>
+<sc-if value="{{noWaiting}}" hint-placeholder-val="{{false}}">
+<p class="fade-in" style="margin: 0; font-size: 23px; line-height: 1.38; font-weight: 500; color: #1D2140; max-width: 22ch">You're all caught up. Callum will tap you when someone replies.</p>
+</sc-if>
+</div>
+
+<sc-if value="{{riverView}}" hint-placeholder-val="{{true}}">
+<div class="field" style="position: absolute; left: 0; right: 0; top: 0; height: 585px">
+<svg aria-hidden="true" viewBox="0 0 1000 300" preserveAspectRatio="none" style="position: absolute; left: 0; top: 285px; width: 100%; height: 280px; overflow: visible">
+<defs>
+<linearGradient id="v2-morning-bed" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#EEF0F6" stop-opacity="0"></stop>
+<stop offset="0.07" stop-color="#EEF0F6" stop-opacity="1"></stop>
+<stop offset="0.5" stop-color="#ECEFFB" stop-opacity="1"></stop>
+<stop offset="0.82" stop-color="#FFF4DD" stop-opacity="1"></stop>
+<stop offset="1" stop-color="#FFEBC2" stop-opacity="1"></stop>
+</linearGradient>
+</defs>
+<path d="M0,50 C160,25 320,70 500,45 C680,20 840,65 1000,35 L1000,262 C840,285 680,240 500,262 C320,284 160,245 0,258 Z" fill="url(#v2-morning-bed)"></path>
+<path class="current" d="M0,105 C180,82 340,130 500,104 C660,80 820,124 1000,96" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+<path class="current current-slow" d="M0,155 C170,136 330,180 500,154 C670,130 830,174 1000,146" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+<path class="current" d="M0,205 C180,192 340,228 500,204 C660,184 820,222 1000,196" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+</svg>
+
+<sc-for list="{{dockMeta}}" as="m" hint-placeholder-count="3">
+<span class="meta-in dock-name" style="position: absolute; transform: translateX(-50%); font-size: 14px; font-weight: 600; white-space: nowrap; {{m.nameStyle}}">{{m.first}}</span>
+<span aria-hidden="true" class="meta-in" style="position: absolute; border-left: 2px dashed #FFB020; {{m.lineStyle}}"></span>
+</sc-for>
+
+<sc-for list="{{faces}}" as="f" hint-placeholder-count="40">
+<button type="button" class="face {{f.cls}}" onClick="{{f.pick}}" aria-label="{{f.label}}" aria-hidden="{{f.ariaHidden}}" tabindex="{{f.tab}}" style="outline-offset: 3px; {{f.style}}"><sc-if value="{{f.pinging}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" class="{{f.pingCls}}"></span></sc-if><sc-if value="{{f.isSending}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" class="badge badge-sending"></span></sc-if><sc-if value="{{f.isSent}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" class="badge"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span></sc-if><sc-if value="{{f.isBooked}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" class="badge" style="background: #FFB020"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="3"></rect><path d="M3.5 10h17"></path></svg></span></sc-if></button>
+</sc-for>
+
+<sc-if value="{{hasFocus}}" hint-placeholder-val="{{false}}">
+<div class="panel-a" style="position: absolute; z-index: 8; width: 340px; background: #FFFFFF; border-radius: 26px; padding: 18px 18px 16px; box-sizing: border-box; box-shadow: 0 30px 70px -28px rgba(29,33,64,0.38), 0 0 0 1px rgba(29,33,64,0.06); display: flex; flex-direction: column; gap: 14px; {{pop.pos}}">
+<div style="display: flex; align-items: center; gap: 12px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; {{pop.avatar}}"></span>
+<span style="display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto"><span style="font-size: 17px; font-weight: 600">{{pop.name}}</span><span style="font-size: 14px; color: #646B85">{{pop.sub}}</span></span>
+<button type="button" onClick="{{closeFocus}}" aria-label="Close" style="flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; border: none; background: #F4F5F9; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="#1D2140" stroke-width="2" stroke-linecap="round"></path></svg></button>
+</div>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; align-items: flex-start">
+<sc-for list="{{pop.steps}}" as="st" hint-placeholder-count="3">
+<li style="flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative">
+<span aria-hidden="true" style="position: absolute; top: 6px; height: 2px; background: #E7E9F0; {{st.line}}"></span>
+<span aria-hidden="true" style="position: relative; width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box; {{st.dot}}"></span>
+<span style="display: flex; flex-direction: column; align-items: center; font-size: 12px; text-align: center; line-height: 1.3"><span style="font-weight: 600">{{st.label}}</span><span style="color: #646B85">{{st.day}}</span></span>
+</li>
+</sc-for>
+</ol>
+<p style="margin: 0; font-size: 15px; line-height: 1.4">{{pop.next}}</p>
+<div style="display: flex; gap: 8px">
+<button type="button" onClick="{{pop.nudge}}" style="flex: 1 1 auto; min-height: 44px; padding: 6px 14px; border-radius: 22px; border: none; background: #1D2140; color: #FFFFFF; font-size: 14px; font-weight: 600; line-height: 1.25; cursor: pointer">{{pop.nudgeLabel}}</button>
+<button type="button" onClick="{{pop.hold}}" style="flex: 0 0 auto; min-height: 44px; padding: 0 18px; border-radius: 22px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">{{pop.holdLabel}}</button>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{listView}}" hint-placeholder-val="{{false}}">
+<div class="list-panel panel-a" style="position: absolute; left: 54%; right: 0; top: 0; height: 585px; background: #FFFFFF; border-radius: 28px; box-shadow: 0 0 0 1px #E7E9F0; box-sizing: border-box; padding: 6px 8px; display: flex; flex-direction: column">
+<div class="list-scroll" style="flex: 1 1 auto; overflow-y: auto; padding: 0 4px 10px">
+<ul style="list-style: none; margin: 0; padding: 0">
+<sc-for list="{{items}}" as="it" hint-placeholder-count="12">
+<li>
+<sc-if value="{{it.isHead}}" hint-placeholder-val="{{false}}"><h3 style="margin: 0; display: flex; align-items: center; gap: 9px; padding: 16px 10px 6px; font-size: 14px; font-weight: 600"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; {{it.dot}}"></span>{{it.title}}<span style="font-weight: 500; color: #646B85">{{it.count}}</span></h3></sc-if>
+<sc-if value="{{it.isRow}}" hint-placeholder-val="{{true}}"><button type="button" class="row" onClick="{{it.pick}}" aria-expanded="{{it.expanded}}" style="width: 100%; display: flex; align-items: center; gap: 12px; padding: 7px 10px; border: none; border-radius: 16px; cursor: pointer; text-align: left; color: #1D2140; font-size: 15px; {{it.sel}}"><span aria-hidden="true" style="flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; {{it.avatar}}"></span><span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column"><span style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{it.name}}</span><span style="font-size: 13px; color: #646B85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{it.sub}}</span></span><span style="flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 24px; padding: 0 9px; border-radius: 12px; background: #F4F5F9; font-size: 12px; font-weight: 600">{{it.ch}}</span><span style="flex: 0 0 140px; font-size: 13px; color: #646B85; text-align: right">{{it.next}}</span></button></sc-if>
+<sc-if value="{{it.isDetail}}" hint-placeholder-val="{{false}}"><div class="fade-in" style="margin: 2px 10px 10px 56px; display: flex; flex-direction: column; gap: 10px"><p style="margin: 0; font-size: 14px; line-height: 1.45">{{it.detail}}</p><div style="display: flex; flex-wrap: wrap; gap: 8px"><button type="button" onClick="{{it.nudge}}" style="min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #1D2140; color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">{{it.nudgeLabel}}</button><button type="button" onClick="{{it.hold}}" style="min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">{{it.holdLabel}}</button></div></div></sc-if>
+</li>
+</sc-for>
+</ul>
+</div>
+</div>
+</sc-if>
+</div>
+
+<div style="position: relative; height: 58px">
+<sc-for list="{{zones}}" as="z" hint-placeholder-count="4">
+<div style="position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; {{z.pos}}">
+<span style="font-size: 28px; font-weight: 600; letter-spacing: -0.03em; line-height: 1">{{z.n}}</span>
+<span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; color: #646B85; white-space: nowrap"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; {{z.dot}}"></span>{{z.name}}</span>
+</div>
+</sc-for>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 18px 28px; padding: 10px 0 4px">
+<div style="display: flex; flex-wrap: wrap; gap: 28px">
+<sc-for list="{{gauges}}" as="g" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 10px; transition: opacity .4s ease; {{g.wrap}}">
+<svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16" fill="none" stroke="#ECEEF3" stroke-width="5"></circle><circle cx="20" cy="20" r="16" fill="none" stroke="#1D2140" stroke-width="5" stroke-linecap="round" transform="rotate(-90 20 20)" style="transition: stroke-dasharray .8s ease; stroke-dasharray: {{g.dash}}"></circle></svg>
+<span style="display: flex; flex-direction: column; gap: 1px"><span style="font-size: 16px; font-weight: 600">{{g.value}}</span><span style="font-size: 13px; color: #646B85">{{g.name}}</span></span>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 26px">
+<span style="display: inline-flex; align-items: center; gap: 10px">
+<span aria-hidden="true" style="width: 40px; height: 40px; border-radius: 50%; background: #FFF3D6; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="3"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>
+<span style="display: flex; flex-direction: column; gap: 1px"><span style="font-size: 16px; font-weight: 600">{{booked}}</span><span style="font-size: 13px; color: #646B85">{{bookedWord}}</span></span>
+</span>
+<span style="display: inline-flex; align-items: center; gap: 10px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #E7E9F0; {{next.avatar}}"></span>
+<span style="display: flex; flex-direction: column; gap: 1px"><span style="font-size: 16px; font-weight: 600">{{next.title}}</span><span style="font-size: 13px; color: #646B85">{{next.sub}}</span></span>
+</span>
+</div>
+</div>
+
+<div style="position: relative; width: 100%; max-width: 760px; margin: auto auto 0; padding-top: 16px; z-index: 10">
+<sc-if value="{{hasAnswer}}" hint-placeholder-val="{{false}}">
+<div class="{{panelCls}}" style="position: absolute; left: 0; right: 0; bottom: calc(100% - 4px); background: #FFFFFF; border-radius: 28px; padding: 18px 22px 22px; box-sizing: border-box; box-shadow: 0 30px 70px -28px rgba(29,33,64,0.38), 0 0 0 1px rgba(29,33,64,0.06); display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-start; gap: 12px">
+<p style="margin: 0 0 0 auto; background: #1D2140; color: #FFFFFF; border-radius: 20px 20px 6px 20px; padding: 9px 16px; font-size: 15px; max-width: 70%">{{asked}}</p>
+<button type="button" onClick="{{closeAnswer}}" aria-label="Close" style="flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; border: none; background: #F4F5F9; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="#1D2140" stroke-width="2" stroke-linecap="round"></path></svg></button>
+</div>
+<div style="display: flex; gap: 14px; align-items: flex-start">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: #FFB020; margin-top: 2px"></span>
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+<sc-if value="{{isWarm}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 14px">
+<sc-for list="{{warm}}" as="w" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+<span style="width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; {{w.ring}}"><span aria-hidden="true" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; {{w.avatar}}"></span></span>
+<span style="font-size: 13px; color: #646B85">{{w.first}}</span>
+</div>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 17px; line-height: 1.45">These four accepted quickly or looked at your profile this week. Want their follow-ups to go out today?</p>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<button type="button" onClick="{{warmNow}}" style="min-height: 46px; padding: 0 22px; border-radius: 23px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Follow up today</button>
+<button type="button" onClick="{{closeAnswer}}" style="min-height: 46px; padding: 0 20px; border-radius: 23px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Not now</button>
+</div>
+</sc-if>
+<sc-if value="{{isFind}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center">
+<sc-for list="{{findDots}}" as="fd" hint-placeholder-count="12"><span aria-hidden="true" style="width: 26px; height: 26px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #D5D9E4; filter: grayscale(1) brightness(1.12); opacity: 0.75; {{fd.avatar}}"></span></sc-for>
+<span style="font-size: 15px; font-weight: 600; color: #646B85; padding-left: 4px">and 8 more</span>
+</div>
+<p style="margin: 0; font-size: 17px; line-height: 1.45">I found 20 more founders like Kemi, at seed-stage fintechs in Lagos and Accra. They join the river as strangers and get a first hello from tomorrow at 9:00.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<button type="button" onClick="{{addFound}}" style="min-height: 46px; padding: 0 22px; border-radius: 23px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Add all 20</button>
+<button type="button" onClick="{{closeAnswer}}" style="min-height: 46px; padding: 0 20px; border-radius: 23px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Not now</button>
+</div>
+</sc-if>
+<sc-if value="{{isPause}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 14px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700">in</span>
+<p style="margin: 0; font-size: 17px; line-height: 1.45">LinkedIn is paused until Monday at 9:00. Email and X keep going, and nobody gets a double message when it resumes.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<button type="button" onClick="{{undoPause}}" style="min-height: 46px; padding: 0 22px; border-radius: 23px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Undo</button>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{showChips}}" hint-placeholder-val="{{false}}">
+<div class="panel-a" style="position: absolute; left: 0; right: 0; bottom: calc(100% - 2px); display: flex; flex-wrap: wrap; justify-content: center; gap: 8px">
+<sc-for list="{{chips}}" as="c" hint-placeholder-count="3"><button type="button" onMouseDown="{{c.pick}}" style="min-height: 44px; padding: 0 18px; border-radius: 22px; border: none; background: #FFFFFF; box-shadow: 0 0 0 1.5px #E7E9F0; color: #1D2140; font-size: 15px; font-weight: 500; cursor: pointer">{{c.text}}</button></sc-for>
+</div>
+</sc-if>
+<div class="ask-pill" style="display: flex; align-items: center; gap: 12px; background: #FFFFFF; border-radius: 34px; padding: 8px 8px 8px 22px; box-shadow: 0 24px 60px -24px rgba(29,33,64,0.32), 0 0 0 1px rgba(29,33,64,0.07)">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; background: #FFB020"></span>
+<label for="ask" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Ask Callum</label>
+<input id="ask" type="text" value="{{q}}" onChange="{{onType}}" onFocus="{{onFocus}}" onBlur="{{onBlur}}" onKeyDown="{{onKey}}" placeholder="Ask Callum, or tell it who to meet" style="flex: 1 1 auto; min-width: 0; height: 52px; border: none; background: transparent; font-size: 18px; color: #1D2140">
+<button type="button" onClick="{{send}}" aria-label="Send" style="flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; border: none; background: #1D2140; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+</div>
+</div>
+
+</div>
+
+<sc-if value="{{deck}}" hint-placeholder-val="{{false}}">
+<div class="veil-in" style="position: absolute; inset: 0; z-index: 30; background: rgba(255,255,255,0.5); display: flex; flex-direction: column; align-items: center; padding: 64px 24px 40px; box-sizing: border-box">
+<button type="button" onClick="{{closeDeck}}" aria-label="Back to the river" style="position: absolute; top: 22px; right: 32px; width: 44px; height: 44px; border-radius: 50%; border: none; background: #F4F5F9; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="#1D2140" stroke-width="2" stroke-linecap="round"></path></svg></button>
+<sc-if value="{{hasCard}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; gap: 6px; align-items: center; height: 10px">
+<sc-for list="{{deckDots}}" as="dd" hint-placeholder-count="3"><span aria-hidden="true" style="height: 8px; border-radius: 4px; transition: width .3s ease, background .3s ease; {{dd.style}}"></span></sc-for>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{deckProgress}}</span>
+</div>
+<div style="position: relative; width: 100%; max-width: 480px; height: 640px; margin-top: 22px">
+<sc-if value="{{hasBack2}}" hint-placeholder-val="{{true}}"><span aria-hidden="true" style="position: absolute; inset: 18px 14px -6px; border-radius: 36px; background: #E9EBF2; transform: rotate(-4deg)"></span></sc-if>
+<sc-if value="{{hasBack1}}" hint-placeholder-val="{{true}}"><span aria-hidden="true" style="position: absolute; inset: 8px 4px -2px; border-radius: 36px; background: #F2F3F8; transform: rotate(2.5deg)"></span></sc-if>
+<article class="deck-card {{cardCls}}" aria-label="{{cardLabel}}" style="position: absolute; inset: 0; background: #FFFFFF; border-radius: 36px; box-shadow: 0 40px 90px -40px rgba(29,33,64,0.45), 0 0 0 1px rgba(29,33,64,0.06); padding: 24px 28px 26px; box-sizing: border-box; display: flex; flex-direction: column; {{cardMotion}}">
+<sc-if value="{{notComposing}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; height: 100%">
+<div style="align-self: stretch; display: flex; justify-content: space-between; align-items: center">
+<span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 15px; background: #F4F5F9; font-size: 13px; font-weight: 600">{{card.ch}}</span>
+<span style="font-size: 13px; color: #646B85">{{card.when}}</span>
+</div>
+<span aria-hidden="true" style="flex: 0 0 auto; width: 96px; height: 96px; margin-top: 4px; border-radius: 50%; border: 3px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 5px #FFB020, 0 18px 36px -14px rgba(255,176,32,0.75); {{card.avatar}}"></span>
+<div style="display: flex; flex-direction: column; gap: 2px; margin-top: 6px">
+<h2 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em">{{card.name}}</h2>
+<span style="font-size: 15px; color: #646B85">{{card.role}}</span>
+</div>
+<p style="margin: 2px 0 0; font-weight: 500; line-height: 1.32; letter-spacing: -0.01em; max-width: 22ch; {{card.quoteStyle}}">{{card.quote}}</p>
+<span style="font-size: 14px; color: #646B85; background: #F4F5F9; border-radius: 16px; padding: 7px 14px">{{card.re}}</span>
+<div style="margin-top: auto; align-self: stretch; display: flex; flex-direction: column; align-items: center; gap: 16px">
+<p style="margin: 0; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #646B85"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #FFB020"></span>{{card.suggest}}</p>
+<div style="display: flex; align-items: flex-end; justify-content: center; gap: 18px">
+<div style="width: 84px; display: flex; flex-direction: column; align-items: center; gap: 8px">
+<button type="button" onClick="{{closeNice}}" aria-label="Close politely" style="width: 60px; height: 60px; border-radius: 50%; border: none; background: #F4F5F9; cursor: pointer; display: flex; align-items: center; justify-content: center; {{sg.close}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1.5"></rect><path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"></path></svg></button>
+<span aria-hidden="true" style="font-size: 13px; white-space: nowrap; {{sl.close}}">Close politely</span>
+</div>
+<div style="width: 84px; display: flex; flex-direction: column; align-items: center; gap: 8px">
+<button type="button" onClick="{{snooze}}" aria-label="{{snoozeLabel}}" style="width: 60px; height: 60px; border-radius: 50%; border: none; background: #F4F5F9; cursor: pointer; display: flex; align-items: center; justify-content: center; {{sg.snooze}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg></button>
+<span aria-hidden="true" style="font-size: 13px; white-space: nowrap; {{sl.snooze}}">Snooze</span>
+</div>
+<div style="width: 84px; display: flex; flex-direction: column; align-items: center; gap: 8px">
+<button type="button" onClick="{{startReply}}" aria-label="Reply" style="width: 76px; height: 76px; border-radius: 50%; border: none; background: #1D2140; cursor: pointer; display: flex; align-items: center; justify-content: center; {{sg.reply}}"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg></button>
+<span aria-hidden="true" style="font-size: 13px; white-space: nowrap; {{sl.reply}}">Reply</span>
+</div>
+<div style="width: 84px; display: flex; flex-direction: column; align-items: center; gap: 8px">
+<button type="button" onClick="{{book}}" aria-label="Book a call" style="width: 60px; height: 60px; border-radius: 50%; border: none; background: #FFB020; cursor: pointer; display: flex; align-items: center; justify-content: center; {{sg.book}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></button>
+<span aria-hidden="true" style="font-size: 13px; white-space: nowrap; {{sl.book}}">Book a call</span>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{composing}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 14px; height: 100%">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<button type="button" onClick="{{backFromReply}}" style="min-height: 40px; padding: 0 14px 0 10px; border-radius: 20px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>Back</button>
+<span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 15px; background: #F4F5F9; font-size: 13px; font-weight: 600">{{card.ch}}</span>
+</div>
+<div style="display: flex; gap: 12px; align-items: flex-start">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 3px #FFB020; {{card.avatar}}"></span>
+<p style="margin: 0; font-size: 15px; line-height: 1.45; color: #646B85">{{card.quote}}</p>
+</div>
+<label for="draft" style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; margin-top: 4px"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #FFB020"></span>Callum's draft, in your voice</label>
+<textarea id="draft" value="{{draft}}" onChange="{{onDraft}}" style="flex: 1 1 auto; min-height: 150px; resize: none; border: none; border-radius: 22px; background: #F4F5F9; padding: 16px 18px; font-size: 17px; line-height: 1.5; color: #1D2140; box-sizing: border-box"></textarea>
+<sc-if value="{{hasHole}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" role="alert" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; background: #FFF1EC; border-radius: 18px; padding: 8px 8px 8px 14px">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D9480F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5M12 16.6v.01"></path></svg>
+<span style="flex: 1 1 200px; font-size: 14px; line-height: 1.35">Add your price first. Callum never sends a message with [YOUR PRICE] in it.</span>
+<button type="button" onClick="{{leaveOut}}" style="min-height: 36px; padding: 0 14px; border-radius: 18px; border: none; background: #FFFFFF; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">Leave the price out</button>
+</div>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<button type="button" onClick="{{sendReply}}" aria-disabled="{{sendDisabled}}" style="flex: 1 1 auto; min-height: 50px; padding: 0 22px; border-radius: 25px; border: none; font-size: 16px; font-weight: 600; {{sendStyle}}">{{sendLabel}}</button>
+<button type="button" onClick="{{shorter}}" style="min-height: 50px; padding: 0 20px; border-radius: 25px; border: none; background: #F4F5F9; color: #1D2140; font-size: 16px; font-weight: 600; cursor: pointer">{{shorterLabel}}</button>
+</div>
+</div>
+</sc-if>
+</article>
+</div>
+</sc-if>
+<sc-if value="{{noCard}}" hint-placeholder-val="{{false}}">
+<div class="card-in-a" style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; margin-top: 150px">
+<span aria-hidden="true" style="width: 104px; height: 104px; border-radius: 50%; background: #FFB020; box-shadow: 0 0 0 22px #FFF3D6, 0 0 0 44px #FFF9EC; margin-bottom: 44px"></span>
+<h2 style="margin: 0; font-size: 30px; font-weight: 600; letter-spacing: -0.02em">All caught up</h2>
+<p style="margin: 0; font-size: 17px; line-height: 1.45; color: #646B85; max-width: 32ch">Callum keeps the river moving. You'll get a tap when the next person replies.</p>
+<button type="button" onClick="{{closeDeck}}" style="min-height: 48px; padding: 0 24px; border-radius: 24px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 6px">Back to the river</button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      running: true, tick: 0, sentToday: 0, autoIdx: 0,
+      stageOf: {}, slotOf: {}, helloDay: {}, accDay: {}, fuNow: {}, lastNow: {},
+      replied: { 0: 0, 3: 1, 4: 2 }, recent: [0, 3, 4], handled: {}, out: {}, sent: { 1: 'reply' }, bookedAt: {}, held: {},
+      ping: -1, pingKey: 0, nudge: [], nudgeKey: 0,
+      email: 0, li: 0, xc: 0, booked: 0, found: false, liPaused: false,
+      focus: -1, latestKey: 0, view: 'river', menu: false,
+      deck: false, deckOrder: [], leaving: '', composing: false, drafts: {}, shortened: {}, cardKey: 0,
+      q: '', chips: false, answer: '', answerKey: 0, asked: '',
+      toast: '', toastKey: 0, toastKind: '', pending: null
+    };
+    this._to = [];
+    this._tk = 0;
+    this._queued = null;
+  }
+
+  d() {
+    if (this._d) return this._d;
+    function hash(n) { var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+    var PAL = ['#FF7A59', '#FFC145', '#4CB5F5', '#7BC67E', '#8C6CFF', '#F26CA7', '#2EC4B6', '#FF9F1C'];
+    function marble(n) {
+      var a = PAL[n % 8], b = PAL[(n * 3 + 2) % 8], c = PAL[(n * 5 + 5) % 8];
+      if (b === a) b = PAL[(n + 3) % 8];
+      if (c === a || c === b) c = PAL[(n + 6) % 8];
+      var ax = Math.round(18 + hash(n * 1.7) * 44), ay = Math.round(14 + hash(n * 2.3) * 44);
+      return 'background: radial-gradient(circle at ' + ax + '% ' + ay + '%, ' + b + ' 0 20%, transparent 58%), radial-gradient(circle at ' + (100 - ax) + '% ' + (100 - ay) + '%, ' + c + ' 0 16%, transparent 54%), ' + a + ';';
+    }
+    var ZONES = [
+      { name: 'strangers', word: 'not contacted yet', x0: 5, x1: 24, size: 22, rows: 4, cols: 10, ring: '#D5D9E4', filter: 'grayscale(1) brightness(1.12)', op: 0.62 },
+      { name: 'said hello', word: 'said hello', x0: 28, x1: 48, size: 26, rows: 4, cols: 9, ring: '#A9B8F5', filter: 'grayscale(0.62)', op: 0.9 },
+      { name: 'following up', word: 'following up', x0: 52, x1: 72, size: 32, rows: 4, cols: 5, ring: '#6E86F2', filter: 'grayscale(0.28)', op: 1 },
+      { name: 'talking', word: 'talking', x0: 76, x1: 93, size: 40, rows: 3, cols: 4, ring: '#3F52D9', filter: 'none', op: 1 }
+    ];
+    ZONES.forEach(function (z, zi) {
+      var sl = [], cw = (z.x1 - z.x0) / z.cols, step = z.rows > 3 ? 0.135 : 0.18;
+      for (var c = 0; c < z.cols; c++) {
+        for (var r = 0; r < z.rows; r++) {
+          var k = zi * 100 + c * 10 + r;
+          sl.push({ x: z.x0 + (c + 0.5) * cw + (hash(k * 3.1 + 1) - 0.5) * cw * 0.35, yf: 0.30 + r * step + (c % 2) * 0.045 + (hash(k * 5.7 + 2) - 0.5) * 0.03, o: hash(k * 13.37 + 5) });
+        }
+      }
+      sl.sort(function (a, b) { return a.o - b.o; });
+      z.slots = sl;
+    });
+    var P = [
+      ['Kemi', 'Eze', 'Founder', 'Oko Pay', 'Email'], ['Tunde', 'Bello', 'CEO', 'Ireti Labs', 'Email'], ['Ada', 'Nwosu', 'Co-founder', 'Yaba Ledger', 'LinkedIn'],
+      ['Femi', 'Adeyemi', 'Founder', 'Eko Wallet', 'Email'], ['Zainab', 'Musa', 'CEO', 'Lagoon Pay', 'Email'], ['Chidi', 'Okeke', 'Co-founder', 'Marina Ledger', 'LinkedIn'],
+      ['Bisi', 'Alade', 'Founder', 'Ikoyi Pay', 'Email'], ['Emeka', 'Obi', 'CEO', 'Surulere Labs', 'Email'], ['Ngozi', 'Ibe', 'COO', 'Bariga Pay', 'LinkedIn'],
+      ['Seun', 'Ojo', 'Founder', 'Lekki Ledger', 'Email'], ['Tolu', 'Adebayo', 'Founder', 'Ajah Money', 'Email'], ['Ifeoma', 'Okonkwo', 'CEO', 'Ebute Pay', 'LinkedIn'],
+      ['Yusuf', 'Danjuma', 'Co-founder', 'Island Books', 'Email'], ['Funke', 'Bakare', 'Head of Finance', 'Ojo Credit', 'Email'], ['Dayo', 'Ogunleye', 'Founder', 'Mainland Pay', 'X'],
+      ['Amaka', 'Nwankwo', 'CEO', 'Ilupeju Labs', 'Email'], ['Kunle', 'Lawal', 'Founder', 'Obalende Pay', 'LinkedIn'], ['Halima', 'Sani', 'COO', 'Gbagada Finance', 'Email'],
+      ['Obinna', 'Uzor', 'Co-founder', 'Festac Wallet', 'Email'], ['Sade', 'Afolabi', 'Founder', 'Apapa Ledger', 'X'], ['Ibrahim', 'Balogun', 'CEO', 'Agege Pay', 'Email'],
+      ['Nneka', 'Okafor', 'Head of Finance', 'Ikeja Books', 'LinkedIn'], ['Wale', 'Oyelaran', 'Founder', 'Maryland Pay', 'Email'], ['Chioma', 'Chukwu', 'CEO', 'Ogba Labs', 'Email'],
+      ['Musa', 'Ajayi', 'Founder', 'Onikan Money', 'Email'], ['Folake', 'Idowu', 'CFO', 'Ketu Pay', 'LinkedIn'], ['Uche', 'Onyeka', 'Co-founder', 'Ojota Ledger', 'Email'],
+      ['Aisha', 'Mohammed', 'CEO', 'Badagry Labs', 'Email'], ['Bayo', 'Fashola', 'Founder', 'Epe Wallet', 'X'], ['Efe', 'Omoregie', 'Founder', 'Idumota Pay', 'Email'],
+      ['Lola', 'Adeyinka', 'Head of Finance', 'Oshodi Books', 'LinkedIn'], ['Gbenga', 'Oladipo', 'CEO', 'Alaba Credit', 'Email'], ['Hauwa', 'Garba', 'COO', 'Magodo Pay', 'Email'],
+      ['Ike', 'Nnaji', 'Co-founder', 'Ikota Labs', 'Email'], ['Temi', 'Coker', 'Founder', 'Sangotedo Pay', 'LinkedIn'], ['Segun', 'Ademola', 'CEO', 'Ogudu Ledger', 'Email'],
+      ['Adaeze', 'Eke', 'Founder', 'Akoka Wallet', 'X'], ['Kola', 'Bankole', 'Founder', 'Ijora Pay', 'Email'], ['Ronke', 'Alabi', 'CFO', 'Mushin Labs', 'Email'],
+      ['Nnamdi', 'Okoro', 'CEO', 'Isolo Finance', 'LinkedIn']
+    ];
+    var FOUND = [
+      ['Kwame', 'Asante', 'Founder', 'Osu Pay', 'Email'], ['Abena', 'Mensah', 'CEO', 'Labone Ledger', 'LinkedIn'], ['Kofi', 'Boateng', 'Co-founder', 'Tema Wallet', 'Email'],
+      ['Efua', 'Owusu', 'Founder', 'Kaneshie Labs', 'Email'], ['Yaw', 'Darko', 'CEO', 'Ridge Ledger', 'X'], ['Akosua', 'Addo', 'Founder', 'Adabraka Money', 'Email'],
+      ['Kojo', 'Appiah', 'Co-founder', 'Cantonments Pay', 'LinkedIn'], ['Ama', 'Ofori', 'CEO', 'Dansoman Books', 'Email'], ['Tobi', 'Ogun', 'Founder', 'Opebi Pay', 'Email'],
+      ['Ebuka', 'Anyanwu', 'CEO', 'Allen Ledger', 'LinkedIn'], ['Rukayat', 'Yusuf', 'Founder', 'Ojuelegba Labs', 'Email'], ['Kayode', 'Akande', 'Co-founder', 'Ilasan Wallet', 'X'],
+      ['Mariam', 'Abubakar', 'CEO', 'Omole Pay', 'Email'], ['Jide', 'Oduya', 'Founder', 'Ikorodu Ledger', 'Email'], ['Esi', 'Quaye', 'Founder', 'Teshie Pay', 'LinkedIn'],
+      ['Nana', 'Agyei', 'CEO', 'Madina Money', 'Email'], ['Ola', 'Ayodele', 'Co-founder', 'Ogombo Labs', 'Email'], ['Zara', 'Ibrahim', 'Founder', 'Lekki Wallet', 'X'],
+      ['Dapo', 'Olaniyan', 'CEO', 'Ikoyi Ledger', 'Email'], ['Ijeoma', 'Nwachukwu', 'Founder', 'Yaba Pay', 'LinkedIn']
+    ];
+    var start = { 0: 1, 1: 3, 2: 2, 3: 1, 4: 1, 8: 2 };
+    var people = [], byId = {};
+    P.forEach(function (r, i) {
+      var st = i >= 24 ? 0 : (start[i] !== undefined ? start[i] : 1);
+      var p = { id: i, first: r[0], last: r[1], role: r[2], co: r[3], ch: r[4], stage: st, avatar: marble(300 + i), hello: i < 12 ? 'Tue' : (i < 24 ? 'Wed' : ''), acc: (i === 2 || i === 8) ? 'Wed' : '', found: false };
+      people.push(p); byId[i] = p;
+    });
+    var foundIds = [];
+    FOUND.forEach(function (r, k) {
+      var id = 40 + k;
+      var p = { id: id, first: r[0], last: r[1], role: r[2], co: r[3], ch: r[4], stage: 0, avatar: marble(300 + id), hello: '', acc: '', found: true };
+      people.push(p); byId[id] = p; foundIds.push(id);
+    });
+    var initSlot = {}, fill = [0, 0, 0, 0], inDock = { 0: true, 3: true, 4: true };
+    people.forEach(function (p) { if (p.found || inDock[p.id]) return; initSlot[p.id] = fill[p.stage]; fill[p.stage] += 1; });
+    var autoOrder = [];
+    for (var a = 24; a < 40; a++) autoOrder.push(a);
+    autoOrder.sort(function (m, n) { return hash(m * 13.37) - hash(n * 13.37); });
+    this._d = {
+      hash: hash, ZONES: ZONES, people: people, byId: byId, initSlot: initSlot, autoOrder: autoOrder, foundIds: foundIds,
+      RT: 285, RH: 280, PLAN: 12,
+      SLOTS: [{ x: 72, y: 92 }, { x: 81, y: 128 }, { x: 90, y: 100 }, { x: 63, y: 122 }, { x: 56, y: 86 }],
+      dockSlot: { 0: 0, 3: 1, 4: 2, 6: 3, 8: 4 },
+      WARM: [2, 7, 9, 10],
+      FU: { Tue: 'Fri', Wed: 'Mon', Today: 'Mon', Tomorrow: 'Tue' },
+      LAST: { Tue: 'next Tue', Wed: 'next Wed', Today: 'next Thu', Tomorrow: 'next Fri' },
+      DAYW: { Fri: 'Friday', Mon: 'Monday', Tue: 'Tuesday', 'next Tue': 'next Tuesday', 'next Wed': 'next Wednesday', 'next Thu': 'next Thursday', 'next Fri': 'next Friday' },
+      TOUCH: { Email: 'first email', LinkedIn: 'connection invite', X: 'hello on X' },
+      chWord: function (ch) { return ch === 'Email' ? 'by email' : 'on ' + ch; },
+      BOOK: ['Tuesday at 14:00', 'Wednesday at 10:30', 'Friday at 11:00', 'Monday at 15:00', 'Tuesday at 11:30'],
+      replies: {
+        0: { when: 'Today, 7:40', short_when: 'Replied at 7:40', day: 'Today', re: 'Replied to your first email', sug: 'reply', suggest: 'Suggested: reply. Callum drafted it.', snoozeTo: 'next Thursday', quote: "This is timely. We're rebuilding our month-end close in December. Could you send a short deck before Monday?", draft: "Thanks Kemi, glad the timing works. I'll send a short deck tonight on how fintech teams take reconciliation off their ops team's plate. Happy to walk you through it on Monday if that helps.", short: "Glad the timing works, Kemi. The deck is coming tonight, and I'm free Monday to walk you through it." },
+        3: { when: 'Yesterday, 18:20', short_when: 'Replied yesterday', day: 'Wed', re: 'Replied to your first email', sug: 'reply', suggest: 'Suggested: reply. Add your price first.', snoozeTo: 'next Thursday', quote: 'What does pricing look like for a team of six?', draft: "Hi Femi, for a team of six it's [YOUR PRICE] a month, and setup is included. Want a two-minute walkthrough video first, or should I send a trial invite?", short: "For six people it's [YOUR PRICE] a month, setup included. Video first, or a trial invite?", noPrice: "Hi Femi, pricing depends on your volume, so I'd rather give you an exact number than a guess. Could we take 15 minutes on Monday or Tuesday?" },
+        4: { when: 'Yesterday, 16:05', short_when: 'Replied yesterday', day: 'Wed', re: 'Replied to your first email', sug: 'snooze', suggest: 'Suggested: snooze until January 6.', snoozeTo: 'January 6', quote: 'Not right now. Try me again in the new year.', draft: "Totally fair, Zainab. I'll check back in early January. Good luck with the year-end rush.", short: 'Fair enough, Zainab. Talk in January.' },
+        6: { when: 'Just now', short_when: 'Replied just now', day: 'Today', re: 'Replied to your first email', sug: 'close', suggest: 'Suggested: close politely.', snoozeTo: 'next Thursday', quote: "We built this in-house last year, so we're set. Thanks though.", draft: 'Makes sense, Bisi. Thanks for the honest answer, and good luck with the rest of the year.', short: 'Makes sense, Bisi. Thanks, and good luck.' },
+        8: { when: 'Just now', short_when: 'Replied just now', day: 'Today', re: 'Replied to your message on LinkedIn', sug: 'book', suggest: 'Suggested: book a call.', snoozeTo: 'next Thursday', quote: 'Funny timing. Our month-end close is a mess right now. Free for 20 minutes next week?', draft: "Sorry to hear it, Ngozi, and happy to help. Tuesday or Wednesday afternoon both work for me. Here's a link to grab a time.", short: 'Next week works, Ngozi. Grab any time here.' }
+      }
+    };
+    return this._d;
+  }
+
+  later(fn, ms) { this._to.push(setTimeout(fn, ms)); }
+
+  componentDidMount() {
+    var self = this;
+    this._timer = setInterval(function () {
+      if (!self.state.running) return;
+      var t = self.state.tick + 1;
+      self.setState({ tick: t });
+      if (t % 7 === 0) self.doSend();
+      if (t === 9) self.doReply(6);
+      if (t === 26) self.doAccept(5);
+      if (t === 44) self.doReply(8);
+    }, 1000);
+  }
+
+  componentWillUnmount() {
+    clearInterval(this._timer);
+    this._to.forEach(function (h) { clearTimeout(h); });
+  }
+
+  stageOf(s, id) { var v = s.stageOf[id]; return v === undefined ? this.d().byId[id].stage : v; }
+
+  zoneOf(s, id) {
+    var p = this.d().byId[id];
+    if (p.found && !s.found) return -1;
+    if (s.out[id]) return -1;
+    if (s.replied[id] !== undefined && !s.handled[id]) return -2;
+    return this.stageOf(s, id);
+  }
+
+  slotFor(s, id) {
+    var v = s.slotOf[id];
+    if (v !== undefined && v >= 0) return v;
+    v = this.d().initSlot[id];
+    return v === undefined ? 0 : v;
+  }
+
+  freeSlot(s, zone, id, prefer) {
+    var self = this, D = this.d(), used = {};
+    D.people.forEach(function (p) { if (p.id !== id && self.zoneOf(s, p.id) === zone) used[self.slotFor(s, p.id)] = true; });
+    var n = D.ZONES[zone].slots.length;
+    if (prefer !== undefined && prefer >= 0 && prefer < n && !used[prefer]) return prefer;
+    for (var i = 0; i < n; i++) if (!used[i]) return i;
+    return Math.floor(D.hash(id * 7.7) * n);
+  }
+
+  moveUpd(s, id, zone) {
+    var so = Object.assign({}, s.stageOf); so[id] = zone;
+    var sl = Object.assign({}, s.slotOf); sl[id] = this.freeSlot(s, zone, id);
+    return { stageOf: so, slotOf: sl };
+  }
+
+  gaugeKey(ch, kind) { return ch === 'Email' ? 'email' : (ch === 'X' ? 'xc' : (kind === 'hello' ? 'li' : '')); }
+
+  channelOpen(s, ch, kind) {
+    if (ch === 'LinkedIn') return !s.liPaused && (kind !== 'hello' || s.li < 15);
+    if (ch === 'Email') return s.email < 20;
+    return s.xc < 20;
+  }
+
+  showToast(text, kind, ms) {
+    var self = this;
+    this._tk += 1;
+    var key = this._tk;
+    this.setState({ toast: text, toastKey: key, toastKind: kind || 'info' });
+    this.later(function () { if (self.state.toastKey === key) self.setState({ toast: '' }); }, ms || 3000);
+  }
+
+  toastNow(text, kind) {
+    if (this.state.pending) { this._queued = { text: text, kind: kind || 'info' }; return; }
+    this.showToast(text, kind);
+  }
+
+  flushQueued(delay) {
+    var self = this, q = this._queued;
+    if (!q) return;
+    this._queued = null;
+    this.later(function () { self.toastNow(q.text, q.kind); }, delay);
+  }
+
+  pendingText(pd) {
+    var D = this.d(), p = D.byId[pd.id], r = D.replies[pd.id];
+    return {
+      reply: 'Sending your reply to ' + p.first,
+      book: 'Sending ' + p.first + ' your calendar link',
+      close: 'Thanking ' + p.first + '. No more follow-ups.',
+      snooze: p.first + ' rests until ' + (r ? r.snoozeTo : 'next Thursday'),
+      hello: 'Saying hello to ' + p.first + ' ' + D.chWord(p.ch),
+      fu: 'Sending ' + p.first + ' a follow-up',
+      last: p.ch === 'LinkedIn' ? 'Sending ' + p.first + ' a follow-up' : 'Sending ' + p.first + ' the last note'
+    }[pd.kind];
+  }
+
+  doneText(pd) {
+    var D = this.d(), p = D.byId[pd.id], r = D.replies[pd.id];
+    return {
+      reply: 'Sent to ' + p.first,
+      book: 'Calendar link sent to ' + p.first,
+      close: 'Sent. Callum won’t follow up with ' + p.first + ' again.',
+      snooze: p.first + ' comes back to you on ' + (r ? r.snoozeTo : 'next Thursday'),
+      hello: 'Hello sent to ' + p.first + ' ' + D.chWord(p.ch),
+      fu: 'Follow-up sent to ' + p.first,
+      last: (p.ch === 'LinkedIn' ? 'Follow-up sent to ' : 'Last note sent to ') + p.first
+    }[pd.kind];
+  }
+
+  undoText(pd) {
+    var p = this.d().byId[pd.id];
+    if (pd.kind === 'reply') return 'Not sent. Your reply to ' + p.first + ' is back.';
+    if (pd.kind === 'snooze') return p.first + ' is back with you.';
+    if (pd.kind === 'book' || pd.kind === 'close') return 'Not sent. ' + p.first + ' is back with you.';
+    return 'Not sent. Nothing went to ' + p.first + '.';
+  }
+
+  startPending(pd) {
+    var self = this;
+    this._tk += 1;
+    var key = this._tk;
+    var full = Object.assign({ key: key }, pd);
+    this.setState({ pending: full, toast: this.pendingText(pd), toastKey: key, toastKind: 'pending' });
+    this.later(function () { var cur = self.state.pending; if (cur && cur.key === key) self.commitPending(false); }, 10000);
+  }
+
+  commitPending(silent) {
+    var pd = this.state.pending;
+    if (!pd) return;
+    var self = this;
+    this._tk += 1;
+    var key = this._tk;
+    this.setState(function (s) {
+      var se = Object.assign({}, s.sent);
+      if (pd.kind === 'reply' || pd.kind === 'book' || pd.kind === 'close') se[pd.id] = pd.kind;
+      var u = { pending: null, sent: se };
+      if (!silent) { u.toast = self.doneText(pd); u.toastKey = key; u.toastKind = 'info'; }
+      return u;
+    });
+    if (!silent) {
+      this.later(function () { if (self.state.toastKey === key) self.setState({ toast: '' }); }, 2600);
+      this.flushQueued(2200);
+    }
+    if (pd.kind === 'book') this.later(function () { self.confirmBooking(pd.id); }, 7000);
+  }
+
+  undo() {
+    var pd = this.state.pending;
+    if (!pd) return;
+    var self = this;
+    this._tk += 1;
+    var key = this._tk;
+    this.setState(function (s) {
+      var u = { pending: null, toast: self.undoText(pd), toastKey: key, toastKind: 'info' };
+      if (pd.kind === 'reply' || pd.kind === 'book' || pd.kind === 'close' || pd.kind === 'snooze') {
+        var h = Object.assign({}, s.handled); delete h[pd.id]; u.handled = h;
+        var o = Object.assign({}, s.out); delete o[pd.id]; u.out = o;
+        u.cardKey = s.cardKey + 1; u.latestKey = s.latestKey + 1;
+        if (pd.kind === 'reply') u.composing = s.deck;
+      } else {
+        var so = Object.assign({}, s.stageOf), sl = Object.assign({}, s.slotOf);
+        if (pd.kind !== 'last') {
+          so[pd.id] = pd.from;
+          var tmp = Object.assign({}, s, { stageOf: so, slotOf: sl });
+          sl[pd.id] = -1;
+          sl[pd.id] = self.freeSlot(tmp, pd.from, pd.id, pd.prevSlot);
+          u.stageOf = so; u.slotOf = sl;
+        }
+        if (pd.kind === 'hello') { var hd = Object.assign({}, s.helloDay); delete hd[pd.id]; u.helloDay = hd; }
+        if (pd.kind === 'fu') { var f = Object.assign({}, s.fuNow); if (pd.hadFu) f[pd.id] = true; else delete f[pd.id]; u.fuNow = f; }
+        if (pd.kind === 'last') { var l = Object.assign({}, s.lastNow); delete l[pd.id]; u.lastNow = l; }
+        if (pd.g) u[pd.g] = Math.max(0, s[pd.g] - 1);
+      }
+      return u;
+    });
+    this.later(function () { if (self.state.toastKey === key) self.setState({ toast: '' }); }, 2600);
+    this.flushQueued(2200);
+  }
+
+  confirmBooking(id) {
+    var D = this.d(), p = D.byId[id], s = this.state;
+    if (s.handled[id] !== 'book' || s.bookedAt[id]) return;
+    var when = D.BOOK[s.booked % D.BOOK.length];
+    this.setState(function (s2) { var b = Object.assign({}, s2.bookedAt); b[id] = when; return { bookedAt: b, booked: s2.booked + 1, ping: id, pingKey: s2.pingKey + 1 }; });
+    this.toastNow(p.first + ' booked a call for ' + when, 'event');
+  }
+
+  canHello(s, id, manual) {
+    var p = this.d().byId[id];
+    if (this.zoneOf(s, id) !== 0 || s.held[id]) return false;
+    if (p.found && !manual) return false;
+    return this.channelOpen(s, p.ch, 'hello');
+  }
+
+  nextSend(s) {
+    var D = this.d();
+    if (s.sentToday >= D.PLAN) return null;
+    for (var j = 0; j < D.autoOrder.length; j++) {
+      var k = (s.autoIdx + j) % D.autoOrder.length, pid = D.autoOrder[k];
+      if (this.canHello(s, pid, false)) return { id: pid, auto: k + 1 };
+    }
+    return null;
+  }
+
+  doSend() {
+    var self = this, D = this.d();
+    this.setState(function (s) {
+      var e = self.nextSend(s);
+      if (!e) return null;
+      var u = self.moveUpd(s, e.id, 1);
+      var hd = Object.assign({}, s.helloDay); hd[e.id] = 'Today'; u.helloDay = hd;
+      var g = self.gaugeKey(D.byId[e.id].ch, 'hello');
+      if (g) u[g] = s[g] + 1;
+      u.ping = e.id; u.pingKey = s.pingKey + 1; u.autoIdx = e.auto; u.sentToday = s.sentToday + 1;
+      return u;
+    });
+  }
+
+  doReply(id) {
+    var D = this.d(), s = this.state;
+    var z = this.zoneOf(s, id);
+    if (s.replied[id] !== undefined || s.held[id] || (z !== 1 && z !== 2)) return;
+    this.setState(function (s2) {
+      var r = Object.assign({}, s2.replied); r[id] = D.dockSlot[id];
+      return { replied: r, recent: [id].concat(s2.recent), latestKey: s2.latestKey + 1, ping: id, pingKey: s2.pingKey + 1, deckOrder: s2.deck ? s2.deckOrder.concat([id]) : s2.deckOrder, focus: s2.focus === id ? -1 : s2.focus };
+    });
+    this.toastNow(D.byId[id].first + ' just replied ' + D.chWord(D.byId[id].ch), 'event');
+  }
+
+  doAccept(id) {
+    var self = this, D = this.d();
+    if (this.zoneOf(this.state, id) !== 1 || this.state.held[id]) return;
+    this.setState(function (s) {
+      var u = self.moveUpd(s, id, 2);
+      var a = Object.assign({}, s.accDay); a[id] = 'Today'; u.accDay = a;
+      u.ping = id; u.pingKey = s.pingKey + 1;
+      return u;
+    });
+    this.toastNow(D.byId[id].first + ' accepted your invite', 'event');
+  }
+
+  pathFor(s, id) {
+    var D = this.d(), p = D.byId[id];
+    var z = this.stageOf(s, id), li = p.ch === 'LinkedIn';
+    var hd = s.helloDay[id] || p.hello || (p.found ? 'Tomorrow' : 'Today');
+    var labels, days, done;
+    if (z === 3) {
+      var rep = D.replies[id];
+      labels = [li ? 'Invite' : 'Hello', 'Replied', 'You answered'];
+      days = [hd, rep ? rep.day : 'Wed', s.handled[id] ? 'Today' : 'Wed'];
+      done = 3;
+    } else if (li) {
+      var acc = s.accDay[id] || p.acc, accToday = s.accDay[id] === 'Today';
+      labels = ['Invite', 'Accepted', 'Thank-you', 'Follow-up'];
+      days = [hd, acc || '', accToday ? '11:00' : (acc || ''), acc ? (s.lastNow[id] ? 'Today' : 'Mon') : ''];
+      done = z === 0 ? 0 : (z === 1 ? 1 : (s.lastNow[id] ? 4 : (accToday ? 2 : 3)));
+    } else {
+      labels = ['Hello', 'Follow-up', 'Last note'];
+      days = [hd, s.fuNow[id] ? 'Today' : D.FU[hd], s.lastNow[id] ? 'Today' : D.LAST[hd]];
+      done = z === 0 ? 0 : (z === 1 ? 1 : (s.lastNow[id] ? 3 : 2));
+    }
+    return { labels: labels, days: days, done: done };
+  }
+
+  nextLine(s, id) {
+    var D = this.d(), p = D.byId[id], z = this.zoneOf(s, id), li = p.ch === 'LinkedIn';
+    var hd = s.helloDay[id] || p.hello || 'Today';
+    if (s.held[id]) return 'On hold. Callum won’t contact ' + p.first + ' until you resume.';
+    if (z === 3) return "You're talking. Callum won't follow up while the conversation is yours.";
+    if (z === 0) return p.found ? 'Callum says hello tomorrow after 9:00 their time.' : 'Callum says hello today after 9:00 their time.';
+    if (z === 1) {
+      if (li) return 'Waiting for ' + p.first + ' to accept. Callum gives it 14 days.';
+      if (s.fuNow[id]) return 'The follow-up goes out today.';
+      return 'If ' + p.first + " doesn't reply, a follow-up goes out on " + D.DAYW[D.FU[hd]] + ' at 9:00.';
+    }
+    if (s.lastNow[id]) return 'That was the last ' + (li ? 'follow-up' : 'note') + '. If ' + p.first + " doesn't reply, they rest for 90 days.";
+    if (li && s.accDay[id] === 'Today') return p.first + ' accepted today. A short thank-you goes out at 11:00, then one follow-up on Monday.';
+    if (li) return 'If ' + p.first + " doesn't reply, one follow-up goes out on Monday at 9:00.";
+    return 'If ' + p.first + " doesn't reply, one last note goes out " + D.DAYW[D.LAST[hd]] + '. Then they rest.';
+  }
+
+  nudgeLabel(s, id) {
+    var p = this.d().byId[id], z = this.zoneOf(s, id);
+    if (s.held[id]) return 'Nudge now';
+    if (z === 0) return 'Say hello now';
+    if (z === 1) return p.ch === 'LinkedIn' ? 'Nudge now' : 'Send the follow-up now';
+    if (z === 2) return s.lastNow[id] || s.accDay[id] === 'Today' ? 'Nudge now' : (p.ch === 'LinkedIn' ? 'Send the follow-up now' : 'Send the last note now');
+    return 'Remind me Monday';
+  }
+
+  rowNext(s, id) {
+    var D = this.d(), p = D.byId[id], z = this.zoneOf(s, id), li = p.ch === 'LinkedIn';
+    var hd = s.helloDay[id] || p.hello || 'Today', pd = s.pending;
+    if (pd && pd.id === id) return 'Sending now';
+    if (s.out[id]) return s.out[id] === 'close' ? 'Closed politely' : 'Back ' + D.replies[id].snoozeTo;
+    if (s.held[id]) return 'On hold';
+    if (z === -2) return D.replies[id].short_when;
+    if (z === 3) return s.bookedAt[id] ? 'Call ' + s.bookedAt[id].replace(' at ', ', ') : (s.handled[id] === 'book' ? 'Calendar link sent' : 'You answered');
+    if (z === 2) return s.lastNow[id] ? (li ? 'Follow-up sent' : 'Last note sent') : (li ? (s.accDay[id] === 'Today' ? 'Thank-you at 11:00' : 'Follow-up Mon') : 'Last note ' + D.LAST[hd]);
+    if (z === 1) return li ? 'Waiting to accept' : (s.fuNow[id] ? 'Follow-up today' : 'Follow-up ' + D.FU[hd]);
+    return p.found ? 'Hello tomorrow' : 'Hello today';
+  }
+
+  nudgeOne(id) {
+    var self = this, D = this.d(), p = D.byId[id], s = this.state;
+    var z = this.zoneOf(s, id);
+    if (z < 0) return;
+    if (s.held[id]) { this.toastNow(p.first + ' is on hold. Resume first.'); return; }
+    if (z === 3) { this.toastNow('Callum will remind you on Monday if ' + p.first + ' goes quiet'); return; }
+    if (z === 1 && p.ch === 'LinkedIn') { this.toastNow('Still waiting on ' + p.first + ' to accept'); return; }
+    if (z === 2 && s.lastNow[id]) { this.toastNow("That was the last one. Callum won't push " + p.first + ' further'); return; }
+    if (z === 2 && s.accDay[id] === 'Today') { this.toastNow("The thank-you waits until 11:00 so it doesn't feel automated"); return; }
+    var kind = z === 0 ? 'hello' : (z === 1 ? 'fu' : 'last');
+    if (!this.channelOpen(s, p.ch, kind)) { this.toastNow(p.ch + " is paused or at today's limit, so nothing went out"); return; }
+    this.commitPending(true);
+    var g = this.gaugeKey(p.ch, kind);
+    var pd = { id: id, kind: kind, from: z, prevSlot: this.slotFor(s, id), g: g, hadFu: !!s.fuNow[id] };
+    this.setState(function (s2) {
+      var u = {};
+      if (kind === 'hello') { u = self.moveUpd(s2, id, 1); var hd = Object.assign({}, s2.helloDay); hd[id] = 'Today'; u.helloDay = hd; }
+      else if (kind === 'fu') { u = self.moveUpd(s2, id, 2); var f = Object.assign({}, s2.fuNow); f[id] = true; u.fuNow = f; }
+      else { var l = Object.assign({}, s2.lastNow); l[id] = true; u.lastNow = l; }
+      if (g) u[g] = s2[g] + 1;
+      u.ping = id; u.pingKey = s2.pingKey + 1;
+      return u;
+    });
+    this.startPending(pd);
+  }
+
+  toggleHold(id) {
+    var p = this.d().byId[id];
+    var on = !this.state.held[id];
+    this.setState(function (s) { var h = Object.assign({}, s.held); if (on) h[id] = true; else delete h[id]; return { held: h }; });
+    this.toastNow(on ? 'Callum will leave ' + p.first + ' alone for now' : p.first + ' is back in the river');
+  }
+
+  openDeck(first) {
+    var self = this, s = this.state;
+    var order = s.recent.filter(function (i) { return self.zoneOf(s, i) === -2; });
+    if (first >= 0) order = [first].concat(order.filter(function (i) { return i !== first; }));
+    this.setState({ deck: true, deckOrder: order, composing: false, leaving: '', cardKey: s.cardKey + 1, focus: -1, answer: '', menu: false });
+  }
+
+  closeDeck() { this.setState({ deck: false, composing: false, leaving: '' }); }
+
+  currentCard(s) {
+    for (var i = 0; i < s.deckOrder.length; i++) { if (this.zoneOf(s, s.deckOrder[i]) === -2) return s.deckOrder[i]; }
+    return -1;
+  }
+
+  draftFor(s, id) {
+    var r = this.d().replies[id];
+    if (s.drafts[id] !== undefined) return s.drafts[id];
+    return s.shortened[id] ? r.short : r.draft;
+  }
+
+  holeIn(text) { return /\[[A-Z][A-Z ]*\]/.test(text || ''); }
+
+  act(kind) {
+    var self = this, s = this.state;
+    var id = this.currentCard(s);
+    if (id < 0 || s.leaving) return;
+    if (kind === 'reply' && this.holeIn(this.draftFor(s, id))) return;
+    this.commitPending(true);
+    this.setState({ leaving: { snooze: 'left', book: 'right', close: 'down', reply: 'up' }[kind] });
+    this.later(function () {
+      self.setState(function (s2) {
+        var h = Object.assign({}, s2.handled); h[id] = kind;
+        var u = { handled: h, leaving: '', composing: false, cardKey: s2.cardKey + 1 };
+        if (kind === 'reply' || kind === 'book') { var m = self.moveUpd(s2, id, 3); u.stageOf = m.stageOf; u.slotOf = m.slotOf; }
+        else { var o = Object.assign({}, s2.out); o[id] = kind; u.out = o; }
+        return u;
+      });
+      self.startPending({ id: id, kind: kind });
+    }, 430);
+  }
+
+  ask(text) {
+    var t = (text || '').trim();
+    if (!t) t = "Who's warming up?";
+    var low = t.toLowerCase();
+    var type = /pause|stop|hold|break/.test(low) ? 'pause' : (/find|lagos|accra|founder|more|add|new|search|like/.test(low) ? 'find' : 'warm');
+    var u = { asked: t, answer: type, answerKey: this.state.answerKey + 1, q: '', chips: false, focus: -1, menu: false };
+    if (type === 'pause') u.liPaused = true;
+    this.setState(u);
+  }
+
+  warmNow() {
+    var D = this.d(), self = this;
+    this.setState(function (s) {
+      var f = Object.assign({}, s.fuNow);
+      D.WARM.forEach(function (id) { if (self.zoneOf(s, id) === 1 && D.byId[id].ch !== 'LinkedIn') f[id] = true; });
+      return { fuNow: f, nudge: D.WARM.slice(), nudgeKey: s.nudgeKey + 1, answer: '' };
+    });
+    this.toastNow('Their follow-ups go out today, from 11:00');
+  }
+
+  addFound() {
+    var self = this, D = this.d();
+    if (this.state.found) { this.setState({ answer: '' }); this.toastNow("They're already in the river"); return; }
+    this.setState(function (s) {
+      var tmp = Object.assign({}, s, { found: true, slotOf: Object.assign({}, s.slotOf) });
+      D.foundIds.forEach(function (fid) { tmp.slotOf[fid] = -1; });
+      D.foundIds.forEach(function (fid) { tmp.slotOf[fid] = -1; tmp.slotOf[fid] = self.freeSlot(tmp, 0, fid); });
+      return { found: true, slotOf: tmp.slotOf, answer: '' };
+    });
+    this.toastNow('20 new strangers joined the river');
+  }
+
+  undoPause() { this.setState({ liPaused: false, answer: '' }); this.toastNow('LinkedIn is back on'); }
+
+  renderVals() {
+    var self = this, D = this.d(), s = this.state;
+    var pd = s.pending;
+
+    var faces = [];
+    D.people.forEach(function (p) {
+      if (p.found && !s.found) return;
+      var z = self.zoneOf(s, p.id);
+      var isDock = z === -2, hidden = z === -1;
+      var x, cy, size, shadow, filter, op, cls = '';
+      if (isDock || (hidden && s.replied[p.id] !== undefined)) {
+        var sl = D.SLOTS[s.replied[p.id]];
+        x = sl.x; cy = sl.y; size = 72; cls = 'is-dock';
+        shadow = '0 0 0 4px #FFB020, 0 16px 34px -12px rgba(255,176,32,0.75)';
+        filter = 'saturate(1.1)'; op = 1;
+      } else {
+        var zz = hidden ? self.stageOf(s, p.id) : z;
+        var Z = D.ZONES[zz], slot = Z.slots[self.slotFor(s, p.id) % Z.slots.length];
+        x = slot.x; cy = D.RT + slot.yf * D.RH; size = Z.size;
+        shadow = '0 0 0 ' + (zz >= 2 ? 2 : 1.5) + 'px ' + Z.ring;
+        filter = Z.filter; op = Z.op;
+        if (s.held[p.id]) { filter = 'grayscale(1)'; op = 0.32; }
+      }
+      if (s.focus === p.id) shadow += ', 0 0 0 7px rgba(63,82,217,0.18)';
+      var half = size / 2;
+      var style = 'left: ' + x.toFixed(2) + '%; top: ' + cy.toFixed(1) + 'px; width: ' + size + 'px; height: ' + size + 'px; margin: -' + half + 'px 0 0 -' + half + 'px; ' + p.avatar + ' filter: ' + filter + '; opacity: ' + (hidden ? 0 : op) + '; box-shadow: ' + shadow + '; animation-delay: ' + Math.round((isDock ? 1100 : 0) + x * 11) + 'ms;' + (hidden ? ' transform: scale(0.4); pointer-events: none;' : '');
+      var pinging = false, pingCls = '';
+      if (s.ping === p.id) { pinging = true; pingCls = s.pingKey % 2 ? 'ping-a' : 'ping-b'; }
+      else if (s.nudge.indexOf(p.id) >= 0) { pinging = true; pingCls = s.nudgeKey % 2 ? 'ping-a' : 'ping-b'; }
+      var sending = !!(pd && pd.id === p.id && !hidden);
+      var booked = !sending && !!s.bookedAt[p.id];
+      var sentB = !sending && !booked && !!s.sent[p.id] && z === 3;
+      var where = isDock ? 'replied and waiting on you' : (hidden ? 'resting' : D.ZONES[z].name);
+      faces.push({
+        style: style, cls: cls, pinging: pinging, pingCls: pingCls,
+        isSending: sending, isSent: sentB, isBooked: booked,
+        ariaHidden: hidden ? 'true' : 'false', tab: hidden ? '-1' : '0',
+        label: p.first + ' ' + p.last + ', ' + where + (booked ? ', call booked' : (sentB ? ', you answered' : '')),
+        pick: function () {
+          if (isDock) { self.openDeck(p.id); return; }
+          if (hidden) return;
+          self.setState(function (s2) { return { focus: s2.focus === p.id ? -1 : p.id, answer: '', menu: false }; });
+        }
+      });
+    });
+
+    var lineEnd = D.RT + 30;
+    var dockMeta = s.recent.slice().reverse().map(function (id) {
+      var sl = D.SLOTS[s.replied[id]], gone = self.zoneOf(s, id) !== -2;
+      var top = sl.y + 44;
+      return {
+        first: D.byId[id].first,
+        nameStyle: 'left: ' + sl.x + '%; top: ' + (sl.y - 64) + 'px; opacity: ' + (gone ? 0 : 1) + '; transition: opacity .4s ease;',
+        lineStyle: 'left: ' + sl.x + '%; top: ' + top + 'px; height: ' + (lineEnd - top) + 'px; opacity: ' + (gone ? 0 : 0.9) + '; transition: opacity .4s ease;'
+      };
+    });
+
+    var waiting = s.recent.filter(function (id) { return self.zoneOf(s, id) === -2; });
+    var n = waiting.length;
+    var latest = { quote: '', meta: '' };
+    if (n > 0) {
+      var lp = D.byId[waiting[0]], lr = D.replies[waiting[0]];
+      latest = { quote: '“' + lr.quote + '”', meta: lp.first + ' ' + lp.last + ' at ' + lp.co + ', ' + D.chWord(lp.ch) + ', ' + lr.when.toLowerCase() };
+    }
+
+    var pop = null;
+    var fz = s.focus >= 0 ? this.zoneOf(s, s.focus) : -1;
+    if (fz >= 0) {
+      var fp = D.byId[s.focus], FZ = D.ZONES[fz];
+      var fslot = FZ.slots[this.slotFor(s, fp.id) % FZ.slots.length];
+      var fcy = D.RT + fslot.yf * D.RH;
+      var tx = fslot.x < 16 ? '-12%' : (fslot.x > 84 ? '-88%' : '-50%');
+      var held = !!s.held[fp.id];
+      var path = this.pathFor(s, fp.id), nst = path.labels.length;
+      pop = {
+        pos: 'left: ' + fslot.x.toFixed(2) + '%; top: ' + (fcy - FZ.size / 2 - 14).toFixed(1) + 'px; transform: translate(' + tx + ', -100%);',
+        avatar: fp.avatar + ' filter: ' + (held ? 'grayscale(1)' : FZ.filter) + '; box-shadow: 0 0 0 1.5px ' + FZ.ring + ';',
+        name: fp.first + ' ' + fp.last,
+        sub: fp.co + ', ' + FZ.word + (fz > 0 ? ' ' + D.chWord(fp.ch) : ''),
+        steps: path.labels.map(function (lab, i) {
+          return {
+            label: lab, day: path.days[i] || ' ',
+            dot: i < path.done ? 'background: #1D2140;' : (i === path.done ? 'background: #FFFFFF; border: 2px dashed #1D2140;' : 'background: #FFFFFF; border: 2px solid #E7E9F0;'),
+            line: i === 0 ? 'left: 50%; right: 0;' : (i === nst - 1 ? 'left: 0; right: 50%;' : 'left: 0; right: 0;')
+          };
+        }),
+        next: this.nextLine(s, fp.id),
+        nudgeLabel: this.nudgeLabel(s, fp.id),
+        holdLabel: held ? 'Resume' : 'Hold',
+        nudge: function () { self.nudgeOne(fp.id); },
+        hold: function () { self.toggleHold(fp.id); }
+      };
+    }
+    var noop = function () {};
+    var emptyPop = { pos: '', avatar: '', name: '', sub: '', steps: [], next: '', nudgeLabel: '', holdLabel: '', nudge: noop, hold: noop };
+
+    var counts = [0, 0, 0, 0];
+    D.people.forEach(function (p) { var z = self.zoneOf(s, p.id); if (z >= 0) counts[z] += 1; });
+    var centers = [14.5, 38, 62, 84.5];
+    var zones = D.ZONES.map(function (z, i) {
+      return { n: String(counts[i]), name: z.name, pos: 'left: ' + centers[i] + '%;', dot: 'background: #FFFFFF; border: 3px solid ' + z.ring + ';' };
+    });
+
+    var base = { isHead: false, isRow: false, isDetail: false, title: '', count: '', dot: '', avatar: '', name: '', sub: '', ch: '', next: '', sel: 'background: transparent;', expanded: 'false', pick: noop, detail: '', nudgeLabel: '', holdLabel: '', nudge: noop, hold: noop };
+    var items = [];
+    function addGroup(title, dot, ids, look) {
+      if (!ids.length) return;
+      items.push(Object.assign({}, base, { isHead: true, title: title, count: String(ids.length), dot: dot }));
+      ids.forEach(function (id) {
+        var p = D.byId[id], dockRow = self.zoneOf(s, id) === -2, open = s.focus === id && !!pop;
+        items.push(Object.assign({}, base, {
+          isRow: true, name: p.first + ' ' + p.last, sub: p.role + ' at ' + p.co, ch: p.ch,
+          avatar: p.avatar + ' ' + (s.held[id] ? 'filter: grayscale(1); opacity: 0.45;' : look),
+          next: self.rowNext(s, id), sel: open ? 'background: #F4F5F9;' : 'background: transparent;', expanded: open ? 'true' : 'false',
+          pick: function () {
+            if (dockRow) { self.openDeck(id); return; }
+            if (s.out[id]) return;
+            self.setState(function (s2) { return { focus: s2.focus === id ? -1 : id, answer: '', menu: false }; });
+          }
+        }));
+        if (open) items.push(Object.assign({}, base, { isDetail: true, detail: pop.next, nudgeLabel: pop.nudgeLabel, holdLabel: pop.holdLabel, nudge: pop.nudge, hold: pop.hold }));
+      });
+    }
+    function inZone(z) { return D.people.filter(function (p) { return self.zoneOf(s, p.id) === z; }).map(function (p) { return p.id; }); }
+    var lookFor = function (z) { var Z = D.ZONES[z]; return 'filter: ' + Z.filter + '; box-shadow: 0 0 0 1.5px ' + Z.ring + ';'; };
+    addGroup('Want to talk', 'background: #FFB020;', waiting, 'box-shadow: 0 0 0 2.5px #FFB020;');
+    addGroup('Talking', 'background: #FFFFFF; border: 3px solid #3F52D9;', inZone(3), lookFor(3));
+    addGroup('Following up', 'background: #FFFFFF; border: 3px solid #6E86F2;', inZone(2), lookFor(2));
+    addGroup('Said hello', 'background: #FFFFFF; border: 3px solid #A9B8F5;', inZone(1), lookFor(1));
+    addGroup('Strangers', 'background: #FFFFFF; border: 3px solid #D5D9E4;', inZone(0), lookFor(0));
+    addGroup('Resting', 'background: #E7E9F0;', D.people.filter(function (p) { return !!s.out[p.id]; }).map(function (p) { return p.id; }), 'filter: grayscale(1); opacity: 0.5;');
+
+    var C = 100.53;
+    function dash(v, max) { return (Math.min(v / max, 1) * C).toFixed(1) + ' ' + C; }
+    var gauges = [
+      { name: 'emails today', value: s.email + ' of 20', dash: dash(s.email, 20), wrap: '' },
+      { name: s.liPaused ? 'LinkedIn, paused' : (s.li >= 15 ? 'invites, done for today' : 'LinkedIn invites'), value: s.li + ' of 15', dash: dash(s.li, 15), wrap: s.liPaused ? 'opacity: 0.45;' : '' },
+      { name: 'X today', value: s.xc + ' of 20', dash: dash(s.xc, 20), wrap: '' }
+    ];
+
+    var ne = this.nextSend(s);
+    var left = 7 - (s.tick % 7);
+    var next;
+    if (ne) next = { avatar: D.byId[ne.id].avatar, title: D.byId[ne.id].first + ', ' + D.TOUCH[D.byId[ne.id].ch], sub: s.running ? 'goes out in 0:0' + left : 'waiting while Callum is paused' };
+    else if (s.sentToday >= D.PLAN) next = { avatar: 'background: #F4F5F9;', title: "Today's 12 hellos are out", sub: 'Next hellos tomorrow at 9:00' };
+    else next = { avatar: 'background: #F4F5F9;', title: 'Nothing queued', sub: 'Callum is done for today' };
+
+    var warm = D.WARM.map(function (id) {
+      var p = D.byId[id], w = Math.round(50 + D.hash(id * 4.4) * 40);
+      return { first: p.first, avatar: p.avatar, ring: 'background: conic-gradient(#FFB020 0 ' + w + '%, #ECEEF3 ' + w + '% 100%);' };
+    });
+    var findDots = D.foundIds.slice(0, 12).map(function (id) { return { avatar: D.byId[id].avatar }; });
+    var chips = ["Who's warming up?", 'Find 20 more like Kemi', 'Pause LinkedIn until Monday'].map(function (t) {
+      return { text: t, pick: function (e) { if (e && e.preventDefault) e.preventDefault(); self.ask(t); } };
+    });
+
+    var cid = this.currentCard(s);
+    var card = { ch: '', when: '', avatar: '', name: '', role: '', quote: '', quoteStyle: '', re: '', suggest: '' };
+    var draft = '', sendLabel = 'Send', shorterLabel = 'Make it shorter', sug = '', hole = false;
+    if (cid >= 0) {
+      var cp = D.byId[cid], rep = D.replies[cid];
+      card = { ch: cp.ch, when: rep.when, avatar: cp.avatar, name: cp.first + ' ' + cp.last, role: cp.role + ' at ' + cp.co, quote: '“' + rep.quote + '”', quoteStyle: 'font-size: ' + (rep.quote.length > 80 ? 22 : 27) + 'px;', re: rep.re, suggest: rep.suggest };
+      draft = this.draftFor(s, cid);
+      hole = this.holeIn(draft);
+      sendLabel = 'Send to ' + cp.first;
+      shorterLabel = s.shortened[cid] ? 'Make it warmer' : 'Make it shorter';
+      sug = rep.sug;
+    }
+    var RING = 'box-shadow: 0 0 0 3px #FFFFFF, 0 0 0 5.5px #1D2140;';
+    var sg = { close: sug === 'close' ? RING : '', snooze: sug === 'snooze' ? RING : '', reply: sug === 'reply' ? RING : '', book: sug === 'book' ? RING : '' };
+    var ON = 'color: #1D2140; font-weight: 600;', OFF = 'color: #646B85;';
+    var slb = { close: sug === 'close' ? ON : OFF, snooze: sug === 'snooze' ? ON : OFF, reply: sug === 'reply' ? ON : OFF, book: sug === 'book' ? ON : OFF };
+    var remaining = 0, place = 0;
+    var deckDots = s.deckOrder.map(function (id, i) {
+      var inDock = self.zoneOf(s, id) === -2;
+      if (inDock && id !== cid) remaining += 1;
+      if (id === cid) place = i + 1;
+      return { style: id === cid ? 'width: 24px; background: #1D2140;' : (!inDock ? 'width: 8px; background: #1D2140; opacity: 0.3;' : 'width: 8px; background: #DADDE6;') };
+    });
+    var motion = { left: 'transform: translateX(-125%) rotate(-12deg); opacity: 0;', right: 'transform: translateX(125%) rotate(12deg); opacity: 0;', up: 'transform: translateY(-110%) scale(0.92); opacity: 0;', down: 'transform: translateY(40%) scale(0.9); opacity: 0;' }[s.leaving] || '';
+    var snoozeTo = cid >= 0 ? D.replies[cid].snoozeTo : '';
+
+    var tk = s.toastKind;
+    return {
+      rootClass: s.running ? '' : 'is-paused',
+      dimStyle: s.deck ? 'opacity: 0.26; filter: blur(5px) saturate(0.7); transform: scale(0.985); pointer-events: none;' : '',
+      hasToast: !!s.toast, toast: s.toast, toastCls: s.toastKey % 2 ? 'toast-a' : 'toast-b',
+      toastRing: tk === 'pending', toastDot: tk === 'event', canUndo: tk === 'pending' && !!pd,
+      toastPad: tk === 'pending' ? 'padding-right: 6px;' : '', ringCls: s.toastKey % 2 ? 'ring-a' : 'ring-b',
+      undo: function () { self.undo(); },
+      statusText: !s.running ? 'Paused' : (s.liPaused ? 'Running, LinkedIn paused until Monday' : 'Running'),
+      statusDot: s.running ? 'background: #22B07D;' : 'background: #C5CAD6;',
+      running: s.running, paused: !s.running,
+      runLabel: s.running ? 'Pause Callum' : 'Resume Callum',
+      toggleRun: function () {
+        var on = !self.state.running;
+        self.setState({ running: on, menu: false });
+        self.toastNow(on ? 'Callum is back to work' : 'Paused. Nothing goes out until you resume.');
+      },
+      riverView: s.view === 'river', listView: s.view === 'list',
+      riverPressed: s.view === 'river' ? 'true' : 'false', listPressed: s.view === 'list' ? 'true' : 'false',
+      riverBtn: s.view === 'river' ? 'background: #FFFFFF; color: #1D2140; box-shadow: 0 1px 3px rgba(29,33,64,0.14);' : 'background: transparent; color: #646B85;',
+      listBtn: s.view === 'list' ? 'background: #FFFFFF; color: #1D2140; box-shadow: 0 1px 3px rgba(29,33,64,0.14);' : 'background: transparent; color: #646B85;',
+      viewRiver: function () { self.setState({ view: 'river', menu: false }); },
+      viewList: function () { self.setState({ view: 'list', menu: false }); },
+      menuOpen: s.menu, menuExpanded: s.menu ? 'true' : 'false',
+      toggleMenu: function () { self.setState(function (s2) { return { menu: !s2.menu }; }); },
+      brief: [
+        { dot: 'width: 9px; height: 9px; background: #FFFFFF; border: 2.5px solid #A9B8F5;', text: '12 hellos went out' },
+        { dot: 'width: 20px; height: 20px; ' + D.byId[2].avatar + ' filter: grayscale(0.28);', text: 'Ada accepted' },
+        { dot: 'width: 8px; height: 8px; background: #22B07D;', text: 'All channels fine' }
+      ],
+      waitingText: n === 0 ? 'Good morning. Nobody is waiting on you.' : 'Good morning. ' + (n === 1 ? '1 person wants' : n + ' people want') + ' to talk.',
+      hasWaiting: n > 0, noWaiting: n === 0, latest: latest,
+      bubbleCls: s.latestKey % 2 ? 'bubble-a' : 'bubble-b',
+      openLabel: n === 1 ? 'Open reply' : 'Go through them',
+      openDeck: function () { self.openDeck(-1); },
+      dockMeta: dockMeta, faces: faces,
+      hasFocus: !!pop && s.view === 'river', pop: pop || emptyPop,
+      closeFocus: function () { self.setState({ focus: -1 }); },
+      items: items,
+      zones: zones, gauges: gauges, booked: String(s.booked), bookedWord: s.booked === 1 ? 'call booked' : 'calls booked', next: next,
+      q: s.q, showChips: s.chips && !s.answer, chips: chips,
+      onType: function (e) { self.setState({ q: e.target.value }); },
+      onFocus: function () { self.setState({ chips: true, menu: false }); },
+      onBlur: function () { self.later(function () { self.setState({ chips: false }); }, 160); },
+      onKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.ask(self.state.q); } },
+      send: function () { self.ask(self.state.q); },
+      hasAnswer: !!s.answer, isWarm: s.answer === 'warm', isFind: s.answer === 'find', isPause: s.answer === 'pause',
+      asked: s.asked, panelCls: s.answerKey % 2 ? 'panel-a' : 'panel-b',
+      warm: warm, findDots: findDots,
+      warmNow: function () { self.warmNow(); },
+      addFound: function () { self.addFound(); },
+      undoPause: function () { self.undoPause(); },
+      closeAnswer: function () { self.setState({ answer: '' }); },
+      deck: s.deck, hasCard: cid >= 0, noCard: cid < 0,
+      card: card, cardLabel: cid >= 0 ? 'Reply from ' + card.name : 'No replies waiting',
+      cardCls: s.cardKey % 2 ? 'card-in-a' : 'card-in-b', cardMotion: motion,
+      hasBack1: remaining >= 1, hasBack2: remaining >= 2,
+      deckDots: deckDots, deckProgress: 'Reply ' + place + ' of ' + s.deckOrder.length,
+      sg: sg, sl: slb, snoozeLabel: 'Snooze until ' + snoozeTo,
+      composing: s.composing, notComposing: !s.composing,
+      draft: draft, sendLabel: sendLabel, shorterLabel: shorterLabel,
+      hasHole: hole, sendDisabled: hole ? 'true' : 'false',
+      sendStyle: hole ? 'background: #DADDE6; color: #646B85; cursor: not-allowed;' : 'background: #1D2140; color: #FFFFFF; cursor: pointer;',
+      closeDeck: function () { self.closeDeck(); },
+      snooze: function () { self.act('snooze'); },
+      book: function () { self.act('book'); },
+      closeNice: function () { self.act('close'); },
+      startReply: function () { self.setState({ composing: true }); },
+      backFromReply: function () { self.setState({ composing: false }); },
+      sendReply: function () { self.act('reply'); },
+      onDraft: function (e) {
+        var v = e.target.value;
+        self.setState(function (s2) { var d2 = Object.assign({}, s2.drafts); d2[cid] = v; return { drafts: d2 }; });
+      },
+      leaveOut: function () {
+        var r = D.replies[cid];
+        var txt = r && r.noPrice ? r.noPrice : draft.replace(/\s*\[[A-Z][A-Z ]*\]/g, '');
+        self.setState(function (s2) { var d2 = Object.assign({}, s2.drafts); d2[cid] = txt; return { drafts: d2 }; });
+      },
+      shorter: function () {
+        self.setState(function (s2) {
+          var sh = Object.assign({}, s2.shortened), d2 = Object.assign({}, s2.drafts);
+          sh[cid] = !sh[cid]; delete d2[cid];
+          return { shortened: sh, drafts: d2 };
+        });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

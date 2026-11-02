@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Callum v2, first run</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1D2140}a:hover{color:#3F52D9}
+button,input,textarea{font-family:inherit}
+button:focus-visible,a:focus-visible{outline:2px solid #3F52D9;outline-offset:3px}
+input:focus,textarea:focus{outline:none}
+input::placeholder{color:#646B85}
+.ask-pill:focus-within{box-shadow:0 0 0 2px #3F52D9,0 24px 60px -24px rgba(29,33,64,.32)!important}
+.offer-line{transition:background-color .2s ease,box-shadow .2s ease}
+.offer-line:hover{background:#ECEEF5!important}
+.offer-line:focus{box-shadow:0 0 0 2px #3F52D9}
+.bubble-edit:focus{box-shadow:0 0 0 3px rgba(63,82,217,.5)}
+.disc{transition:background-color .35s ease,color .35s ease,transform .25s ease,box-shadow .35s ease,opacity .3s ease}
+.disc:hover{transform:translateY(-3px)}
+.peek{transition:transform .2s ease,box-shadow .2s ease}
+.peek:hover{transform:translateY(-3px) scale(1.06)}
+.spin{animation:spin .9s linear infinite;transform-origin:50% 50%}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ring-a,.ring-b{position:absolute;inset:-8px;border-radius:50%;border:2.5px solid #3F52D9;pointer-events:none;opacity:0}
+.ring-a{animation:ring-a .9s ease-out}
+.ring-b{animation:ring-b .9s ease-out}
+@keyframes ring-a{0%{transform:scale(.92);opacity:1}100%{transform:scale(1.3);opacity:0}}
+@keyframes ring-b{0%{transform:scale(.92);opacity:1}100%{transform:scale(1.3);opacity:0}}
+.pop-in{animation:pop-in .45s cubic-bezier(.2,.8,.2,1.4) backwards}
+@keyframes pop-in{from{opacity:0;transform:scale(.3)}}
+.step-in{animation:step-in .5s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes step-in{from{opacity:0;transform:translateY(16px)}}
+.fade-in{animation:fade-in .45s ease backwards}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}}
+.face{position:absolute;border:2.5px solid #FFFFFF;border-radius:50%;box-sizing:border-box;transition:filter .6s ease,box-shadow .6s ease,opacity .6s ease;animation:face-in .8s cubic-bezier(.2,.7,.2,1) backwards}
+@keyframes face-in{from{opacity:0;transform:translateX(-48px) scale(.4)}}
+.next-ring{animation:face-in .8s cubic-bezier(.2,.7,.2,1) backwards,next-ring 1.8s ease-in-out .8s infinite}
+@keyframes next-ring{50%{box-shadow:0 0 0 5px rgba(169,184,245,.55)}}
+.bubble-a{animation:bubble-a .45s cubic-bezier(.2,.8,.2,1) backwards}
+.bubble-b{animation:bubble-b .45s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes bubble-a{from{opacity:0;transform:translateY(8px)}}
+@keyframes bubble-b{from{opacity:0;transform:translateY(8px)}}
+.pulse{animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(.55);opacity:.45}}
+.start{transition:transform .2s ease,box-shadow .2s ease}
+.start:hover{color:#FFFFFF;transform:translateY(-2px);box-shadow:0 26px 48px -20px rgba(29,33,64,.75)!important}
+@media (max-width: 760px){
+.setup-root{padding:18px 16px 24px!important}
+.q-title{font-size:32px!important}
+.ch-row{gap:12px!important}
+.ch-item{width:104px!important}
+.disc-wrap{width:92px!important;height:92px!important}
+.river{height:130px!important}
+}
+@media (prefers-reduced-motion: reduce){
+.disc,.peek,.start,.offer-line,.face{transition:none!important}
+.step-in,.fade-in,.face,.next-ring,.bubble-a,.bubble-b,.pop-in{animation:none!important}
+.pulse,.spin{animation:none}
+.ring-a,.ring-b{display:none}
+}
+</style>
+</helmet>
+<div class="setup-root" style="position: relative; min-height: 900px; background: #FFFFFF; color: #1D2140; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums; padding: 22px 32px 28px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden">
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px">
+<span style="display: inline-flex; align-items: center; gap: 9px; font-size: 22px; font-weight: 700; letter-spacing: -0.03em"><span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 50%; background: #FFB020"></span>callum</span>
+<sc-if value="{{hasDots}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 6px; height: 10px">
+<sc-for list="{{dots}}" as="d" hint-placeholder-count="5"><span aria-hidden="true" style="height: 8px; border-radius: 4px; transition: width .3s ease, background-color .3s ease, opacity .3s ease; {{d.style}}"></span></sc-for>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{stepText}}</span>
+</div>
+</sc-if>
+</header>
+
+<main style="flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 0 12px">
+
+<sc-if value="{{isStep0}}" hint-placeholder-val="{{true}}">
+<section class="step-in" aria-labelledby="q0" style="width: 100%; max-width: 760px; display: flex; flex-direction: column; align-items: center; gap: 30px; text-align: center">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 14px">
+<h1 id="q0" class="q-title" style="margin: 0; font-size: 56px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.04">Callum reaches out for you.</h1>
+<p style="margin: 0; font-size: 21px; line-height: 1.4; color: #646B85">It only taps you when someone wants to talk.</p>
+</div>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px">
+<li style="display: inline-flex; align-items: center; gap: 9px; min-height: 40px; padding: 0 16px 0 13px; border-radius: 20px; background: #F4F5F9; font-size: 15px; font-weight: 500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>Sounds like you</li>
+<li style="display: inline-flex; align-items: center; gap: 9px; min-height: 40px; padding: 0 16px 0 13px; border-radius: 20px; background: #F4F5F9; font-size: 15px; font-weight: 500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"></path></svg>Safe daily limits</li>
+<li style="display: inline-flex; align-items: center; gap: 9px; min-height: 40px; padding: 0 16px 0 13px; border-radius: 20px; background: #F4F5F9; font-size: 15px; font-weight: 500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg>Running in five minutes</li>
+</ul>
+<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px">
+<button type="button" onClick="{{signIn}}" style="min-height: 56px; padding: 0 28px; border-radius: 28px; border: none; background: #1D2140; color: #FFFFFF; font-size: 17px; font-weight: 600; cursor: pointer">Continue with Google</button>
+<button type="button" onClick="{{signIn}}" style="min-height: 56px; padding: 0 28px; border-radius: 28px; border: none; background: #F4F5F9; color: #1D2140; font-size: 17px; font-weight: 600; cursor: pointer">Continue with Microsoft</button>
+</div>
+<p style="margin: 0; font-size: 14px; color: #646B85">Callum sends from your own accounts and never sees your passwords.</p>
+</section>
+</sc-if>
+
+<sc-if value="{{isStep1}}" hint-placeholder-val="{{false}}">
+<section class="step-in" aria-labelledby="q1" style="width: 100%; max-width: 760px; display: flex; flex-direction: column; align-items: center; gap: 34px">
+<h1 id="q1" class="q-title" style="margin: 0; font-size: 46px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.08; text-align: center; max-width: 18ch">Where should Callum reach people?</h1>
+<div class="ch-row" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 24px">
+<sc-for list="{{channels}}" as="c" hint-placeholder-count="3">
+<div class="ch-item" style="width: 196px; display: flex; flex-direction: column; align-items: center; gap: 14px">
+<span class="disc-wrap" style="position: relative; width: 132px; height: 132px">
+<button type="button" class="disc" onClick="{{c.pick}}" aria-pressed="{{c.on}}" aria-label="{{c.label}}" style="width: 100%; height: 100%; border-radius: 50%; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; {{c.discStyle}}">
+<sc-if value="{{c.isEmail}}" hint-placeholder-val="{{true}}"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M4 7.5l8 6 8-6"></path></svg></sc-if>
+<sc-if value="{{c.isLi}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="font-size: 40px; font-weight: 700; letter-spacing: -0.04em; line-height: 1">in</span></sc-if>
+<sc-if value="{{c.isX}}" hint-placeholder-val="{{false}}"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg></sc-if>
+</button>
+<sc-if value="{{c.busy}}" hint-placeholder-val="{{false}}"><svg class="spin" aria-hidden="true" viewBox="0 0 148 148" style="position: absolute; left: -8px; top: -8px; width: calc(100% + 16px); height: calc(100% + 16px); pointer-events: none"><circle cx="74" cy="74" r="71" fill="none" stroke="#3F52D9" stroke-width="3" stroke-linecap="round" stroke-dasharray="110 400"></circle></svg></sc-if>
+<sc-if value="{{c.ringing}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" class="{{c.ringCls}}"></span></sc-if>
+<sc-if value="{{c.on}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" class="pop-in" style="position: absolute; right: 2px; bottom: 2px; width: 36px; height: 36px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 0 0 1.5px #E7E9F0, 0 8px 16px -8px rgba(29,33,64,0.45); display: flex; align-items: center; justify-content: center; pointer-events: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span></sc-if>
+</span>
+<span style="display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center">
+<span style="font-size: 18px; font-weight: 600">{{c.name}}</span>
+<span style="font-size: 14px; color: #646B85; min-height: 18px">{{c.sub}}</span>
+<span style="font-size: 13px; color: #646B85; min-height: 17px">{{c.sub2}}</span>
+</span>
+</div>
+</sc-for>
+</div>
+<p style="margin: -10px 0 0; font-size: 14px; line-height: 1.45; color: #646B85; text-align: center; max-width: 52ch">Each sign-in happens on that service's own page. Callum never sees your passwords.</p>
+<button type="button" onClick="{{toStep2}}" disabled="{{noneOn}}" style="min-height: 52px; padding: 0 34px; border-radius: 26px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity .3s ease; {{next1Style}}">Next</button>
+</section>
+</sc-if>
+
+<sc-if value="{{isStep2}}" hint-placeholder-val="{{false}}">
+<section class="step-in" aria-labelledby="q2" style="width: 100%; max-width: 720px; display: flex; flex-direction: column; align-items: center; gap: 28px">
+<h1 id="q2" class="q-title" style="margin: 0; font-size: 46px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.08; text-align: center">What do you offer?</h1>
+<div style="width: 100%; display: flex; flex-direction: column; gap: 10px">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #646B85; padding-left: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.6 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.6-3.5-8.5s1-5.9 3.5-8.5z"></path></svg>Callum read yourcompany.com and wrote this. Change any word.</span>
+<label for="offer" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">What you offer, in one line</label>
+<textarea id="offer" class="offer-line" value="{{offer}}" onChange="{{onOffer}}" rows="2" style="width: 100%; box-sizing: border-box; resize: none; border: none; border-radius: 26px; background: #F4F5F9; padding: 20px 24px; font-size: 26px; font-weight: 500; line-height: 1.32; letter-spacing: -0.015em; color: #1D2140; height: 112px"></textarea>
+<span style="font-size: 14px; color: #646B85; padding-left: 6px; min-height: 18px">{{offerHint}}</span>
+</div>
+<div style="display: flex; gap: 10px">
+<button type="button" onClick="{{back}}" style="min-height: 52px; padding: 0 24px; border-radius: 26px; border: none; background: #F4F5F9; color: #1D2140; font-size: 16px; font-weight: 600; cursor: pointer">Back</button>
+<button type="button" onClick="{{toStep3}}" style="min-height: 52px; padding: 0 30px; border-radius: 26px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer">Looks right</button>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{isStep3}}" hint-placeholder-val="{{false}}">
+<section class="step-in" aria-labelledby="q3" style="width: 100%; max-width: 760px; display: flex; flex-direction: column; align-items: center; gap: 22px">
+<h1 id="q3" class="q-title" style="margin: 0; font-size: 46px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.08; text-align: center">Who do you want to meet?</h1>
+<div class="ask-pill" style="width: 100%; display: flex; align-items: center; gap: 12px; background: #FFFFFF; border-radius: 36px; padding: 8px 8px 8px 24px; box-sizing: border-box; box-shadow: 0 24px 60px -24px rgba(29,33,64,0.32), 0 0 0 1px rgba(29,33,64,0.07)">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; background: #FFB020"></span>
+<label for="who" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Describe who you want to meet</label>
+<input id="who" type="text" value="{{q}}" onChange="{{onType}}" onKeyDown="{{onKey}}" placeholder="Describe them like you would to a friend" style="flex: 1 1 auto; min-width: 0; height: 56px; border: none; background: transparent; font-size: 19px; color: #1D2140">
+<button type="button" onClick="{{findNow}}" aria-label="Find people" style="flex: 0 0 auto; width: 56px; height: 56px; border-radius: 50%; border: none; background: #1D2140; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+</div>
+<sc-if value="{{showChips}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px">
+<sc-for list="{{chips}}" as="ch" hint-placeholder-count="3"><button type="button" onClick="{{ch.pick}}" style="min-height: 44px; padding: 0 18px; border-radius: 22px; border: none; background: #FFFFFF; box-shadow: 0 0 0 1.5px #E7E9F0; color: #1D2140; font-size: 15px; font-weight: 500; cursor: pointer">{{ch.text}}</button></sc-for>
+<button type="button" onClick="{{openList}}" style="min-height: 44px; padding: 0 18px 0 14px; border-radius: 22px; border: 1.5px dashed #B9BFCE; background: #FFFFFF; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16"></path></svg>Bring a list</button>
+</div>
+</sc-if>
+<sc-if value="{{listOpen}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="width: 100%; box-sizing: border-box; border: 2px dashed #B9BFCE; border-radius: 26px; padding: 18px 18px 18px 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px">
+<span style="flex: 1 1 280px; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 16px; font-weight: 600">Drop a CSV here, or paste a LinkedIn search link</span><span style="font-size: 14px; color: #646B85">Callum checks every name and skips people you already know.</span></span>
+<button type="button" onClick="{{closeList}}" style="min-height: 46px; padding: 0 20px; border-radius: 23px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Cancel</button>
+<button type="button" onClick="{{useList}}" style="min-height: 46px; padding: 0 22px; border-radius: 23px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Use my list</button>
+</div>
+</sc-if>
+<sc-if value="{{narrowing}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; flex-direction: column; align-items: center; gap: 12px">
+<p style="margin: 0; font-size: 17px; text-align: center"><span style="font-weight: 600">That's about 48,000 people.</span> Narrow it down?</p>
+<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px">
+<sc-for list="{{narrowChips}}" as="nc" hint-placeholder-count="3"><button type="button" onClick="{{nc.pick}}" style="min-height: 44px; padding: 0 18px; border-radius: 22px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 500; cursor: pointer">{{nc.text}}</button></sc-for>
+</div>
+</div>
+</sc-if>
+<div aria-live="polite" style="width: 100%; display: flex; flex-direction: column; align-items: center">
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{liveText}}</span>
+<sc-if value="{{looking}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" aria-hidden="true" style="display: flex; align-items: center; gap: 12px; min-height: 56px">
+<span style="display: inline-flex; gap: 6px"><span class="pulse" style="width: 10px; height: 10px; border-radius: 50%; background: #FFB020"></span><span class="pulse" style="width: 10px; height: 10px; border-radius: 50%; background: #FFB020; animation-delay: .15s"></span><span class="pulse" style="width: 10px; height: 10px; border-radius: 50%; background: #FFB020; animation-delay: .3s"></span></span>
+<span style="font-size: 17px; color: #646B85">Callum is looking</span>
+</div>
+</sc-if>
+<sc-if value="{{counting}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 14px">
+<div aria-hidden="true" style="display: flex; align-items: baseline; gap: 10px"><span style="font-size: 56px; font-weight: 600; letter-spacing: -0.04em; line-height: 1">{{shownCount}}</span><span style="font-size: 18px; color: #646B85">{{countLabel}}</span></div>
+<sc-if value="{{found}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; flex-direction: column; align-items: center; gap: 12px">
+<div style="display: flex; align-items: center; gap: 12px">
+<div role="group" aria-label="Some of the people Callum found" style="display: flex; gap: 6px">
+<sc-for list="{{peekFaces}}" as="p" hint-placeholder-count="8"><button type="button" class="peek" onClick="{{p.pick}}" aria-label="{{p.label}}" aria-expanded="{{p.open}}" style="width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; cursor: pointer; {{p.style}}"></button></sc-for>
+</div>
+<span style="font-size: 15px; font-weight: 600; color: #646B85">and {{more}} more</span>
+</div>
+<sc-if value="{{hasPeek}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; align-items: center; gap: 12px; background: #FFFFFF; border-radius: 24px; padding: 10px 10px 10px 12px; box-shadow: 0 24px 50px -24px rgba(29,33,64,0.4), 0 0 0 1px rgba(29,33,64,0.06)">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #D5D9E4; filter: grayscale(1) brightness(1.12); {{pk.avatar}}"></span>
+<span style="display: flex; flex-direction: column; min-width: 0; padding-right: 6px"><span style="font-size: 16px; font-weight: 600">{{pk.name}}</span><span style="font-size: 14px; color: #646B85">{{pk.role}}</span></span>
+<button type="button" onClick="{{notFit}}" style="min-height: 44px; padding: 0 18px; border-radius: 22px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Not a fit</button>
+<button type="button" onClick="{{closePeek}}" aria-label="Close" style="width: 44px; height: 44px; border-radius: 50%; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="#1D2140" stroke-width="2" stroke-linecap="round"></path></svg></button>
+</div>
+</sc-if>
+<p style="margin: 0; font-size: 16px; color: #646B85">{{foundNote}}</p>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+<div style="display: flex; gap: 10px">
+<button type="button" onClick="{{back}}" style="min-height: 52px; padding: 0 24px; border-radius: 26px; border: none; background: #F4F5F9; color: #1D2140; font-size: 16px; font-weight: 600; cursor: pointer">Back</button>
+<button type="button" onClick="{{toStep4}}" disabled="{{notFound}}" style="min-height: 52px; padding: 0 34px; border-radius: 26px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity .3s ease; {{next3Style}}">Next</button>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{isStep4}}" hint-placeholder-val="{{false}}">
+<section class="step-in" aria-labelledby="q4" style="width: 100%; max-width: 700px; display: flex; flex-direction: column; align-items: center; gap: 24px">
+<h1 id="q4" class="q-title" style="margin: 0; font-size: 46px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.08; text-align: center">How should Callum sound?</h1>
+<div role="group" aria-label="Tone" style="display: flex; gap: 4px; padding: 5px; background: #F4F5F9; border-radius: 28px">
+<sc-for list="{{tones}}" as="t" hint-placeholder-count="3"><button type="button" onClick="{{t.pick}}" aria-pressed="{{t.on}}" style="min-height: 44px; padding: 0 22px; border-radius: 22px; border: none; font-size: 15px; font-weight: 600; cursor: pointer; transition: background-color .25s ease, color .25s ease, box-shadow .25s ease; {{t.style}}">{{t.name}}</button></sc-for>
+</div>
+<div style="width: 100%; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #D5D9E4; filter: grayscale(1) brightness(1.12); {{kemi}}"></span>
+<span style="font-size: 14px; color: #646B85">First hello to Kemi Eze at Oko Pay, by email</span>
+</div>
+<label for="draft" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">First message to Kemi</label>
+<textarea id="draft" class="bubble-edit {{bubbleCls}}" value="{{message}}" onChange="{{onDraft}}" rows="3" style="margin-left: 44px; width: calc(100% - 44px); box-sizing: border-box; resize: none; border: none; background: #1D2140; color: #FFFFFF; caret-color: #FFFFFF; border-radius: 8px 28px 28px 28px; padding: 20px 24px; font-size: 19px; line-height: 1.45; height: 130px"></textarea>
+<span style="margin-left: 44px; font-size: 14px; color: #646B85">{{draftHint}}</span>
+</div>
+<div style="display: flex; gap: 10px">
+<button type="button" onClick="{{back}}" style="min-height: 52px; padding: 0 24px; border-radius: 26px; border: none; background: #F4F5F9; color: #1D2140; font-size: 16px; font-weight: 600; cursor: pointer">Back</button>
+<button type="button" onClick="{{toStep5}}" style="min-height: 52px; padding: 0 34px; border-radius: 26px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer">Next</button>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{isStep5}}" hint-placeholder-val="{{false}}">
+<section class="step-in" aria-labelledby="q5" style="width: 100%; max-width: 800px; display: flex; flex-direction: column; align-items: center; gap: 22px">
+<h1 id="q5" class="q-title" style="margin: 0; font-size: 46px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.08; text-align: center">Here's tomorrow</h1>
+<div style="width: 100%; box-sizing: border-box; background: #F4F5F9; border-radius: 30px; padding: 20px 34px 14px">
+<div aria-hidden="true" style="position: relative; height: 122px">
+<span style="position: absolute; left: 0; right: 0; top: 84px; height: 2px; background: #DADDE6; border-radius: 1px"></span>
+<sc-for list="{{ticks}}" as="tk" hint-placeholder-count="5">
+<span style="position: absolute; top: 79px; width: 2px; height: 12px; margin-left: -1px; background: #C5CAD6; {{tk.pos}}"></span>
+<span style="position: absolute; top: 98px; transform: translateX(-50%); font-size: 13px; color: #646B85; white-space: nowrap; {{tk.pos}}">{{tk.label}}</span>
+</sc-for>
+<sc-for list="{{plan}}" as="pl" hint-placeholder-count="12">
+<span class="pop-in" style="position: absolute; top: 48px; width: 2px; height: 36px; margin-left: -1px; background: #C5CAD6; {{pl.stemStyle}}"></span>
+<span class="pop-in" style="position: absolute; top: 8px; width: 40px; height: 40px; margin-left: -20px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 2px #A9B8F5; filter: grayscale(0.62); {{pl.faceStyle}}"></span>
+<span class="pop-in" style="position: absolute; top: 31px; width: 19px; height: 19px; margin-left: 6px; border-radius: 50%; background: #1D2140; color: #FFFFFF; border: 2px solid #F4F5F9; box-sizing: content-box; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; letter-spacing: -0.02em; {{pl.badgeStyle}}">{{pl.glyph}}</span>
+</sc-for>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center">
+<p style="margin: 0; font-size: 19px; font-weight: 500">{{planLine}}</p>
+<p style="margin: 0; font-size: 15px; color: #646B85">Nothing goes out today. You'll OK the first 10 before they go.</p>
+</div>
+<div style="display: flex; gap: 10px; align-items: center">
+<button type="button" onClick="{{back}}" style="min-height: 56px; padding: 0 24px; border-radius: 28px; border: none; background: #F4F5F9; color: #1D2140; font-size: 16px; font-weight: 600; cursor: pointer">Back</button>
+<a class="start" href="V2DayOne.dc.html" style="display: inline-flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 30px 0 24px; border-radius: 28px; background: #1D2140; color: #FFFFFF; font-size: 17px; font-weight: 600; text-decoration: none; box-shadow: 0 20px 40px -20px rgba(29,33,64,0.7)"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #FFB020"></span>Start tomorrow at 9:00</a>
+</div>
+</section>
+</sc-if>
+
+</main>
+
+<div style="display: flex; flex-direction: column; gap: 8px; padding-top: 18px">
+<div class="river" style="position: relative; height: 160px">
+<svg aria-hidden="true" viewBox="0 0 1000 300" preserveAspectRatio="none" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible">
+<defs>
+<linearGradient id="v2-start-bed" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#EEF0F6" stop-opacity="0"></stop>
+<stop offset="0.07" stop-color="#EEF0F6" stop-opacity="1"></stop>
+<stop offset="0.5" stop-color="#ECEFFB" stop-opacity="1"></stop>
+<stop offset="0.82" stop-color="#FFF4DD" stop-opacity="1"></stop>
+<stop offset="1" stop-color="#FFEBC2" stop-opacity="1"></stop>
+</linearGradient>
+</defs>
+<path d="M0,50 C160,25 320,70 500,45 C680,20 840,65 1000,35 L1000,262 C840,285 680,240 500,262 C320,284 160,245 0,258 Z" fill="url(#v2-start-bed)"></path>
+<path d="M0,105 C180,82 340,130 500,104 C660,80 820,124 1000,96" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 22"></path>
+<path d="M0,155 C170,136 330,180 500,154 C670,130 830,174 1000,146" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 22"></path>
+<path d="M0,205 C180,192 340,228 500,204 C660,184 820,222 1000,196" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 22"></path>
+</svg>
+<sc-for list="{{faces}}" as="f" hint-placeholder-count="0"><span aria-hidden="true" class="{{f.cls}}" style="{{f.style}}"></span></sc-for>
+</div>
+<div style="position: relative; height: 52px">
+<sc-for list="{{zones}}" as="z" hint-placeholder-count="4">
+<div style="position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; {{z.pos}}">
+<span style="font-size: 22px; font-weight: 600; letter-spacing: -0.03em; line-height: 1">{{z.n}}</span>
+<span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; color: #646B85; white-space: nowrap"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; {{z.dot}}"></span>{{z.name}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { step: 0, conn: {}, busy: '', lastOn: '', ringKey: 0, offer: null, q: '', looking: false, count: 0, narrowing: false, listOpen: false, removed: {}, lastRemoved: -1, peek: -1, tone: 'warm', toneKey: 0, drafts: {} };
+    this._to = [];
+  }
+
+  componentWillUnmount() {
+    this._to.forEach(function (h) { clearTimeout(h); });
+    clearTimeout(this._look);
+    clearInterval(this._iv);
+  }
+
+  d() {
+    if (this._d) return this._d;
+    function hash(n) { var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+    var PAL = ['#FF7A59', '#FFC145', '#4CB5F5', '#7BC67E', '#8C6CFF', '#F26CA7', '#2EC4B6', '#FF9F1C'];
+    function marble(n) {
+      var a = PAL[n % 8], b = PAL[(n * 3 + 2) % 8], c = PAL[(n * 5 + 5) % 8];
+      if (b === a) b = PAL[(n + 3) % 8];
+      if (c === a || c === b) c = PAL[(n + 6) % 8];
+      var ax = Math.round(18 + hash(n * 1.7) * 44), ay = Math.round(14 + hash(n * 2.3) * 44);
+      return 'background: radial-gradient(circle at ' + ax + '% ' + ay + '%, ' + b + ' 0 20%, transparent 58%), radial-gradient(circle at ' + (100 - ax) + '% ' + (100 - ay) + '%, ' + c + ' 0 16%, transparent 54%), ' + a + ';';
+    }
+    var NAMED = [
+      ['Kemi Eze', 'Founder', 'Oko Pay'], ['Tunde Bello', 'CEO', 'Ireti Labs'], ['Ada Nwosu', 'Co-founder', 'Yaba Ledger'], ['Femi Adeyemi', 'Founder', 'Eko Wallet'],
+      ['Zainab Musa', 'CEO', 'Lagoon Pay'], ['Chidi Okeke', 'Co-founder', 'Marina Ledger'], ['Bisi Alade', 'Founder', 'Ikoyi Pay'], ['Emeka Obi', 'CEO', 'Surulere Labs']
+    ];
+    var faces = [];
+    for (var i = 0; i < 24; i++) {
+      var col = Math.floor(i / 3), row = i % 3;
+      var x = 4 + (col + 0.5) * 3 + (hash(i * 3.1 + 1) - 0.5) * 1.2;
+      var yf = 0.36 + row * 0.15 + (hash(i * 5.7 + 2) - 0.5) * 0.06 + (col % 2) * 0.04;
+      var nm = NAMED[i];
+      faces.push({ i: i, avatar: marble(300 + i), name: nm ? nm[0] : '', role: nm ? nm[1] + ' at ' + nm[2] : '', pos: 'left: ' + x.toFixed(2) + '%; top: ' + (yf * 100).toFixed(1) + '%;' });
+    }
+    this._d = {
+      faces: faces,
+      CH: [
+        { key: 'email', name: 'Email', on: 'you@yourcompany.com', on2: '20 a day now, 120 by week 3' },
+        { key: 'li', name: 'LinkedIn', on: '15 invites a day', on2: 'working hours only' },
+        { key: 'x', name: 'X', on: '20 DMs a day', on2: '' }
+      ],
+      TONES: [
+        { key: 'warm', name: 'Warm', text: "Hi Kemi, I've been following what Oko Pay is building. I help fintech teams take reconciliation off their ops team's plate. Would a quick chat be useful?" },
+        { key: 'direct', name: 'Direct', text: 'Hi Kemi, I help fintech teams like Oko Pay close their books faster. Worth 15 minutes next week?' },
+        { key: 'playful', name: 'Playful', text: 'Hi Kemi, quick question: who at Oko Pay loses the most sleep over reconciliation? I might be able to give them a few nights back.' }
+      ],
+      ZONES: [['strangers', '#D5D9E4'], ['said hello', '#A9B8F5'], ['following up', '#6E86F2'], ['talking', '#3F52D9']],
+      CHIPS: ['Seed-stage fintech founders in Lagos', 'Heads of finance at fintechs', 'Startups'],
+      NARROW: ['Startup founders in Lagos', 'Heads of finance at 20 to 200 person startups', 'Fintech startups in Nairobi'],
+      OFFER: 'You help fintech finance teams take reconciliation off their plate.'
+    };
+    return this._d;
+  }
+
+  go(step) { this.setState({ step: step, peek: -1 }); }
+
+  signIn() {
+    this.setState(function (s) { return { step: 1, conn: { email: true }, lastOn: 'email', ringKey: s.ringKey + 1 }; });
+  }
+
+  toggle(key) {
+    var self = this, s = this.state;
+    if (s.busy) return;
+    if (s.conn[key]) {
+      this.setState(function (s2) { var c = Object.assign({}, s2.conn); delete c[key]; return { conn: c, lastOn: '' }; });
+      return;
+    }
+    this.setState({ busy: key });
+    this._to.push(setTimeout(function () {
+      self.setState(function (s2) { var c = Object.assign({}, s2.conn); c[key] = true; return { conn: c, busy: '', lastOn: key, ringKey: s2.ringKey + 1 }; });
+    }, 900));
+  }
+
+  find(text) {
+    var self = this, D = this.d();
+    var t = (text || '').trim();
+    if (!t) t = D.CHIPS[0];
+    clearTimeout(this._look);
+    clearInterval(this._iv);
+    if (/^(startups?|founders?|companies|people|everyone|ceos?)$/i.test(t)) {
+      this.setState({ q: t, narrowing: true, listOpen: false, looking: false, count: 0, peek: -1 });
+      return;
+    }
+    this.setState({ q: t, narrowing: false, listOpen: false, looking: true, count: 0, removed: {}, lastRemoved: -1, peek: -1 });
+    this._look = setTimeout(function () {
+      var n = 0;
+      self.setState({ looking: false });
+      self._iv = setInterval(function () {
+        n += 1;
+        self.setState({ count: n });
+        if (n >= 40) clearInterval(self._iv);
+      }, 45);
+    }, 900);
+  }
+
+  renderVals() {
+    var self = this, D = this.d(), s = this.state;
+    var on = 0;
+    var channels = D.CH.map(function (c) {
+      var isOn = !!s.conn[c.key], busy = s.busy === c.key;
+      if (isOn) on += 1;
+      return {
+        name: c.name, label: 'Connect ' + c.name, on: isOn, busy: busy,
+        isEmail: c.key === 'email', isLi: c.key === 'li', isX: c.key === 'x',
+        discStyle: isOn ? 'background: #1D2140; color: #FFFFFF; box-shadow: 0 22px 44px -22px rgba(29,33,64,0.6);' : 'background: #F4F5F9; color: #1D2140;' + (busy ? ' opacity: 0.7;' : ''),
+        sub: busy ? 'Connecting' : (isOn ? c.on : 'Connect'),
+        sub2: isOn ? c.on2 : '',
+        ringing: isOn && s.lastOn === c.key, ringCls: s.ringKey % 2 ? 'ring-a' : 'ring-b',
+        pick: function () { self.toggle(c.key); }
+      };
+    });
+
+    var removedCount = Object.keys(s.removed).length;
+    var found = s.count >= 40;
+    var total = found ? 40 - removedCount : s.count;
+    var shownFaces = Math.round(s.count * D.faces.length / 40);
+    var alive = D.faces.filter(function (f) { return !s.removed[f.i]; });
+    var firstTwelve = {};
+    alive.slice(0, 12).forEach(function (f) { firstTwelve[f.i] = true; });
+    var faces = D.faces.filter(function (f) { return f.i < shownFaces && !s.removed[f.i]; }).map(function (f) {
+      var next = s.step === 5 && firstTwelve[f.i];
+      return {
+        cls: next ? 'face next-ring' : 'face',
+        style: 'width: 22px; height: 22px; margin: -11px 0 0 -11px; ' + f.pos + ' ' + f.avatar + (next ? ' filter: grayscale(0.62); opacity: 1; box-shadow: 0 0 0 2px #A9B8F5;' : ' filter: grayscale(1) brightness(1.12); opacity: 0.72; box-shadow: 0 0 0 1.5px #D5D9E4;')
+      };
+    });
+
+    var named = alive.filter(function (f) { return !!f.name; });
+    var peekFaces = named.map(function (f) {
+      return {
+        label: f.name + ', ' + f.role, open: s.peek === f.i,
+        style: f.avatar + ' filter: grayscale(1) brightness(1.12); box-shadow: 0 0 0 ' + (s.peek === f.i ? '3px #3F52D9' : '1.5px #D5D9E4') + ';',
+        pick: function () { self.setState(function (s2) { return { peek: s2.peek === f.i ? -1 : f.i }; }); }
+      };
+    });
+    var pf = s.peek >= 0 ? D.faces[s.peek] : null;
+    var pk = pf ? { name: pf.name, role: pf.role, avatar: pf.avatar } : { name: '', role: '', avatar: '' };
+    var lastName = s.lastRemoved >= 0 ? D.faces[s.lastRemoved].name.split(' ')[0] : '';
+
+    var centers = [14.5, 38, 62, 84.5];
+    var zones = D.ZONES.map(function (z, i) {
+      return { n: String(i === 0 ? total : 0), name: z[0], pos: 'left: ' + centers[i] + '%;', dot: 'background: #FFFFFF; border: 3px solid ' + z[1] + ';' };
+    });
+    var dots = [1, 2, 3, 4, 5].map(function (n) {
+      return { style: n === s.step ? 'width: 24px; background: #1D2140;' : (n < s.step ? 'width: 8px; background: #1D2140; opacity: 0.3;' : 'width: 8px; background: #DADDE6;') };
+    });
+    var tones = D.TONES.map(function (t) {
+      var isOn = s.tone === t.key;
+      return {
+        name: t.name, on: isOn,
+        style: isOn ? 'background: #FFFFFF; color: #1D2140; box-shadow: 0 6px 16px -8px rgba(29,33,64,0.35);' : 'background: transparent; color: #646B85;',
+        pick: function () { if (self.state.tone !== t.key) self.setState(function (s2) { return { tone: t.key, toneKey: s2.toneKey + 1 }; }); }
+      };
+    });
+    var baseMsg = D.TONES.filter(function (t) { return t.key === s.tone; })[0].text;
+    var edited = s.drafts[s.tone] !== undefined;
+
+    var avail = { email: !!s.conn.email, li: !!s.conn.li, x: !!s.conn.x };
+    function chFor(k) {
+      if (avail.li && k % 3 === 2) return 'li';
+      if (avail.x && k % 6 === 4) return 'x';
+      if (avail.email) return 'email';
+      return avail.li ? 'li' : (avail.x ? 'x' : 'email');
+    }
+    var counts = { email: 0, li: 0, x: 0 };
+    var plan = alive.slice(0, 12).map(function (f, k) {
+      var ch = chFor(k), left = (k * 10 / 120 * 100).toFixed(2) + '%';
+      counts[ch] += 1;
+      return { faceStyle: 'left: ' + left + '; ' + f.avatar + ' animation-delay: ' + (k * 60) + 'ms;', stemStyle: 'left: ' + left + '; animation-delay: ' + (k * 60) + 'ms;', badgeStyle: 'left: ' + left + '; animation-delay: ' + (k * 60 + 120) + 'ms;', glyph: ch === 'email' ? '@' : (ch === 'li' ? 'in' : 'X') };
+    });
+    var parts = [];
+    if (counts.email) parts.push(counts.email + ' by email');
+    if (counts.li) parts.push(counts.li + ' on LinkedIn');
+    if (counts.x) parts.push(counts.x + ' on X');
+    var planLine = plan.length + ' hellos from 9:00 their time' + (parts.length === 1 ? ', all ' + parts[0].replace(/^\d+ /, '') + '.' : ': ' + (parts.length === 2 ? parts[0] + ' and ' + parts[1] : parts[0] + ', ' + parts[1] + ' and ' + parts[2]) + '.');
+    var ticks = [['9:00', 0], ['9:30', 25], ['10:00', 50], ['10:30', 75], ['11:00', 100]].map(function (t) { return { label: t[0], pos: 'left: ' + t[1] + '%;' }; });
+
+    return {
+      hasDots: s.step > 0, dots: dots, stepText: 'Step ' + s.step + ' of 5',
+      isStep0: s.step === 0, isStep1: s.step === 1, isStep2: s.step === 2, isStep3: s.step === 3, isStep4: s.step === 4, isStep5: s.step === 5,
+      signIn: function () { self.signIn(); },
+      back: function () { self.go(Math.max(1, self.state.step - 1)); },
+      channels: channels, noneOn: on === 0,
+      next1Style: on === 0 ? 'opacity: 0.35; cursor: default;' : '',
+      toStep2: function () { if (Object.keys(self.state.conn).length > 0) self.go(2); },
+      offer: s.offer === null ? D.OFFER : s.offer,
+      onOffer: function (e) { self.setState({ offer: e.target.value }); },
+      offerHint: s.offer !== null && s.offer !== D.OFFER ? 'Got it. Callum will use your words.' : '',
+      toStep3: function () { self.go(3); },
+      q: s.q,
+      onType: function (e) { self.setState({ q: e.target.value }); },
+      onKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.find(self.state.q); } },
+      findNow: function () { self.find(self.state.q); },
+      showChips: !s.looking && s.count === 0 && !s.narrowing && !s.listOpen,
+      chips: D.CHIPS.map(function (t) { return { text: t, pick: function () { self.find(t); } }; }),
+      listOpen: s.listOpen,
+      openList: function () { self.setState({ listOpen: true }); },
+      closeList: function () { self.setState({ listOpen: false }); },
+      useList: function () { self.find('People from your list'); },
+      narrowing: s.narrowing,
+      narrowChips: D.NARROW.map(function (t) { return { text: t, pick: function () { self.find(t); } }; }),
+      looking: s.looking, counting: s.count > 0, found: found, notFound: !found,
+      shownCount: String(total), countLabel: found ? 'people found' : 'and counting',
+      liveText: s.looking ? 'Callum is looking' : (found ? total + ' people found' : (s.narrowing ? 'That is about 48,000 people. Narrow it down?' : '')),
+      peekFaces: peekFaces, more: String(Math.max(0, total - peekFaces.length)),
+      hasPeek: !!pf, pk: pk,
+      notFit: function () {
+        var id = self.state.peek;
+        if (id < 0) return;
+        self.setState(function (s2) { var r = Object.assign({}, s2.removed); r[id] = true; return { removed: r, lastRemoved: id, peek: -1 }; });
+      },
+      closePeek: function () { self.setState({ peek: -1 }); },
+      foundNote: lastName ? 'Got it. Callum will find fewer people like ' + lastName + '.' : 'Tap a face to check anyone. Nobody hears from Callum yet.',
+      next3Style: found ? '' : 'opacity: 0.35; cursor: default;',
+      toStep4: function () { if (self.state.count >= 40) self.go(4); },
+      tones: tones, kemi: D.faces[0].avatar,
+      message: edited ? s.drafts[s.tone] : baseMsg,
+      bubbleCls: s.toneKey % 2 ? 'bubble-a' : 'bubble-b',
+      onDraft: function (e) { var v = e.target.value; self.setState(function (s2) { var d2 = Object.assign({}, s2.drafts); d2[s2.tone] = v; return { drafts: d2 }; }); },
+      draftHint: edited ? 'Nice. Callum learns from every edit you make.' : 'Click the message to change any words.',
+      toStep5: function () { self.go(5); },
+      plan: plan, planLine: planLine, ticks: ticks,
+      faces: faces, zones: zones
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Callum v2, day one</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1D2140}a:hover{color:#3F52D9}
+button,input,textarea{font-family:inherit}
+button:focus-visible,a:focus-visible{outline:2px solid #3F52D9;outline-offset:3px}
+input:focus,textarea:focus{outline:none}
+input::placeholder{color:#646B85}
+.msg-edit{transition:background-color .2s ease,box-shadow .2s ease}
+.msg-edit:hover{background:#ECEEF5!important}
+.msg-edit:focus{box-shadow:0 0 0 2px #3F52D9}
+.card{transition:transform .38s cubic-bezier(.55,0,.75,.2),opacity .38s ease}
+.card-in-a{animation:card-in-a .5s cubic-bezier(.2,.8,.2,1) backwards}
+.card-in-b{animation:card-in-b .5s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes card-in-a{from{opacity:0;transform:translateY(36px) scale(.96)}}
+@keyframes card-in-b{from{opacity:0;transform:translateY(36px) scale(.96)}}
+.step-in{animation:step-in .5s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes step-in{from{opacity:0;transform:translateY(16px)}}
+.fade-in{animation:fade-in .45s ease backwards}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}}
+.toast-a{animation:toast-a .4s cubic-bezier(.2,.8,.2,1) backwards}
+.toast-b{animation:toast-b .4s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes toast-a{from{opacity:0;transform:translateY(-10px)}}
+@keyframes toast-b{from{opacity:0;transform:translateY(-10px)}}
+.face{position:absolute;border:2.5px solid #FFFFFF;border-radius:50%;box-sizing:border-box;transition:filter .6s ease,box-shadow .6s ease,opacity .6s ease}
+.next-ring{animation:next-ring 1.8s ease-in-out infinite}
+@keyframes next-ring{50%{box-shadow:0 0 0 5px rgba(169,184,245,.55)}}
+.cur-ring{animation:cur-ring 1.2s ease-in-out infinite}
+@keyframes cur-ring{50%{box-shadow:0 0 0 6px rgba(63,82,217,.35)}}
+.seg{transition:background-color .35s ease}
+.dock-hint{animation:dock-hint 3.2s ease-in-out infinite}
+@keyframes dock-hint{50%{transform:translateY(-4px)}}
+.go{transition:transform .2s ease,box-shadow .2s ease}
+.go:hover{color:#FFFFFF;transform:translateY(-2px)}
+@media (max-width: 760px){
+.day-root{padding:18px 16px 24px!important}
+.q-title{font-size:30px!important}
+.river{height:130px!important}
+.dock-place{display:none!important}
+}
+@media (prefers-reduced-motion: reduce){
+.card,.face,.msg-edit,.go{transition:none!important}
+.card-in-a,.card-in-b,.step-in,.fade-in,.toast-a,.toast-b,.next-ring,.cur-ring,.dock-hint{animation:none!important}
+}
+</style>
+</helmet>
+<div class="day-root" style="position: relative; min-height: 900px; background: #FFFFFF; color: #1D2140; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums; padding: 22px 32px 28px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden">
+
+<p aria-live="polite" style="position: absolute; left: 0; right: 0; top: 78px; z-index: 20; margin: 0; display: flex; justify-content: center; pointer-events: none">
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{false}}"><span class="{{toastCls}}" style="display: inline-flex; align-items: center; gap: 12px; background: #1D2140; color: #FFFFFF; border-radius: 24px; padding: 6px 6px 6px 18px; font-size: 15px; font-weight: 500; box-shadow: 0 18px 40px -18px rgba(29,33,64,0.55); pointer-events: auto">{{toast}}<sc-if value="{{canUndo}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{undo}}" style="min-height: 36px; padding: 0 14px; border-radius: 18px; border: none; background: rgba(255,255,255,0.14); color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">Undo</button></sc-if></span></sc-if>
+</p>
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px">
+<span style="display: inline-flex; align-items: center; gap: 9px; font-size: 22px; font-weight: 700; letter-spacing: -0.03em"><span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 50%; background: #FFB020"></span>callum</span>
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px 0 12px; border-radius: 18px; background: #F4F5F9; font-size: 14px; font-weight: 500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg>Starts tomorrow at 9:00</span>
+<button type="button" aria-label="Your account" style="width: 40px; height: 40px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #E7E9F0; cursor: pointer; background: radial-gradient(circle at 30% 30%, #8C6CFF 0 22%, transparent 58%), radial-gradient(circle at 72% 70%, #FFC145 0 18%, transparent 55%), #4CB5F5"></button>
+</div>
+</header>
+
+<main style="flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 22px 0 8px">
+
+<sc-if value="{{reviewing}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="ok-title" style="width: 100%; max-width: 640px; display: flex; flex-direction: column; align-items: center; gap: 20px">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center">
+<h1 id="ok-title" class="q-title" style="margin: 0; font-size: 40px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.1">OK the first 10 hellos</h1>
+<p style="margin: 0; font-size: 17px; color: #646B85">After these, Callum runs on its own.</p>
+</div>
+<div style="display: flex; align-items: center; gap: 12px">
+<div aria-hidden="true" style="display: flex; gap: 4px">
+<sc-for list="{{segs}}" as="sg" hint-placeholder-count="10"><span class="seg" style="width: 22px; height: 6px; border-radius: 3px; {{sg.style}}"></span></sc-for>
+</div>
+<span style="font-size: 14px; font-weight: 600; color: #646B85">{{progressText}}</span>
+</div>
+<article class="card {{cardCls}}" aria-label="{{cardLabel}}" style="width: 100%; box-sizing: border-box; background: #FFFFFF; border-radius: 30px; padding: 20px 22px 18px; box-shadow: 0 36px 80px -40px rgba(29,33,64,0.45), 0 0 0 1px rgba(29,33,64,0.06); display: flex; flex-direction: column; gap: 14px; {{cardMotion}}">
+<div style="display: flex; align-items: center; gap: 12px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 2px #A9B8F5; filter: grayscale(0.62); {{p.avatar}}"></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column"><span style="font-size: 17px; font-weight: 600">{{p.name}}</span><span style="font-size: 14px; color: #646B85">{{p.role}}</span></span>
+<span style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px"><span style="display: inline-flex; align-items: center; min-height: 28px; padding: 0 11px; border-radius: 14px; background: #F4F5F9; font-size: 13px; font-weight: 600">{{p.chLabel}}</span><span style="font-size: 13px; color: #646B85; white-space: nowrap">{{p.when}}</span></span>
+</div>
+<label for="msg" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{msgLabel}}</label>
+<textarea id="msg" class="msg-edit" value="{{p.text}}" onChange="{{onEdit}}" rows="4" style="width: 100%; box-sizing: border-box; resize: none; border: none; border-radius: 20px; background: #F4F5F9; padding: 16px 18px; font-size: 18px; line-height: 1.5; color: #1D2140; height: 132px"></textarea>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+<span style="flex: 1 1 200px; font-size: 14px; color: #646B85">{{editHint}}</span>
+<button type="button" onClick="{{skip}}" style="min-height: 48px; padding: 0 20px; border-radius: 24px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Don't contact</button>
+<button type="button" onClick="{{ok}}" style="min-height: 48px; padding: 0 26px; border-radius: 24px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>OK</button>
+</div>
+</article>
+</section>
+</sc-if>
+
+<sc-if value="{{done}}" hint-placeholder-val="{{false}}">
+<section class="step-in" aria-labelledby="done-title" style="width: 100%; max-width: 600px; display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center">
+<span aria-hidden="true" style="width: 72px; height: 72px; border-radius: 50%; background: #1D2140; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 14px #F4F5F9"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
+<div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px">
+<h1 id="done-title" class="q-title" style="margin: 0; font-size: 40px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.1">That's all 10</h1>
+<p style="margin: 0; font-size: 18px; line-height: 1.45; color: #646B85">{{doneLine}}</p>
+</div>
+<sc-if value="{{askNotif}}" hint-placeholder-val="{{true}}">
+<div class="fade-in" style="width: 100%; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; background: #F4F5F9; border-radius: 26px; padding: 14px 14px 14px 18px; text-align: left">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"></path><path d="M10 20.5a2.2 2.2 0 0 0 4 0"></path></svg></span>
+<span style="flex: 1 1 200px; font-size: 16px; font-weight: 500">Want a tap when someone replies?</span>
+<button type="button" onClick="{{notifNo}}" style="min-height: 44px; padding: 0 18px; border-radius: 22px; border: none; background: #FFFFFF; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Not now</button>
+<button type="button" onClick="{{notifYes}}" style="min-height: 44px; padding: 0 20px; border-radius: 22px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Turn on</button>
+</div>
+</sc-if>
+<sc-if value="{{notifDone}}" hint-placeholder-val="{{false}}">
+<p class="fade-in" style="margin: 0; font-size: 16px; color: #646B85">{{notifLine}}</p>
+</sc-if>
+<a class="go" href="V2Morning.dc.html" style="display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 22px 0 24px; border-radius: 26px; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none">See a morning a few days later<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
+</section>
+</sc-if>
+
+</main>
+
+<div style="display: flex; flex-direction: column; gap: 8px; padding-top: 18px">
+<div class="river" style="position: relative; height: 160px">
+<svg aria-hidden="true" viewBox="0 0 1000 300" preserveAspectRatio="none" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible">
+<defs>
+<linearGradient id="v2-day-bed" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#EEF0F6" stop-opacity="0"></stop>
+<stop offset="0.07" stop-color="#EEF0F6" stop-opacity="1"></stop>
+<stop offset="0.5" stop-color="#ECEFFB" stop-opacity="1"></stop>
+<stop offset="0.82" stop-color="#FFF4DD" stop-opacity="1"></stop>
+<stop offset="1" stop-color="#FFEBC2" stop-opacity="1"></stop>
+</linearGradient>
+</defs>
+<path d="M0,50 C160,25 320,70 500,45 C680,20 840,65 1000,35 L1000,262 C840,285 680,240 500,262 C320,284 160,245 0,258 Z" fill="url(#v2-day-bed)"></path>
+<path d="M0,105 C180,82 340,130 500,104 C660,80 820,124 1000,96" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 22"></path>
+<path d="M0,155 C170,136 330,180 500,154 C670,130 830,174 1000,146" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 22"></path>
+<path d="M0,205 C180,192 340,228 500,204 C660,184 820,222 1000,196" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 22"></path>
+</svg>
+<div class="dock-place" style="position: absolute; right: 7%; top: -34px; display: flex; align-items: center; gap: 12px">
+<span style="font-size: 14px; color: #646B85; text-align: right; line-height: 1.35">Replies land here.<br>It's normal for this<br>to stay quiet a few days.</span>
+<span aria-hidden="true" class="dock-hint" style="flex: 0 0 auto; width: 58px; height: 58px; border-radius: 50%; border: 2px dashed #FFB020; box-sizing: border-box; background: rgba(255,243,214,0.6)"></span>
+</div>
+<sc-for list="{{faces}}" as="f" hint-placeholder-count="24"><span aria-hidden="true" class="{{f.cls}}" style="{{f.style}}"></span></sc-for>
+</div>
+<div style="position: relative; height: 52px">
+<sc-for list="{{zones}}" as="z" hint-placeholder-count="4">
+<div style="position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; {{z.pos}}">
+<span style="font-size: 22px; font-weight: 600; letter-spacing: -0.03em; line-height: 1">{{z.n}}</span>
+<span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; color: #646B85; white-space: nowrap"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; {{z.dot}}"></span>{{z.name}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { idx: 0, verdict: {}, edits: {}, leaving: '', cardKey: 0, toast: '', toastKey: 0, undoable: -1, notif: '' };
+    this._to = [];
+    this._tk = 0;
+  }
+
+  componentWillUnmount() { this._to.forEach(function (h) { clearTimeout(h); }); }
+
+  later(fn, ms) { this._to.push(setTimeout(fn, ms)); }
+
+  d() {
+    if (this._d) return this._d;
+    function hash(n) { var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+    var PAL = ['#FF7A59', '#FFC145', '#4CB5F5', '#7BC67E', '#8C6CFF', '#F26CA7', '#2EC4B6', '#FF9F1C'];
+    function marble(n) {
+      var a = PAL[n % 8], b = PAL[(n * 3 + 2) % 8], c = PAL[(n * 5 + 5) % 8];
+      if (b === a) b = PAL[(n + 3) % 8];
+      if (c === a || c === b) c = PAL[(n + 6) % 8];
+      var ax = Math.round(18 + hash(n * 1.7) * 44), ay = Math.round(14 + hash(n * 2.3) * 44);
+      return 'background: radial-gradient(circle at ' + ax + '% ' + ay + '%, ' + b + ' 0 20%, transparent 58%), radial-gradient(circle at ' + (100 - ax) + '% ' + (100 - ay) + '%, ' + c + ' 0 16%, transparent 54%), ' + a + ';';
+    }
+    var faces = [];
+    for (var i = 0; i < 24; i++) {
+      var col = Math.floor(i / 3), row = i % 3;
+      var x = 4 + (col + 0.5) * 3 + (hash(i * 3.1 + 1) - 0.5) * 1.2;
+      var yf = 0.36 + row * 0.15 + (hash(i * 5.7 + 2) - 0.5) * 0.06 + (col % 2) * 0.04;
+      faces.push({ i: i, avatar: marble(300 + i), pos: 'left: ' + x.toFixed(2) + '%; top: ' + (yf * 100).toFixed(1) + '%;' });
+    }
+    var P = [
+      ['Kemi Eze', 'Founder at Oko Pay', 'Email', "Hi Kemi, I've been following what Oko Pay is building. I help fintech teams take reconciliation off their ops team's plate. Would a quick chat be useful?"],
+      ['Tunde Bello', 'CEO at Ireti Labs', 'Email', 'Hi Tunde, I help fintech teams like Ireti Labs take reconciliation off their ops team\'s plate. Would a 15-minute chat next week be useful?'],
+      ['Ada Nwosu', 'Co-founder at Yaba Ledger', 'LinkedIn', "Hi Ada, I work with fintech finance teams across Lagos and would love to connect."],
+      ['Femi Adeyemi', 'Founder at Eko Wallet', 'Email', "Hi Femi, quick one: how does Eko Wallet handle reconciliation today? I help fintech teams take it off their ops team's plate, and I'd love to compare notes."],
+      ['Zainab Musa', 'CEO at Lagoon Pay', 'Email', "Hi Zainab, I've been following Lagoon Pay. I help fintech teams close their books without the month-end scramble. Worth a short chat?"],
+      ['Chidi Okeke', 'Co-founder at Marina Ledger', 'LinkedIn', "Hi Chidi, I spend my days with fintech finance teams in Lagos. I'd love to connect."],
+      ['Bisi Alade', 'Founder at Ikoyi Pay', 'Email', "Hi Bisi, I help fintech teams like Ikoyi Pay take reconciliation off their ops team's plate. Open to a quick chat next week?"],
+      ['Emeka Obi', 'CEO at Surulere Labs', 'Email', "Hi Emeka, who at Surulere Labs owns reconciliation today? I help fintech teams take it off their plate and would love to compare notes."],
+      ['Ngozi Ibe', 'COO at Bariga Pay', 'LinkedIn', "Hi Ngozi, I work with fintech ops and finance teams in Lagos. I'd love to connect."],
+      ['Seun Ojo', 'Founder at Lekki Ledger', 'Email', "Hi Seun, I've been following Lekki Ledger. I help fintech teams take reconciliation off their ops team's plate. Would a quick chat be useful?"]
+    ];
+    var people = P.map(function (p, k) {
+      var mins = k * 10, hh = 9 + Math.floor(mins / 60), mm = mins % 60;
+      return { k: k, name: p[0], first: p[0].split(' ')[0], role: p[1], ch: p[2], text: p[3], time: hh + ':' + (mm < 10 ? '0' : '') + mm, avatar: faces[k].avatar };
+    });
+    this._d = { faces: faces, people: people, ZONES: [['strangers', '#D5D9E4'], ['said hello', '#A9B8F5'], ['following up', '#6E86F2'], ['talking', '#3F52D9']] };
+    return this._d;
+  }
+
+  toastNow(text, undoable) {
+    var self = this;
+    this._tk += 1;
+    var key = this._tk;
+    this.setState({ toast: text, toastKey: key, undoable: undoable });
+    this.later(function () { if (self.state.toastKey === key) self.setState({ toast: '', undoable: -1 }); }, 4200);
+  }
+
+  decide(kind) {
+    var self = this, D = this.d(), s = this.state;
+    if (s.idx >= D.people.length || s.leaving) return;
+    var k = s.idx, p = D.people[k];
+    this.setState({ leaving: kind });
+    this.later(function () {
+      self.setState(function (s2) {
+        var v = Object.assign({}, s2.verdict); v[k] = kind;
+        return { verdict: v, idx: k + 1, leaving: '', cardKey: s2.cardKey + 1 };
+      });
+      if (kind === 'ok') self.toastNow(p.first + "'s hello goes out tomorrow at " + p.time + ' their time', k);
+      else self.toastNow('Callum won\'t contact ' + p.first, k);
+    }, 380);
+  }
+
+  undo() {
+    var k = this.state.undoable;
+    if (k < 0) return;
+    this.setState(function (s) {
+      var v = Object.assign({}, s.verdict); delete v[k];
+      return { verdict: v, idx: k, cardKey: s.cardKey + 1, toast: '', undoable: -1 };
+    });
+  }
+
+  renderVals() {
+    var self = this, D = this.d(), s = this.state;
+    var n = D.people.length, done = s.idx >= n;
+    var cur = done ? D.people[n - 1] : D.people[s.idx];
+    var edited = s.edits[cur.k] !== undefined;
+    var okCount = 0, skipCount = 0;
+    Object.keys(s.verdict).forEach(function (k) { if (s.verdict[k] === 'ok') okCount++; else skipCount++; });
+
+    var segs = D.people.map(function (p) {
+      var v = s.verdict[p.k];
+      return { style: v === 'ok' ? 'background: #1D2140;' : (v === 'skip' ? 'background: #C5CAD6;' : (p.k === s.idx ? 'background: #A9B8F5;' : 'background: #E7E9F0;')) };
+    });
+
+    var faces = D.faces.map(function (f) {
+      var v = f.i < n ? s.verdict[f.i] : undefined;
+      var cls = 'face', look;
+      if (v === 'ok') look = 'filter: grayscale(0.62); opacity: 1; box-shadow: 0 0 0 2px #1D2140;';
+      else if (v === 'skip') look = 'filter: grayscale(1); opacity: 0.18; box-shadow: none;';
+      else if (!done && f.i === s.idx) { cls = 'face cur-ring'; look = 'filter: grayscale(0.4); opacity: 1; box-shadow: 0 0 0 2.5px #3F52D9;'; }
+      else if (f.i < 12) { cls = 'face next-ring'; look = 'filter: grayscale(0.62); opacity: 1; box-shadow: 0 0 0 2px #A9B8F5;'; }
+      else look = 'filter: grayscale(1) brightness(1.12); opacity: 0.72; box-shadow: 0 0 0 1.5px #D5D9E4;';
+      return { cls: cls, style: 'width: 22px; height: 22px; margin: -11px 0 0 -11px; ' + f.pos + ' ' + f.avatar + ' ' + look };
+    });
+
+    var centers = [14.5, 38, 62, 84.5];
+    var zones = D.ZONES.map(function (z, i) {
+      return { n: String(i === 0 ? 40 - skipCount : 0), name: z[0], pos: 'left: ' + centers[i] + '%;', dot: 'background: #FFFFFF; border: 3px solid ' + z[1] + ';' };
+    });
+
+    var motion = { ok: 'transform: translateX(60%) rotate(6deg); opacity: 0;', skip: 'transform: translateX(-60%) rotate(-6deg); opacity: 0;' }[s.leaving] || '';
+    return {
+      hasToast: !!s.toast, toast: s.toast, toastCls: s.toastKey % 2 ? 'toast-a' : 'toast-b',
+      canUndo: s.undoable >= 0, undo: function () { self.undo(); },
+      reviewing: !done, done: done,
+      segs: segs, progressText: Math.min(s.idx + 1, n) + ' of ' + n,
+      cardCls: s.cardKey % 2 ? 'card-in-a' : 'card-in-b', cardMotion: motion,
+      cardLabel: 'First message to ' + cur.name,
+      p: { name: cur.name, role: cur.role, avatar: cur.avatar, chLabel: cur.ch, when: (cur.ch === 'LinkedIn' ? 'Invite note, ' : '') + 'tomorrow ' + cur.time, text: edited ? s.edits[cur.k] : cur.text },
+      msgLabel: 'Message to ' + cur.first + '. You can change any words.',
+      onEdit: function (e) { var v = e.target.value, k = cur.k; self.setState(function (s2) { var ed = Object.assign({}, s2.edits); ed[k] = v; return { edits: ed }; }); },
+      editHint: edited ? 'Edited. Callum learns from this.' : 'Click the message to change any words.',
+      ok: function () { self.decide('ok'); },
+      skip: function () { self.decide('skip'); },
+      doneLine: (okCount === 1 ? '1 hello is set' : okCount + ' hellos are set') + (skipCount ? ', and Callum will leave ' + skipCount + (skipCount === 1 ? ' person' : ' people') + ' alone' : '') + '. From tomorrow at 9:00, Callum runs on its own.',
+      askNotif: done && !s.notif, notifDone: done && !!s.notif,
+      notifLine: s.notif === 'on' ? "Done. You'll get a tap the moment someone replies." : 'Okay. Replies will wait for you right here.',
+      notifYes: function () { self.setState({ notif: 'on' }); },
+      notifNo: function () { self.setState({ notif: 'no' }); },
+      faces: faces, zones: zones
+    };
+  }
+}
+</script>
+</body>
+</html>
