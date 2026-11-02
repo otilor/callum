@@ -147,14 +147,32 @@ describe('act', () => {
     await expect(act(h.ctx, h.project.id, { kind: 'pause_channel', label: '', args: { channel: 'linkedin' } })).rejects.toThrow("LinkedIn isn't running, so there is nothing to pause.");
   });
 
-  it('resumes a paused channel and settles the check that paused it', async () => {
+  it('resumes a channel the user paused', async () => {
     const h = harness({ connected: ['email', 'linkedin'] });
     h.ctx.repo.updateChannel('linkedin', { status: 'paused' });
-    h.ctx.repo.insertIncident({ channel: 'linkedin', kind: 'linkedin_check', message: 'check' });
     const res = await act(h.ctx, h.project.id, { kind: 'resume_channel', label: 'Resume LinkedIn', args: { channel: 'linkedin' } });
     expect(res.text).toBe('Resumed LinkedIn.');
     expect(h.ctx.repo.getChannel('linkedin')).toMatchObject({ status: 'connected', halfPaceUntil: null });
-    expect(h.ctx.repo.listIncidents({ open: true })).toEqual([]);
+  });
+
+  it('will not resume a channel past a check, a daily limit or a signed-out mailbox, and says where to go', async () => {
+    const h = harness({ connected: ['email', 'linkedin', 'x'] });
+    const resume = (channel: 'email' | 'linkedin' | 'x') => act(h.ctx, h.project.id, { kind: 'resume_channel', label: '', args: { channel } });
+
+    h.ctx.repo.updateChannel('linkedin', { status: 'paused' });
+    h.ctx.repo.insertIncident({ channel: 'linkedin', kind: 'linkedin_check', message: 'check' });
+    await expect(resume('linkedin')).rejects.toThrow("LinkedIn asked to check it's you. Finish the check on LinkedIn first, then press Resume LinkedIn on the notice on your home screen.");
+    expect(h.ctx.repo.getChannel('linkedin').status).toBe('paused');
+    expect(h.ctx.repo.listIncidents({ open: true })).toHaveLength(1);
+
+    h.ctx.repo.updateChannel('x', { status: 'paused' });
+    h.ctx.repo.insertIncident({ channel: 'x', kind: 'x_limit', message: 'limit' });
+    await expect(resume('x')).rejects.toThrow('X is out of room for today, so Callum can\'t resume it yet. It starts again by itself tomorrow.');
+
+    h.ctx.repo.updateChannel('email', { status: 'error' });
+    h.ctx.repo.insertIncident({ channel: 'email', kind: 'mailbox_signed_out', message: 'out' });
+    await expect(resume('email')).rejects.toThrow('Email signed Callum out. Reconnect Email first, from Your Callum or the notice on your home screen.');
+    expect(h.ctx.repo.getChannel('email').status).toBe('error');
   });
 
   it('changes the tone of the project', async () => {

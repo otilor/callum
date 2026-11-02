@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, session, shell, Tray, type MenuItemConstructorOptions } from 'electron';
 import { getOpenAtLogin, HIDDEN_FLAG, setOpenAtLogin, type LoginDeps } from './login.js';
 import { createNotifier, type Notifier } from './notify.js';
+import { startOnSavedPort } from './port.js';
 import type { DesktopServer, ServerModule, TimeApi } from './server-api.js';
 import { createTray, nextMondayMorning, type CallumTray, type TrayStatus } from './tray.js';
 
@@ -35,6 +36,8 @@ const timers: NodeJS.Timeout[] = [];
 interface Prefs {
   backgroundNoteShown?: boolean;
   briefShownOn?: string;
+  /** The port Callum listened on last time, so the page keeps its address (and what it remembers) between launches. */
+  port?: number;
 }
 
 const prefsFile = () => join(app.getPath('userData'), 'desktop.json');
@@ -373,14 +376,21 @@ async function boot(): Promise<void> {
       import(pathToFileURL(join(root, 'dist/server/engine/time.js')).href) as Promise<TimeApi>,
     ]);
     time = timeModule;
-    server = await serverModule.startServer({
-      dataDir: join(app.getPath('userData'), 'data'),
-      host: '127.0.0.1',
-      port: 0,
-      password: null,
-      webDir: existsSync(webIndex) ? dirname(webIndex) : null,
-      env: process.env,
-    });
+    server = await startOnSavedPort(
+      (port) =>
+        serverModule.startServer({
+          dataDir: join(app.getPath('userData'), 'data'),
+          host: '127.0.0.1',
+          port,
+          password: null,
+          webDir: existsSync(webIndex) ? dirname(webIndex) : null,
+          env: process.env,
+        }),
+      readPrefs().port,
+      (line) => console.error(`[callum] ${line}`),
+    );
+    const port = Number(new URL(server.url).port);
+    if (readPrefs().port !== port) writePrefs({ port });
   } catch (err) {
     dialog.showErrorBox('Callum could not start', err instanceof Error ? err.message : String(err));
     app.exit(1);

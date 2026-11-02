@@ -79,6 +79,30 @@ export function channelSummary(ctx: Ctx, ch: Channel): ChannelSummary {
   return { pending: pendingFor(ctx, ch), paceLine: paceLine(ctx, ch) };
 }
 
+// ---- resuming a stopped channel ------------------------------------------------------------------------
+
+const NAME_OF: Record<Channel, string> = { email: 'Email', linkedin: 'LinkedIn', x: 'X' };
+const SIGNED_OUT_INCIDENT = { email: 'mailbox_signed_out', linkedin: 'linkedin_signed_out', x: 'x_signed_out' } as const;
+
+/**
+ * Throws, in plain words, when a channel cannot simply be resumed: it is signed out (resuming would call it connected
+ * without signing in), X is out of room for today, or LinkedIn asked to check it's the user. `checked` is the user's own
+ * word that they finished LinkedIn's check; only the incident card sends it, so Ask and a stray request cannot.
+ */
+export function assertCanResume(ctx: Ctx, ch: Channel, opts: { checked?: boolean } = {}): void {
+  const name = NAME_OF[ch];
+  const open = ctx.repo.listIncidents({ open: true }).filter((i) => i.channel === ch);
+  if (ctx.repo.getChannel(ch).status === 'error' || open.some((i) => i.kind === SIGNED_OUT_INCIDENT[ch])) {
+    throw new UserError(`${name} signed Callum out. Reconnect ${name} first, from Your Callum or the notice on your home screen.`);
+  }
+  if (open.some((i) => i.kind === 'x_limit')) {
+    throw new UserError("X is out of room for today, so Callum can't resume it yet. It starts again by itself tomorrow.");
+  }
+  if (open.some((i) => i.kind === 'linkedin_check') && opts.checked !== true) {
+    throw new UserError("LinkedIn asked to check it's you. Finish the check on LinkedIn first, then press Resume LinkedIn on the notice on your home screen.");
+  }
+}
+
 // ---- connect and disconnect ----------------------------------------------------------------------------
 
 /** Signs in to a channel through the registry. A refusal leaves as a UserError with the adapter's own words. */

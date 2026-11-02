@@ -45,7 +45,11 @@ npm run build
 CALLUM_PASSWORD='choose a long password' npm start
 ```
 
-Open `http://localhost:4600`. When `CALLUM_PASSWORD` is set Callum listens on every interface and asks for the password. Without it, Callum listens on this computer only. Put it behind HTTPS (a reverse proxy such as Caddy does this in a few lines) before you open it to the internet.
+Open `http://localhost:4600`. When `CALLUM_PASSWORD` is set Callum listens on every interface and asks for the password. Without it, Callum listens on this computer only.
+
+A password sent over plain HTTP can be read by anyone on the network between you and the server. So password mode on a network needs an HTTPS reverse proxy in front of Callum (Caddy does this in a few lines: `callum.example.com { reverse_proxy localhost:4600 }`). Open Callum at the HTTPS address, and keep port 4600 closed to everyone but the proxy.
+
+Callum locks the sign-in for a minute after five wrong passwords from one address. Behind a proxy every request arrives from the proxy's own address, so by default one person's wrong tries lock out everybody. Set `CALLUM_TRUST_PROXY=1` when Callum sits behind exactly one proxy that sets `X-Forwarded-For`, and the lockout counts the address the proxy saw instead. Leave it off otherwise: with no proxy, anyone could write that header and pick their own address.
 
 ### Docker
 
@@ -54,7 +58,7 @@ cp .env.example .env      # set CALLUM_PASSWORD in it
 docker compose up -d
 ```
 
-Open `http://localhost:4600`. Your data lives in the `callum-data` volume. The image has no browser in it, so LinkedIn connects with the `li_at` cookie rather than a sign-in window. See [docs/SETUP.md](docs/SETUP.md#linkedin).
+Open `http://localhost:4600`. To reach it from another computer, put an HTTPS reverse proxy in front of it first (see Server mode above). Your data lives in the `callum-data` volume. The image has no browser in it, so LinkedIn connects with the `li_at` cookie rather than a sign-in window. See [docs/SETUP.md](docs/SETUP.md#linkedin).
 
 ## Try it first
 
@@ -90,6 +94,7 @@ Server mode reads these environment variables. The desktop app does not need any
 | `PORT` | `4600` | The port Callum listens on. |
 | `CALLUM_DATA_DIR` | `./data` | Where the database and the saved LinkedIn session live. |
 | `CALLUM_PASSWORD` | none | Asks for this password at sign-in and makes Callum listen on every interface. Required on a server. |
+| `CALLUM_TRUST_PROXY` | off | Set to `1` behind one HTTPS reverse proxy that sets `X-Forwarded-For`, so the sign-in lockout counts each visitor's own address. |
 | `ANTHROPIC_API_KEY` | none | Lets Claude write and read messages. |
 | `CALLUM_MODEL` | `claude-opus-5-5` | The Claude model to use. |
 | `APOLLO_API_KEY` | none | Lets you find people from a description. |
