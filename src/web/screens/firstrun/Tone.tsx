@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Person, Tone as ToneName } from '../../../shared/types.js';
+import type { Channel, Person, Tone as ToneName } from '../../../shared/types.js';
 import { api, ApiError } from '../../api.js';
 import { Button } from '../../ui/Button.js';
 import { Marble } from '../../ui/Marble.js';
 import { ErrorLine } from './icons.js';
+
+const VIA: Record<Channel, string> = { email: ', by email', linkedin: ', on LinkedIn', x: ', on X' };
 
 const TONES: { key: ToneName; name: string }[] = [
   { key: 'warm', name: 'Warm' },
@@ -36,6 +38,8 @@ export interface ToneProps {
   projectId: number;
   /** The first person in the list: the sample is written to them. */
   first: Person;
+  /** The first channel that is connected, which is where the first hello goes. */
+  channel: Channel;
   store: ToneStore;
   error: string;
   busy: boolean;
@@ -43,7 +47,7 @@ export interface ToneProps {
   onNext(): void;
 }
 
-export function Tone({ projectId, first, store, error, busy, onBack, onNext }: ToneProps) {
+export function Tone({ projectId, first, channel, store, error, busy, onBack, onNext }: ToneProps) {
   const { tone, drafts, samples, setSample } = store;
   const [failure, setFailure] = useState<{ tone: ToneName; message: string } | null>(null);
   // Two names for one animation, so the bubble can play it again each time the tone changes.
@@ -85,7 +89,7 @@ export function Tone({ projectId, first, store, error, busy, onBack, onNext }: T
       <div className="fr-sample">
         <div className="fr-sample-for">
           <Marble seed={300 + first.id} size={34} tone="grey" />
-          <span>{`First hello to ${target}`}</span>
+          <span>{`First hello to ${target}${VIA[channel]}`}</span>
         </div>
         <label htmlFor="draft" className="sr-only">{`First message to ${first.firstName}`}</label>
         <textarea

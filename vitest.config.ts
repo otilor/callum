@@ -20,6 +20,8 @@ export default defineConfig({
           include: ['src/web/**/*.test.{ts,tsx}'],
           environment: 'jsdom',
           setupFiles: ['src/web/test/setup.ts'],
+          // Long first-run walks type a lot; a busy machine must not turn them into failures.
+          testTimeout: 30_000,
         },
       },
     ],

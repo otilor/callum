@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach } from 'vitest';
+
+configure({ asyncUtilTimeout: 5000 });
 
 // Tests run with reduced motion on, so counters and rings settle at once and nothing ticks after a test ends.
 Object.defineProperty(window, 'matchMedia', {

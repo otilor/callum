@@ -20,6 +20,8 @@ export function SignInCard({ onDone }: { onDone(): Promise<void> }) {
       await onDone();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Callum kept everything as it was.');
+    } finally {
+      // If the page is still showing the card, the check is over, whatever came back.
       setBusy(false);
     }
   };

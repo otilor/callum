@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type { Person } from '../../../shared/types.js';
 import { Marble } from '../../ui/Marble.js';
 
@@ -10,13 +11,16 @@ function hash(n: number): number {
   return x - Math.floor(x);
 }
 
-/** Where the i-th face drifts in: three rows, a column at a time, a little loose. */
-function place(i: number): { left: string; top: string } {
+/**
+ * Where the i-th face drifts in: three rows, a column at a time, a little loose. The column spacing lives in CSS
+ * (`--face-dx`), so a narrow screen can spread the faces out instead of piling them up.
+ */
+function place(i: number): CSSProperties {
   const col = Math.floor(i / 3);
   const row = i % 3;
-  const x = 4 + (col + 0.5) * 3 + (hash(i * 3.1 + 1) - 0.5) * 1.2;
+  const jitter = (hash(i * 3.1 + 1) - 0.5) * 1.2;
   const y = 0.36 + row * 0.15 + (hash(i * 5.7 + 2) - 0.5) * 0.06 + (col % 2) * 0.04;
-  return { left: `${x.toFixed(2)}%`, top: `${(y * 100).toFixed(1)}%` };
+  return { left: `calc(var(--face-x0) + ${col + 0.5} * var(--face-dx) + ${jitter.toFixed(2)}%)`, top: `${(y * 100).toFixed(1)}%` };
 }
 
 /** The river under First run: the people Callum has found, grey on the left, with a count per stage. */
@@ -51,7 +55,7 @@ export function RiverStrip({ people, planning }: { people: Person[]; planning: b
               tone={next ? 'cool' : 'grey'}
               ring={next ? '#A9B8F5' : '#D5D9E4'}
               className={next ? 'face next-ring' : 'face'}
-              style={{ marginLeft: -11, marginTop: -11, left: where.left, top: where.top, opacity: next ? 1 : 0.72, animationDelay: `${Math.min(i, 24) * 30}ms` }}
+              style={{ marginLeft: -11, marginTop: -11, ...where, opacity: next ? 1 : 0.72, animationDelay: `${Math.min(i, 24) * 30}ms` }}
             />
           );
         })}

@@ -52,6 +52,7 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
   const [reading, setReading] = useState(false);
   const [nameOverride, setNameOverride] = useState<string | null>(null);
   const [offerError, setOfferError] = useState('');
+  const [nameProblem, setNameProblem] = useState('');
   const [offerBusy, setOfferBusy] = useState(false);
 
   const [people, setPeople] = useState<Person[]>(() => (existing ? state.people.filter((p) => p.projectId === existing.id) : []));
@@ -62,6 +63,21 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
   const [startError, setStartError] = useState('');
   const [starting, setStarting] = useState(false);
   const ringKey = useRef(0);
+
+  // Once the server's state shows what a sign-in just did, the local copy has done its job.
+  useEffect(() => {
+    setLocal((l) => {
+      const keep: Partial<Record<Channel, ChannelAccount>> = {};
+      let changed = false;
+      for (const ch of Object.keys(l) as Channel[]) {
+        const mine = l[ch];
+        const theirs = state.channels.find((a) => a.channel === ch);
+        if (mine && theirs && theirs.status === mine.status && theirs.identity === mine.identity) changed = true;
+        else if (mine) keep[ch] = mine;
+      }
+      return changed ? keep : l;
+    });
+  }, [state.channels]);
 
   const accounts = useMemo(() => {
     const merged: Partial<Record<Channel, ChannelAccount>> = {};
@@ -141,15 +157,17 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
     const text = offer.trim();
     if (!text) return setOfferError('Say what you offer in one line.');
     setOfferError('');
+    setNameProblem('');
     setOfferBusy(true);
     try {
+      // The project is called what the page shows, so there is never a second name Callum picked behind the person's back.
       let saved: Project;
       if (!project) {
-        saved = await api.createProject({ offer: text, ...(nameOverride ? { name: nameOverride } : {}) });
+        saved = await api.createProject({ offer: text, ...(name ? { name } : {}) });
       } else {
         const patch: { offer?: string; name?: string } = {};
         if (text !== (project.offer ?? '')) patch.offer = text;
-        if (nameOverride && nameOverride !== project.name) patch.name = nameOverride;
+        if (name && name !== project.name) patch.name = name;
         saved = Object.keys(patch).length > 0 ? await api.updateProject(project.id, patch) : project;
       }
       setProject(saved);
@@ -157,7 +175,9 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
       setStep(3);
       void refresh();
     } catch (e) {
-      setOfferError(messageOf(e));
+      // A refused name (a duplicate) is shown beside the pencil, everything else under the offer.
+      if (e instanceof ApiError && e.status === 422 && name) setNameProblem(e.message);
+      else setOfferError(messageOf(e));
     } finally {
       setOfferBusy(false);
     }
@@ -180,7 +200,7 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
     setToneError('');
     setToneBusy(true);
     try {
-      const patch: { tone: typeof tone.tone; sample: string | null; audience?: string } = { tone: tone.tone, sample: tone.drafts[tone.tone] ?? null };
+      const patch: { tone: typeof tone.tone; sample: string | null; audience?: string } = { tone: tone.tone, sample: tone.drafts[tone.tone]?.trim() ? (tone.drafts[tone.tone] ?? null) : null };
       if (audience) patch.audience = audience;
       setProject(await api.updateProject(project.id, patch));
       setStep(5);
@@ -207,6 +227,7 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
   };
 
   const first = people[0];
+  const firstChannel = (['email', 'linkedin', 'x'] as const).find((ch) => accounts[ch]?.status === 'connected') ?? 'email';
   const sheetNode = !sheet ? null : sheet.kind === 'email' ? (
     <EmailSheet
       provider={sheet.provider}
@@ -232,7 +253,7 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
             {[1, 2, 3, 4, 5].map((n) => (
               <span key={n} className="fr-dot" aria-hidden="true" data-state={n === step ? 'now' : n < step ? 'done' : 'next'} />
             ))}
-            <span className="sr-only">{`Step ${step} of 5`}</span>
+            <span className="sr-only">{`${step} of 5`}</span>
           </div>
         ) : null}
       </header>
@@ -251,8 +272,12 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
             readFrom={readFrom}
             reading={reading}
             name={name}
-            onRename={setNameOverride}
+            onRename={(n) => {
+              setNameOverride(n);
+              setNameProblem('');
+            }}
             error={offerError}
+            nameProblem={nameProblem}
             busy={offerBusy}
             onBack={() => setStep(1)}
             onNext={() => void submitOffer()}
@@ -262,7 +287,7 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
           <Who projectId={project.id} people={people} onAdded={addPeople} onRemoved={dropPerson} onBack={() => setStep(2)} onNext={leaveWho} />
         ) : null}
         {step === 4 && project && first ? (
-          <Tone projectId={project.id} first={first} store={tone} error={toneError} busy={toneBusy} onBack={() => setStep(3)} onNext={() => void submitTone()} />
+          <Tone projectId={project.id} first={first} channel={firstChannel} store={tone} error={toneError} busy={toneBusy} onBack={() => setStep(3)} onNext={() => void submitTone()} />
         ) : null}
         {step === 5 && project ? (
           <Plan

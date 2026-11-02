@@ -95,3 +95,14 @@ export type AskAction =
   | { kind: 'switch_channel'; label: string; args: { personIds: number[]; channel: Channel } };
 export interface AskAnswer { text: string; personIds: number[]; action: AskAction | null }
 export type Scope = 'people' | 'outbox' | 'incidents' | 'settings' | 'channels' | 'projects';
+
+export type SkipReason = 'duplicate' | 'known' | 'stopped' | 'no_channel' | 'other_project';
+/** Someone a list or a search turned up who was not added, and why. */
+export interface Skipped {
+  name: string;
+  reason: SkipReason;
+  /** The project the person is already in, for `other_project`. */
+  projectName?: string;
+  /** The line of the file or paste the person came from (1-based), when there is one. */
+  row?: number;
+}

@@ -21,7 +21,8 @@ export interface AppStateHandle {
   /** The live stream broke and the server could not be reached either. */
   offline: boolean;
   currentProject: Project | null;
-  refresh(): Promise<void>;
+  /** Fetches state again. With `strict`, a failure that is not a 401 is thrown to the caller as well as noted. */
+  refresh(opts?: { strict?: boolean }): Promise<void>;
 }
 
 /** `/api/state`, kept current: the page listens to `/api/events` and fetches again, at most every 150 ms, when something changed. */
@@ -33,7 +34,7 @@ export function useAppState(): AppStateHandle {
   const asked = useRef(0);
   const alive = useRef(true);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (opts?: { strict?: boolean }) => {
     const ticket = ++asked.current;
     try {
       const next = await api.state();
@@ -48,6 +49,7 @@ export function useAppState(): AppStateHandle {
         setOffline(false);
       } else {
         setOffline(true);
+        if (opts?.strict) throw e;
       }
     } finally {
       if (alive.current && ticket === asked.current) setLoading(false);

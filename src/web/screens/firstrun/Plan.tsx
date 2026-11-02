@@ -17,6 +17,11 @@ export function channelsOf(byChannel: Record<Channel, number>, n: number): Chann
   return all.slice(0, n);
 }
 
+/** The plan's own closing sentence, which the line under it says again. */
+export function withoutNothingToday(line: string): string {
+  return line.replace(/\s*Nothing goes out today\.\s*$/, '');
+}
+
 export interface PlanProps {
   projectId: number;
   people: Person[];
@@ -47,8 +52,8 @@ export function Plan({ projectId, people, timezone, now, error, starting, onBack
     };
   }, [projectId]);
 
-  const slot = plan ? formatSlot(plan.firstSendAt, timezone, now) : '';
-  const day = slot.split(' at ')[0] ?? '';
+  // Only the day comes from the clock; hellos always start at 9:00 their time.
+  const day = plan ? (formatSlot(plan.firstSendAt, timezone, now).split(' at ')[0] ?? '') : '';
   const title = day === 'tomorrow' ? "Here's tomorrow" : day ? `Here's ${day}` : "Here's tomorrow";
   const faces = plan ? people.slice(0, Math.min(FACES, plan.total)) : [];
   const channels = plan ? channelsOf(plan.byChannel, faces.length) : [];
@@ -82,7 +87,7 @@ export function Plan({ projectId, people, timezone, now, error, starting, onBack
         </div>
       </div>
       <div className="fr-plan-lines" aria-live="polite">
-        <p className="line-1">{plan ? plan.line : failed ? '' : 'Callum is planning'}</p>
+        <p className="line-1">{plan ? withoutNothingToday(plan.line) : failed ? '' : 'Callum is planning'}</p>
         <p className="line-2">Nothing goes out today. You'll OK the first 10 before they go.</p>
       </div>
       {failed ? <ErrorLine>{failed}</ErrorLine> : null}
@@ -91,7 +96,7 @@ export function Plan({ projectId, people, timezone, now, error, starting, onBack
         <Button size="lg" variant="quiet" onClick={onBack}>Back</Button>
         <Button size="lg" className="fr-start" aria-busy={starting} disabled={!plan || starting} onClick={onStart}>
           <span className="fr-start-dot" aria-hidden="true" />
-          {plan ? `Start ${slot}` : 'Start'}
+          {plan ? `Start ${day} at 9:00` : 'Start'}
         </Button>
       </div>
     </section>

@@ -1,12 +1,8 @@
 import type { Channel, ChannelAccount } from '../../../shared/types.js';
 import { Button } from '../../ui/Button.js';
 import { CheckIcon, MailIcon, XMark } from './icons.js';
+import { paceFor } from './pace.js';
 
-const PACE: Record<Channel, { name: string; line: string; line2: string }> = {
-  email: { name: 'Email', line: '20 a day now, 120 by week 3', line2: '' },
-  linkedin: { name: 'LinkedIn', line: '15 invites a day', line2: 'working hours only' },
-  x: { name: 'X', line: '20 DMs a day', line2: '' },
-};
 const ORDER: Channel[] = ['email', 'linkedin', 'x'];
 
 export interface ChannelsProps {
@@ -26,7 +22,7 @@ export function Channels({ accounts, busy, ringing, onPick, onNext }: ChannelsPr
       <h1 id="q1" className="fr-title">Where should Callum reach people?</h1>
       <div className="fr-ch-row">
         {ORDER.map((ch) => {
-          const meta = PACE[ch];
+          const meta = paceFor(ch);
           const account = accounts[ch];
           const on = account?.status === 'connected';
           const working = busy === ch;
