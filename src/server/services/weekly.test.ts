@@ -74,7 +74,7 @@ describe('weeklyNote', () => {
     out(h, p.id, 'hello', '2026-10-26T09:12:00.000Z');
     const note = weeklyNote(h.ctx, WEEK_START);
     expect(note.suggestion).toBeNull();
-    expect(note.line).toBe('Callum said hello to 1 person. 1 replied and 0 calls are booked.');
+    expect(note.line).toBe('Callum said hello to 1 person. 1 replied. No calls are booked yet.');
   });
 
   it('shows who is warming up and who is resting', () => {
@@ -108,7 +108,7 @@ describe('weeklyNote', () => {
     expect(note.replied).toHaveLength(4);
     expect(note.groups.map((g) => g.name)).toEqual(['Reconciliation', 'Payroll']);
     expect(note.groups[0]?.line).toBe('Callum said hello to 5 people. 3 replied and 2 calls are booked.');
-    expect(note.groups[1]?.line).toBe('Callum said hello to 1 person. 1 replied and 0 calls are booked.');
+    expect(note.groups[1]?.line).toBe('Callum said hello to 1 person. 1 replied. No calls are booked yet.');
     expect(note.groups[1]?.replied.map((r) => r.first)).toEqual(['Yaw']);
     expect(note.suggestion?.projectId).toBe(h.project.id);
   });
@@ -165,7 +165,7 @@ describe('weeklyEmail', () => {
     out(h, yaw.id, 'hello', '2026-10-28T09:00:00.000Z');
     const text = weeklyEmail(weeklyNote(h.ctx, WEEK_START)).text;
     expect(text).toContain('\nReconciliation\nCallum said hello to 5 people.');
-    expect(text).toContain('\nPayroll\nCallum said hello to 1 person. 1 replied and 0 calls are booked.');
+    expect(text).toContain('\nPayroll\nCallum said hello to 1 person. 1 replied. No calls are booked yet.');
     expect(text.indexOf('Reconciliation')).toBeLessThan(text.indexOf('Payroll'));
     expect(text.match(/One idea/g)).toHaveLength(1);
   });

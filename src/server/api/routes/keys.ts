@@ -34,6 +34,8 @@ export function keysRoutes(ctx: Ctx, opts: KeysRoutesOptions = {}): Hono {
 
   app.onError((err, c) => {
     if (err instanceof UserError) return c.json({ error: err.message }, err.status as ContentfulStatusCode);
+    // Nobody expected this one: the person is told plainly, and the app's own error reporter keeps the details.
+    ctx.onError(err);
     return c.json({ error: BROKEN }, 500);
   });
 

@@ -43,7 +43,8 @@ function channelFor(p: Person, connected: Channel[]): Channel | null {
 const isStranger = (p: Person): boolean => p.status === 'active' && p.stage === 'stranger' && p.touches === 0;
 
 /** A hello (or an invite) as Callum would write it for the first stranger in the project, in this tone. */
-export async function sample(ctx: Ctx, projectId: number, tone: Tone): Promise<string> {
+/** A first hello in this voice, and who it was written to: the first stranger of the project, or a made-up person when there is none. */
+export async function sample(ctx: Ctx, projectId: number, tone: Tone): Promise<{ body: string; to: { name: string; company: string | null } }> {
   const project = requireProject(ctx, projectId);
   const settings = ctx.repo.getSettings();
   const connected = connectedChannels(ctx);
@@ -61,7 +62,7 @@ export async function sample(ctx: Ctx, projectId: number, tone: Tone): Promise<s
   const written = await ctx.writer.write(kind, {
     person: { ...person, channel }, project: { ...project, tone }, settings, channel, history: [],
   });
-  return written.body;
+  return { body: written.body, to: { name: person.name, company: person.company } };
 }
 
 export interface PlanPreview {

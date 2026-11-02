@@ -42,8 +42,9 @@ describe('sample', () => {
   it('writes the hello for the first stranger in the tone asked for', async () => {
     const h = harness();
     h.person({ name: 'Tunde Ade', company: 'Fieldnote' });
-    const warm = await sample(h.ctx, h.project.id, 'warm');
-    const direct = await sample(h.ctx, h.project.id, 'direct');
+    const { body: warm, to } = await sample(h.ctx, h.project.id, 'warm');
+    const { body: direct } = await sample(h.ctx, h.project.id, 'direct');
+    expect(to).toEqual({ name: 'Tunde Ade', company: 'Fieldnote' });
     expect(warm).toContain('Tunde');
     expect(warm).toContain('Fieldnote');
     expect(direct).toContain('Tunde');
@@ -53,7 +54,8 @@ describe('sample', () => {
 
   it('uses Kemi Eze at Oko Pay when nobody is there yet, and never saves anything', async () => {
     const h = harness();
-    const body = await sample(h.ctx, h.project.id, 'playful');
+    const { body, to } = await sample(h.ctx, h.project.id, 'playful');
+    expect(to).toEqual({ name: 'Kemi Eze', company: 'Oko Pay' });
     expect(body).toContain('Kemi');
     expect(body).toContain('Oko Pay');
     expect(h.ctx.repo.listPeople()).toEqual([]);
@@ -63,7 +65,7 @@ describe('sample', () => {
   it('writes an invite when the first stranger is on LinkedIn', async () => {
     const h = harness({ connected: ['linkedin'] });
     h.person({ name: 'Tunde Ade', email: null, linkedinUrl: 'https://www.linkedin.com/in/tunde' });
-    expect((await sample(h.ctx, h.project.id, 'warm')).length).toBeLessThanOrEqual(280);
+    expect((await sample(h.ctx, h.project.id, 'warm')).body.length).toBeLessThanOrEqual(280);
   });
 });
 

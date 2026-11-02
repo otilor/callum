@@ -51,6 +51,8 @@ export function channelsRoutes(ctx: Ctx, opts: ChannelsRoutesOptions = {}): Hono
     if (err instanceof UserError) {
       return c.json({ error: err.message, ...(err.detail === undefined ? {} : { detail: err.detail }) }, err.status as ContentfulStatusCode);
     }
+    // Nobody expected this one: the person is told plainly, and the app's own error reporter keeps the details.
+    ctx.onError(err);
     return c.json({ error: BROKEN }, 500);
   });
 

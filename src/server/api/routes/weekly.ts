@@ -40,7 +40,7 @@ export function weeklyRoutes(ctx: Ctx): Hono {
   app.onError((err, c) => {
     if (err instanceof NoteError) return c.json({ error: err.message }, err.status as ContentfulStatusCode);
     // Anything nobody expected: say so plainly and leave the details in the log.
-    console.error(`[callum] ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+    ctx.onError(err);
     return c.json({ error: 'Something went wrong. Callum kept everything as it was.' }, 500);
   });
 
