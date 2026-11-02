@@ -386,7 +386,10 @@ rows['opt-out scope (round 5)'] = [
   ['Do not email me, call me instead.', '!lost'], ['Do not email me, WhatsApp me instead.', 'not_interested'],
   ['Do not contact me through LinkedIn.', 'not_interested'], ['Do not contact me by phone.', 'not_interested'],
   // R4. call, phone, ring, text, SMS, WhatsApp and DM are never an email opt-out
-  ["Please don't phone me. Happy to continue by email.", '!lost'], ["Don't call me. Send me the details by email.", '!lost'], ['Do not call me. Email me the deck.', '!lost'],
+  ["Please don't phone me. Happy to continue by email.", '!lost'], ["Don't call me. Send me the details by email.", '!lost'], ['Do not call me. Email me the deck.', ['interested', 'question']],
+  ['Do not call me. Email me the deck', ['interested', 'question']], ['Do not call me, email me the deck.', ['interested', 'question']],
+  ['Please do not call me. Email me the pricing deck.', ['interested', 'question']], ["Don't text me. Email me.", ['interested', 'question']],
+  ['Do not call me. Email me.', ['interested', 'question']], ['Do not call me. Email me over the details.', ['interested', 'question']],
   ["Don't call me.", 'not_interested'], ['Do not text me.', 'not_interested'], ['Please do not call me again.', 'not_interested'], ["Don't DM me on LinkedIn again.", 'not_interested'],
   // R5. narrower than a stop, nothing engaged: the dock with a close suggested
   ["Don't email me the PDF.", 'not_interested'],

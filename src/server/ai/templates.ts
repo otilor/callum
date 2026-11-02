@@ -215,12 +215,12 @@ export function cleanReply(rawText: string): string {
 // ---- engagement
 const NEGATED_INTEREST_RE = /\b(?:not|never|no|isn'?t|aren'?t|n'?t)\s+(?:really\s+|very\s+|that\s+|so\s+)?(?:interested|keen)\b|\bno interest\b|\bkein interesse\b|pas int[ée]ress[ée]e?|no me interesa|n[ãa]o tenho interesse|\bnot sure\b/gi;
 /** "Don't call me", "never send me ...": the engagement phrase is refused, not offered. */
-const REFUSED_REQUEST_RE = /\b(?:do not|don'?t|never)\s+(?:ever\s+)?(?:call|ring|send|text|phone)\s+(?:me|us)\b/gi;
+const REFUSED_REQUEST_RE = /\b(?:do not|don'?t|never)\s+(?:ever\s+)?(?:call|ring|send|text|phone|e-?mail|mail|message)\s+(?:me|us)\b/gi;
 const RHETORICAL_QUESTION_RE = /\b(?:any |other )?(?:questions|queries|urgent(?:ly)?|need (?:help|assistance)|anything urgent)\s*\?/gi;
 const ENGAGED_RE = new RegExp(
   '(?<![\\p{L}])(?:' + [
     'yes', 'yeah', 'yep', 'sure', 'happy to', 'glad to', 'keen', 'interested', 'intrigued', 'a call works', "let'?s", 'sounds (?:good|great)',
-    'call me', 'ring me', 'send me', 'send over', 'send (?:the|us|through|across)', 'tell me more', 'exactly what we need', 'works for me', 'free (?:on|at|tomorrow)',
+    'call me', 'ring me', 'send me', String.raw`e-?mail me(?=\s*(?:[.!,;]|$)|\s+(?:the|a|an|your|some|more|any|over|through|across|details|info|pricing|it|that|this|those|these|instead)\b)`, 'send over', 'send (?:the|us|through|across)', 'tell me more', 'exactly what we need', 'works for me', 'free (?:on|at|tomorrow)',
     's\\u00ed', 'me interesa', 'claro', 'ja', 'gerne', 'interesse an', 'oui', 'int[\\u00e9e]ress[\\u00e9e]e?', 'volontiers', 'bien s[u\\u00fb]r', 'sim', 'tenho interesse', 'com certeza',
   ].join('|') + ')(?![\\p{L}])|[?\\u00bf]',
   'iu',
