@@ -31,6 +31,8 @@ export interface IncidentVariant {
   title: string;
   /** `Today at 9:14` */
   when: string;
+  /** When it happened (ISO), to tell which card is the newest. */
+  at: string;
   /** The person's own words (the reply that did not go out, the message that said stop). */
   quote: string | null;
   lines: VariantLine[];
@@ -112,7 +114,7 @@ const OKAY: VariantButton = { label: 'Okay', action: { kind: 'dismiss' } };
 /** "Your mail server" in the middle of a sentence: only the first word of a name that starts with "Your" loses its capital. */
 const midSentence = (name: string): string => name.replace(/^Your\b/, 'your');
 
-function signedOut(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when'>): IncidentVariant | null {
+function signedOut(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when' | 'at'>): IncidentVariant | null {
   const waiting = waitingOn(state.people, i.channel);
   const name = CHANNEL_NAME[i.channel];
   const provider = i.channel === 'email' ? providerOf(i.message) : null;
@@ -138,7 +140,7 @@ function signedOut(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id
   };
 }
 
-function bounces(i: Incident, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when'>): IncidentVariant {
+function bounces(i: Incident, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when' | 'at'>): IncidentVariant {
   const d = parseBounce(i.detail);
   const n = d?.people.length ?? 1;
   const parts = sentences(i.message);
@@ -160,7 +162,7 @@ function bounces(i: Incident, base: Pick<IncidentVariant, 'id' | 'incidentId' | 
   };
 }
 
-function xLimit(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when'>, tz: string, now: Date): IncidentVariant {
+function xLimit(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when' | 'at'>, tz: string, now: Date): IncidentVariant {
   const waiting = waitingOn(state.people, 'x');
   const until = state.channels.find((c) => c.channel === 'x')?.pausedUntil;
   const parts = sentences(i.message);
@@ -180,7 +182,7 @@ function xLimit(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' |
   };
 }
 
-function sendFailed(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when'>): IncidentVariant | null {
+function sendFailed(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when' | 'at'>): IncidentVariant | null {
   const outboxId = parseOutboxId(i.detail);
   const item = outboxId === null ? undefined : state.outbox.find((o) => o.id === outboxId);
   const person = i.personId === null ? undefined : state.people.find((p) => p.id === i.personId);
@@ -202,7 +204,7 @@ function sendFailed(i: Incident, state: AppState, base: Pick<IncidentVariant, 'i
   };
 }
 
-function weeklyLimit(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when'>): IncidentVariant {
+function weeklyLimit(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when' | 'at'>): IncidentVariant {
   const parts = sentences(i.message);
   const emailOn = state.channels.some((c) => c.channel === 'email' && c.status === 'connected');
   // Invites that have not gone out yet, for people Callum could write to instead.
@@ -237,7 +239,7 @@ function weeklyLimit(i: Incident, state: AppState, base: Pick<IncidentVariant, '
 }
 
 /** A reply Callum could not read: it is on the dock as it came, so the next step is to read it and answer. */
-function replyUnread(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when'>): IncidentVariant {
+function replyUnread(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when' | 'at'>): IncidentVariant {
   const person = i.personId === null ? undefined : state.people.find((p) => p.id === i.personId);
   const name = CHANNEL_NAME[i.channel];
   return {
@@ -257,7 +259,7 @@ function replyUnread(i: Incident, state: AppState, base: Pick<IncidentVariant, '
 }
 
 /** A channel that stopped answering: Callum keeps asking, and it clears itself once the channel answers. */
-function notAnswering(i: Incident, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when'>): IncidentVariant {
+function notAnswering(i: Incident, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when' | 'at'>): IncidentVariant {
   const name = CHANNEL_NAME[i.channel];
   const title = `${name.charAt(0).toUpperCase()}${name.slice(1)} isn't answering`;
   return {
@@ -281,7 +283,7 @@ function notAnswering(i: Incident, base: Pick<IncidentVariant, 'id' | 'incidentI
  */
 export function incidentVariant(incident: Incident, state: AppState, now: Date): IncidentVariant | null {
   const tz = state.settings.timezone;
-  const base = { id: `incident-${incident.id}`, incidentId: incident.id, when: whenText(incident.createdAt, tz, now) };
+  const base = { id: `incident-${incident.id}`, incidentId: incident.id, when: whenText(incident.createdAt, tz, now), at: incident.createdAt };
   switch (incident.kind) {
     case 'mailbox_signed_out':
     case 'x_signed_out':
@@ -309,6 +311,7 @@ export function stopVariants(state: AppState, now: Date): IncidentVariant[] {
       incidentId: null,
       title: `${p.firstName} asked not to be contacted`,
       when: whenText(p.repliedAt ?? '', tz, now),
+      at: p.repliedAt ?? '',
       quote: p.lastInbound,
       lines: [
         { kind: 'did' as const, text: `Callum stopped everything and won't reach out again. It stays in ${p.firstName}'s history.` },

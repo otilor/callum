@@ -198,7 +198,7 @@ export function App() {
         {...(banner ? { dayOne: { left: currentProject.approvalsLeft, onOpen: () => setDayOneFor(currentProject.id) } } : {})}
         incident={
           <>
-            <VariantStack state={state} onReconnect={reconnect} onOpenPerson={openPerson} onChanged={() => void refresh()} />
+            <VariantStack state={state} onReconnect={reconnect} onOpenPerson={openPerson} onChanged={() => void refresh()} collapse />
             {/* The LinkedIn check has its own steps, and a reply whose words are gone has no card in the stack above. */}
             <IncidentCards
               state={state}

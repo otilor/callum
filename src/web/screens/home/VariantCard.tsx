@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 import type { AppState, Channel } from '../../../shared/types.js';
 import { api, ApiError } from '../../api.js';
 import { Marble } from '../../ui/Marble.js';
@@ -161,17 +161,39 @@ export function VariantCard({ variant: v, onReconnect, onOpenPerson, onDismiss, 
   );
 }
 
-/** Every notice the situation calls for, minus the ones the person has said Okay to. */
-export function VariantStack({ state, onReconnect, onOpenPerson, onChanged, now }: {
-  state: AppState; onReconnect(channel: Channel): void; onOpenPerson?(personId: number): void; onChanged(): void; now?: () => Date;
+/** The notices that need something from the person come before the quiet ones, and the newest comes first in each. */
+export function newestFirst(variants: IncidentVariant[]): IncidentVariant[] {
+  const needsYou = (v: IncidentVariant): number => (v.incidentId !== null ? 0 : 1);
+  return [...variants].sort((a, b) => needsYou(a) - needsYou(b) || b.at.localeCompare(a.at) || (b.incidentId ?? 0) - (a.incidentId ?? 0));
+}
+
+/**
+ * Every notice the situation calls for, minus the ones the person has said Okay to. With `collapse` (the desktop
+ * Home, where a tall stack would run under the Ask bar and over the river) two or more show as the newest card and a
+ * quiet button that opens the rest.
+ */
+export function VariantStack({ state, onReconnect, onOpenPerson, onChanged, now, collapse = false }: {
+  state: AppState; onReconnect(channel: Channel): void; onOpenPerson?(personId: number): void; onChanged(): void; now?: () => Date; collapse?: boolean;
 }) {
   const [dismissed, dismiss] = useDismissed();
+  const [open, setOpen] = useState(false);
+  const restId = useId();
   // Read again whenever the state is.
   const variants = allVariants(state, (now ?? (() => new Date()))()).filter((v) => !dismissed.has(v.id));
   if (variants.length === 0) return null;
+  const card = (v: IncidentVariant) => (
+    <VariantCard key={v.id} variant={v} onReconnect={onReconnect} {...(onOpenPerson ? { onOpenPerson } : {})} onDismiss={dismiss} onChanged={onChanged} />
+  );
+  if (!collapse || variants.length < 2) return <div className="vc-stack">{variants.map(card)}</div>;
+
+  const [first, ...rest] = newestFirst(variants);
   return (
     <div className="vc-stack">
-      {variants.map((v) => <VariantCard key={v.id} variant={v} onReconnect={onReconnect} {...(onOpenPerson ? { onOpenPerson } : {})} onDismiss={dismiss} onChanged={onChanged} />)}
+      {first ? card(first) : null}
+      <button type="button" className="vc-more" aria-expanded={open} aria-controls={restId} onClick={() => setOpen((o) => !o)}>
+        {open ? 'Show fewer' : `${rest.length} more ${rest.length === 1 ? 'thing needs' : 'things need'} you`}
+      </button>
+      {open ? <div id={restId} className="vc-rest">{rest.map(card)}</div> : null}
     </div>
   );
 }

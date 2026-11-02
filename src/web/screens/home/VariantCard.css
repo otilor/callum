@@ -168,6 +168,31 @@
   font-size: 14px;
   color: var(--error);
 }
+/* The quiet button under the newest card when more are waiting. */
+.vc-more {
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 20px;
+  background: var(--mist);
+  color: var(--slate);
+  font-size: 14px;
+  font-weight: 600;
+}
+.vc-more:hover {
+  color: var(--ink);
+}
+/* The rest, opened: they scroll inside the dock instead of running under the Ask bar. */
+.vc-rest {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: min(52vh, 460px);
+  overflow-y: auto;
+  margin: -6px -10px;
+  padding: 6px 10px 18px;
+}
 @media (max-width: 760px) {
   .vc {
     padding: 18px 16px;

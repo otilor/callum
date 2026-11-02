@@ -125,3 +125,71 @@ describe('VariantStack', () => {
     expect(stack(s).container).toBeEmptyDOMElement();
   });
 });
+
+describe('VariantStack with collapse (the desktop Home)', () => {
+  const older = { createdAt: '2026-11-03T06:00:00.000Z' };
+  const newer = { createdAt: '2026-11-03T08:30:00.000Z' };
+  const three = () => appState({
+    channels: [channel('email', 'error'), channel('linkedin'), channel('x', 'paused', { pausedUntil: '2026-11-03T23:00:00.000Z' })],
+    incidents: [
+      incident(1, 'mailbox_signed_out', { message: 'Google signed Callum out of gabriel@yourcompany.com.', ...older }),
+      incident(2, 'linkedin_weekly_limit', { channel: 'linkedin', message: "LinkedIn's weekly invite limit is reached.", ...older }),
+      incident(3, 'x_limit', { channel: 'x', message: "X stopped accepting Callum's messages because your X plan's daily limit is reached.", ...newer }),
+    ],
+  });
+
+  it('shows only the newest card and a quiet button that counts the rest', () => {
+    stack(three(), { collapse: true });
+    expect(screen.getByRole('heading', { name: 'X stopped taking messages' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Google signed Callum out' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: "LinkedIn's weekly limit" })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2 more things need you' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('opens the rest from the keyboard and closes them again', async () => {
+    const user = userEvent.setup();
+    stack(three(), { collapse: true });
+    await user.tab(); // the newest card's first button
+    const more = screen.getByRole('button', { name: '2 more things need you' });
+    more.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('heading', { name: 'Google signed Callum out' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: "LinkedIn's weekly limit" })).toBeInTheDocument();
+    const fewer = screen.getByRole('button', { name: 'Show fewer' });
+    expect(fewer).toHaveAttribute('aria-expanded', 'true');
+    expect(fewer).toHaveAttribute('aria-controls', document.querySelector('.vc-rest')?.id ?? 'missing');
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('heading', { name: 'Google signed Callum out' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2 more things need you' })).toBeInTheDocument();
+  });
+
+  it('says one more thing needs you, in the singular', () => {
+    const s = three();
+    stack({ ...s, incidents: s.incidents.slice(1) }, { collapse: true });
+    expect(screen.getByRole('button', { name: '1 more thing needs you' })).toBeInTheDocument();
+  });
+
+  it('puts a card that needs you before a quiet notice, even when the notice is newer', () => {
+    const quiet = person(11, 'Ruth Mensah', { status: 'stopped', replyKind: 'stop', repliedAt: '2026-11-03T09:00:00.000Z', lastInbound: 'Please take me off your list.' });
+    const s = appState({
+      people: [quiet],
+      incidents: [incident(1, 'mailbox_signed_out', { message: 'Google signed Callum out of gabriel@yourcompany.com.', ...older })],
+    });
+    stack(s, { collapse: true });
+    expect(screen.getByRole('heading', { name: 'Google signed Callum out' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1 more thing needs you' })).toBeInTheDocument();
+  });
+
+  it('shows a single card as it is, with no button', () => {
+    const s = three();
+    stack({ ...s, incidents: s.incidents.slice(2) }, { collapse: true });
+    expect(screen.getByRole('heading', { name: 'X stopped taking messages' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /more thing/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps every card on screen when collapse is off, as on the phone', () => {
+    stack(three());
+    expect(screen.getAllByRole('region')).toHaveLength(3);
+    expect(screen.queryByRole('button', { name: /more thing/ })).not.toBeInTheDocument();
+  });
+});
