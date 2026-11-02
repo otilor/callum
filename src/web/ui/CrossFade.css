@@ -1,0 +1,28 @@
+.xf {
+  position: relative;
+}
+.xf-out {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  animation: xf-out 0.45s ease forwards;
+}
+.xf-in {
+  animation: xf-in 0.45s ease backwards;
+}
+@keyframes xf-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes xf-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .xf-out,
+  .xf-in {
+    animation: none;
+  }
+}

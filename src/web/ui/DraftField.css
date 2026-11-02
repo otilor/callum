@@ -1,0 +1,43 @@
+.draft {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 132px;
+  border-radius: 22px;
+  background: var(--sun-tint);
+  transition: box-shadow 0.2s ease;
+}
+.draft:focus-within {
+  box-shadow: 0 0 0 2px var(--focus);
+}
+.draft-back,
+.draft-text {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 16px 18px;
+  border: none;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1.5;
+  letter-spacing: normal;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  box-sizing: border-box;
+}
+.draft-back {
+  overflow: hidden;
+  color: transparent;
+  pointer-events: none;
+}
+.draft-hole {
+  border-radius: 6px;
+  background: #ffd98a;
+  box-shadow: 0 0 0 3px #ffd98a;
+  color: transparent;
+}
+.draft-text {
+  resize: none;
+  background: transparent;
+  color: var(--ink);
+}

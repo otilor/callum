@@ -44,7 +44,7 @@ const paying = person(11, 'Yaw Mensah', {
 function state(over: Partial<AppState> = {}, people: Person[] = [kemi, zainab, tunde, ada, chidi, ngozi, emeka, hello, strangerA, strangerB]): AppState {
   return appState({
     people,
-    brief: { wantToTalk: people.filter((p) => p.status === 'waiting').length, sentYesterday: 12, acceptedRecently: ['Ada'], nextSendAt: null, line: '' },
+    brief: { wantToTalk: people.filter((p) => p.status === 'waiting').length, sentYesterday: 12, acceptedRecently: ['Ada'], acceptedIds: people.filter((p) => p.firstName === 'Ada').map((p) => p.id), nextSendAt: null, line: '' },
     ...over,
   });
 }

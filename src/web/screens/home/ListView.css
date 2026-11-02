@@ -1,0 +1,195 @@
+/* The list view: the river as a table. */
+.lv {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 8px 0 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: fade-in 0.45s ease backwards;
+}
+.lv-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lv-chip {
+  min-height: 38px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 19px;
+  background: var(--mist);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lv-chip.is-on {
+  background: var(--ink);
+  color: #ffffff;
+}
+.lv-empty {
+  margin: 40px 0;
+  text-align: center;
+  font-size: 17px;
+  color: var(--slate);
+}
+.lv-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.lv-group + .lv-group .lv-head {
+  padding-top: 26px;
+}
+.lv-head {
+  padding: 4px 8px 8px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--slate);
+}
+.is-sun .lv-head {
+  color: var(--ink);
+}
+.lv-count {
+  margin-left: 10px;
+  font-weight: 500;
+  color: var(--tick);
+}
+.lv-row > * {
+  padding: 8px;
+  border-top: 1px solid var(--line);
+  vertical-align: middle;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 400;
+}
+.lv-row.is-open > *,
+.lv-row.is-open + .lv-detail td {
+  background: var(--mist);
+}
+.lv-row.is-open > *:first-child {
+  border-top-left-radius: 18px;
+}
+.lv-row.is-open > *:last-child {
+  border-top-right-radius: 18px;
+}
+.lv-row.is-open + .lv-detail td {
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
+}
+.lv-name {
+  width: 34%;
+}
+.lv-open {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 24px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.lv-open:hover .lv-who-name {
+  text-decoration: underline;
+  text-decoration-color: var(--tick);
+  text-underline-offset: 3px;
+}
+.lv-face {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border: 2.5px solid #ffffff;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.lv-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lv-who-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+.lv-who-role {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--slate);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lv-company,
+.lv-channel,
+.lv-stage {
+  color: var(--ink);
+}
+.lv-channel,
+.lv-stage,
+.lv-next {
+  color: var(--slate);
+}
+.lv-next {
+  font-size: 14px;
+}
+.lv-detail td {
+  padding: 0 8px 8px;
+}
+.lv-detail .pop.is-inline {
+  margin: 0 8px 6px 56px;
+}
+@media (max-width: 760px) {
+  .lv-table,
+  .lv-table tbody,
+  .lv-table tr,
+  .lv-table th,
+  .lv-table td {
+    display: block;
+  }
+  .lv-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    column-gap: 10px;
+    border-top: 1px solid var(--line);
+  }
+  .lv-row > * {
+    border-top: none;
+    padding: 2px 8px;
+  }
+  .lv-name {
+    grid-column: 1 / -1;
+    width: auto;
+  }
+  .lv-company {
+    grid-column: 1;
+    font-size: 14px;
+    padding-left: 66px;
+  }
+  .lv-channel {
+    grid-column: 2;
+    font-size: 13px;
+  }
+  .lv-stage {
+    display: none;
+  }
+  .lv-next {
+    grid-column: 1;
+    padding-left: 66px;
+    font-size: 13px;
+  }
+  .lv-project {
+    grid-column: 2;
+  }
+  .lv-detail .pop.is-inline {
+    margin-left: 8px;
+  }
+}

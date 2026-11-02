@@ -95,7 +95,9 @@ export interface Settings {
 }
 
 export interface PathStep { label: string; at: string | null; done: boolean }
-export interface Brief { wantToTalk: number; sentYesterday: number; acceptedRecently: string[]; nextSendAt: string | null; line: string }
+export interface Brief { wantToTalk: number; sentYesterday: number; acceptedRecently: string[];
+  /** The people behind `acceptedRecently`, in the same order. */
+  acceptedIds: number[]; nextSendAt: string | null; line: string }
 export interface AppState {
   settings: Settings; projects: Project[]; channels: ChannelAccount[]; people: Person[];
   outbox: OutboxItem[]; incidents: Incident[]; brief: Brief; demo: boolean;
@@ -103,6 +105,8 @@ export interface AppState {
   apolloConnected: boolean;
   /** Whether Callum writes with Claude (a key in the environment or saved in Your Callum). Never the key itself. */
   claudeConnected: boolean;
+  /** Whether this Callum asks for a password. A page that is let in uses it to offer Sign out. */
+  auth: { password: boolean };
 }
 export type AskAction =
   | { kind: 'find_more'; label: string; args: { likePersonId: number | null; query: string | null; count: number } }

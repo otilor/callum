@@ -1,0 +1,568 @@
+/* Home, after V2Morning: the bar, the brief and the dock on the left, the river across the bottom of the stage. */
+.home {
+  position: relative;
+  min-height: 100vh;
+  background: #ffffff;
+}
+.home-main {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 22px 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: opacity 0.35s ease, filter 0.35s ease;
+}
+.home-main.is-dimmed {
+  opacity: 0.35;
+  filter: blur(1px);
+}
+
+/* ---- the bar ---- */
+.home-bar {
+  position: relative;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+}
+.home-brand {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.home-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.home-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+  background: var(--mist);
+  font-size: 14px;
+  font-weight: 500;
+}
+.home-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.home-status.is-running {
+  background: var(--green);
+}
+.home-status.is-still {
+  background: var(--tick);
+}
+.home-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 21px;
+  background: var(--mist);
+}
+.home-toggle button {
+  min-height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--slate);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.home-toggle button.is-on {
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: 0 1px 4px rgba(29, 33, 64, 0.12);
+}
+.home-add {
+  min-height: 44px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 22px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-run {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--mist);
+  cursor: pointer;
+}
+.home-channels {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--slate);
+}
+
+/* ---- the stage ---- */
+.home-stage {
+  position: relative;
+}
+.home-stage.is-river {
+  height: 643px;
+}
+.home-river {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+.stage-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.is-river .stage-preview {
+  position: absolute;
+  left: 0;
+  top: 22px;
+  z-index: 3;
+  width: min(520px, 48%);
+}
+.is-list .stage-preview {
+  max-width: 760px;
+  padding: 18px 0 8px;
+}
+
+/* ---- brief ---- */
+.brief {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.brief-label {
+  margin-right: 2px;
+  font-size: 14px;
+  color: var(--slate);
+}
+.brief-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 12px 0 10px;
+  border-radius: 15px;
+  background: var(--mist);
+  font-size: 14px;
+  font-weight: 500;
+}
+.brief-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.brief-dot-sun {
+  background: var(--sun);
+}
+.brief-dot-ring {
+  background: #ffffff;
+  border: 2.5px solid var(--ring-hello);
+}
+.brief-dot-clock {
+  background: var(--ink);
+}
+.brief-face {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-sizing: border-box;
+}
+
+/* ---- dock ---- */
+.dock-line {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--slate);
+}
+.dock-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--sun);
+}
+.dock-bubble {
+  margin: 0;
+  padding: 20px 26px;
+  border-radius: 30px 30px 30px 8px;
+  background: var(--sun-tint);
+  font-size: 23px;
+  line-height: 1.38;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  animation: dock-bubble-in 0.5s var(--ease) backwards;
+}
+@keyframes dock-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+.dock-open {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+.dock-open-btn {
+  min-height: 48px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 24px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dock-meta {
+  font-size: 14px;
+  color: var(--slate);
+}
+.home-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 9px;
+  border-radius: 11px;
+  background: var(--mist);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--slate);
+  white-space: nowrap;
+}
+.dock-faces {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+.dock-spot {
+  display: contents;
+}
+.dock-name {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  animation: dock-meta-in 0.5s ease backwards;
+}
+.dock-first {
+  font-size: 14px;
+  font-weight: 600;
+}
+.dock-tag {
+  font-size: 12px;
+  color: var(--slate);
+}
+.dock-line-down {
+  position: absolute;
+  border-left: 2px dashed var(--sun);
+  transform: translateX(-1px);
+  animation: dock-meta-in 0.5s ease backwards;
+}
+@keyframes dock-meta-in {
+  from {
+    opacity: 0;
+  }
+}
+.dock-face {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  margin: 0 0 0 -36px;
+  padding: 0;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 3px var(--sun), 0 14px 28px -10px rgba(255, 176, 32, 0.6);
+  cursor: pointer;
+  pointer-events: auto;
+  animation: dock-face-in 0.7s var(--ease-pop) backwards;
+  transition: transform 0.25s var(--ease);
+}
+.dock-face:hover,
+.dock-face:focus-visible {
+  transform: scale(1.06);
+}
+@keyframes dock-face-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.8);
+  }
+}
+
+/* ---- inside the water ---- */
+.home-paused {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 5;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100% - 32px);
+  padding: 10px 10px 10px 22px;
+  border-radius: 30px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px -24px rgba(29, 33, 64, 0.32), 0 0 0 1px rgba(29, 33, 64, 0.07);
+  font-size: 16px;
+  font-weight: 500;
+  animation: fade-in 0.5s ease backwards;
+}
+.home-paused-btn {
+  flex: 0 0 auto;
+  min-height: 42px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 21px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-empty {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 5;
+  transform: translate(-50%, -50%);
+  max-width: calc(100% - 32px);
+  padding: 14px 24px;
+  border: none;
+  border-radius: 28px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px -24px rgba(29, 33, 64, 0.32), 0 0 0 1px rgba(29, 33, 64, 0.07);
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 500;
+  cursor: pointer;
+  animation: fade-in 0.5s ease backwards;
+}
+
+/* ---- the next hello ---- */
+.home-next {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-end;
+}
+.home-next-face {
+  width: 40px;
+  height: 40px;
+  border: 2.5px solid #ffffff;
+  border-radius: 50%;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 1.5px var(--line);
+}
+.home-next-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.home-next-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.home-next-sub {
+  font-size: 13px;
+  color: var(--slate);
+}
+
+@media (max-width: 760px) {
+  .home-main {
+    padding: 18px 16px 20px;
+  }
+  .home-bar {
+    flex-wrap: wrap;
+  }
+  .home-pill,
+  .home-add {
+    display: none;
+  }
+  .home-stage.is-river {
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .is-river .stage-preview {
+    position: static;
+    width: auto;
+  }
+  .dock-faces {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    pointer-events: auto;
+  }
+  .dock-name,
+  .dock-line-down {
+    display: none;
+  }
+  .dock-face {
+    position: static;
+    margin: 0;
+    width: 60px;
+    height: 60px;
+  }
+  .home-river {
+    position: static;
+  }
+  .brief-label {
+    display: none;
+  }
+  .home-next {
+    align-self: flex-start;
+  }
+  .dock-bubble {
+    font-size: 19px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dock-bubble,
+  .dock-face,
+  .dock-name,
+  .dock-line-down,
+  .home-paused,
+  .home-empty {
+    animation: none;
+  }
+}
+
+/* In the list the replies are rows, so the faces floating above the water have nowhere to float. */
+.is-list .dock-faces {
+  display: none;
+}
+
+/* More than five people waiting: the rest are one sun button in the sixth spot. */
+.dock-more {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  margin: 0 0 0 -36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: var(--sun);
+  box-shadow: 0 0 0 3px var(--sun-tint), 0 14px 28px -10px rgba(255, 176, 32, 0.6);
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: dock-face-in 0.7s var(--ease-pop) backwards;
+}
+.dock-more:hover,
+.dock-more:focus-visible {
+  transform: scale(1.06);
+}
+@media (max-width: 760px) {
+  .dock-more {
+    position: static;
+    margin: 0;
+    width: 60px;
+    height: 60px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dock-more {
+    animation: none;
+  }
+}
+
+/* Hellos still to OK, while more than one project runs: a banner in the water, after V4Projects. */
+.home-dayone {
+  position: absolute;
+  left: 0;
+  top: 64px;
+  z-index: 5;
+  max-width: 62%;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 8px 8px 8px 20px;
+  border-radius: 30px;
+  background: #ffffff;
+  box-shadow: 0 20px 44px -24px rgba(29, 33, 64, 0.4), 0 0 0 1px rgba(29, 33, 64, 0.07);
+  animation: fade-in 0.5s ease backwards;
+}
+.home-dayone-segs {
+  display: flex;
+  gap: 3px;
+}
+.home-dayone-segs span {
+  width: 14px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track);
+}
+.home-dayone-segs span.is-ok {
+  background: var(--ink);
+}
+.home-dayone-line {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.home-dayone-btn {
+  min-height: 44px;
+  padding: 0 22px;
+  border: none;
+  border-radius: 22px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .home-dayone {
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    border-radius: 24px;
+    padding-left: 16px;
+  }
+  .home-dayone-segs {
+    display: none;
+  }
+}

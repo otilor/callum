@@ -114,7 +114,7 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
 
   api.post('/login', auth.login);
   api.post('/logout', auth.logout);
-  api.get('/state', (c) => c.json(getState(ctx)));
+  api.get('/state', (c) => c.json(getState(ctx, { password: opts.password !== null })));
   api.get('/events', (c) => eventStream(ctx.bus, c.req.raw.signal));
 
   // The feature modules come first: a path they own (a person's page, connecting a channel) is theirs, not the generic one below.

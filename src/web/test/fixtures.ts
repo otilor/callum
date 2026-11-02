@@ -51,9 +51,10 @@ export function appState(over: Partial<AppState> = {}): AppState {
     people: [],
     outbox: [],
     incidents: [],
-    brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], nextSendAt: null, line: 'All caught up. Callum keeps the river moving.' },
+    brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: null, line: 'All caught up. Callum keeps the river moving.' },
     demo: false,
     apolloConnected: false,
+    auth: { password: false },
     claudeConnected: false,
     ...over,
   };

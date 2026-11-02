@@ -9,7 +9,7 @@ const AUTO_KINDS: OutKind[] = ['hello', 'invite', 'thanks', 'follow_up'];
 const NEW_PROJECT_DAYS = 3;
 
 /** What the UI needs to draw everything. Nothing in it is secret: channel sign-ins stay in their own table. */
-export function getState(ctx: Ctx): AppState {
+export function getState(ctx: Ctx, auth: { password: boolean }): AppState {
   const { repo } = ctx;
   const now = ctx.clock.now().getTime();
   const weekAgo = now - 7 * DAY_MS;
@@ -31,6 +31,7 @@ export function getState(ctx: Ctx): AppState {
     demo: ctx.demo,
     apolloConnected: ctx.apollo !== null,
     claudeConnected: ctx.claudeKey !== null,
+    auth,
   };
 }
 
@@ -53,9 +54,9 @@ export function brief(ctx: Ctx): Brief {
   const now = ctx.clock.now().getTime();
   const people = repo.listPeople();
   const wantToTalk = people.filter((p) => p.status === 'waiting').length;
-  const acceptedRecently = people
-    .filter((p) => p.status !== 'removed' && p.linkedinState === 'connected' && now - new Date(p.updatedAt).getTime() <= DAY_MS)
-    .map((p) => p.firstName);
+  const accepted = people.filter((p) => p.status !== 'removed' && p.linkedinState === 'connected' && now - new Date(p.updatedAt).getTime() <= DAY_MS);
+  const acceptedRecently = accepted.map((p) => p.firstName);
+  const acceptedIds = accepted.map((p) => p.id);
   const nextSendAt = repo.listOutbox({ state: ['scheduled'] })[0]?.sendAfter ?? null;
   const started = repo.listProjects().flatMap((p) => (p.startedAt ? [new Date(p.startedAt).getTime()] : []));
   const startedRecently = started.length > 0 && now - Math.min(...started) < NEW_PROJECT_DAYS * DAY_MS;
@@ -65,5 +66,5 @@ export function brief(ctx: Ctx): Brief {
   else if (wantToTalk > 1) line = `${wantToTalk} people want to talk.`;
   else if (startedRecently) line = 'No replies yet, which is normal this early. Callum will tap you the moment someone answers.';
   else line = 'All caught up. Callum keeps the river moving.';
-  return { wantToTalk, sentYesterday: sentYesterday(ctx), acceptedRecently, nextSendAt, line };
+  return { wantToTalk, sentYesterday: sentYesterday(ctx), acceptedRecently, acceptedIds, nextSendAt, line };
 }

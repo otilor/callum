@@ -65,7 +65,7 @@ function setup(state: AppState = appState({ people: [kemi()] }), extra: Partial<
 
 describe('PhoneHome', () => {
   it('shows the brief, the river and the dock the caller gave it, and the person who wants to talk as a card', () => {
-    setup(appState({ people: [kemi()], brief: { wantToTalk: 1, sentYesterday: 12, acceptedRecently: ['Ada'], nextSendAt: '2026-11-03T08:00:00.000Z', line: '' } }));
+    setup(appState({ people: [kemi()], brief: { wantToTalk: 1, sentYesterday: 12, acceptedRecently: ['Ada'], acceptedIds: [], nextSendAt: '2026-11-03T08:00:00.000Z', line: '' } }));
     expect(screen.getByRole('heading', { name: 'Good morning' })).toBeInTheDocument();
     expect(screen.getByText('12 hellos went out yesterday')).toBeInTheDocument();
     expect(screen.getByText('Ada accepted')).toBeInTheDocument();

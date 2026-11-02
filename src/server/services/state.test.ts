@@ -11,7 +11,7 @@ describe('getState', () => {
     h.ctx.repo.insertIncident({ channel: 'x', kind: 'x_limit', message: 'open one' });
     const done = h.ctx.repo.insertIncident({ channel: 'x', kind: 'x_limit', message: 'old one' });
     h.ctx.repo.updateIncident(done.id, { state: 'resolved', resolvedAt: '2026-11-02T09:00:00.000Z' });
-    const state = getState(h.ctx);
+    const state = getState(h.ctx, { password: false });
     expect(state.people.map((p) => p.id)).toEqual([kept.id]);
     expect(state.incidents.map((i) => i.message)).toEqual(['open one']);
     expect(state.demo).toBe(true);
@@ -22,7 +22,7 @@ describe('getState', () => {
   it('includes every project', async () => {
     const h = harness();
     const second = await createProject(h.ctx, { offer: 'You help teams with payroll', name: 'Payroll' });
-    expect(getState(h.ctx).projects.map((p) => p.id)).toEqual([h.project.id, second.id]);
+    expect(getState(h.ctx, { password: false }).projects.map((p) => p.id)).toEqual([h.project.id, second.id]);
   });
 
   it('chooses which outbox items to show', () => {
@@ -40,7 +40,7 @@ describe('getState', () => {
     const blocked = q('blocked');
     q('sent');
     q('cancelled');
-    const ids = getState(h.ctx).outbox.map((i) => i.id);
+    const ids = getState(h.ctx, { password: false }).outbox.map((i) => i.id);
     expect(ids).toEqual([awaiting.id, autoUndo.id, user.id, failed.id, blocked.id].sort((a, b) => a - b));
     expect(ids).not.toContain(autoLater.id);
     expect(ids).not.toContain(autoUndoClosed.id);
@@ -50,9 +50,9 @@ describe('getState', () => {
     const h = harness();
     const p = h.person({ channel: 'email' });
     const old = h.ctx.repo.insertOutbox({ personId: p.id, channel: 'email', kind: 'follow_up', body: 'x', state: 'failed', origin: 'auto', sendAfter: '2026-10-01T00:00:00.000Z' });
-    expect(getState(h.ctx).outbox.map((i) => i.id)).toContain(old.id);
+    expect(getState(h.ctx, { password: false }).outbox.map((i) => i.id)).toContain(old.id);
     h.clock.advance(8 * 86_400_000);
-    expect(getState(h.ctx).outbox.map((i) => i.id)).not.toContain(old.id);
+    expect(getState(h.ctx, { password: false }).outbox.map((i) => i.id)).not.toContain(old.id);
   });
 
   it('never carries a secret', () => {
@@ -60,7 +60,7 @@ describe('getState', () => {
     h.ctx.repo.setChannelSecret('email', { password: 'hunter2-secret', accessToken: 'tok-123', refreshToken: 'ref-456' });
     h.ctx.repo.setChannelSecret('x', { accessToken: 'x-tok' });
     h.person();
-    const json = JSON.stringify(getState(h.ctx));
+    const json = JSON.stringify(getState(h.ctx, { password: false }));
     expect(json).not.toContain('password');
     expect(json).not.toContain('accessToken');
     expect(json).not.toContain('hunter2');

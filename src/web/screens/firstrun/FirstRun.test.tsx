@@ -61,8 +61,8 @@ function appState(over: Partial<AppState> = {}): AppState {
     people: [],
     outbox: [],
     incidents: [],
-    brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], nextSendAt: null, line: '' },
-    demo: false, apolloConnected: false, claudeConnected: false,
+    brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: null, line: '' },
+    demo: false, apolloConnected: false, claudeConnected: false, auth: { password: false },
     ...over,
   };
 }

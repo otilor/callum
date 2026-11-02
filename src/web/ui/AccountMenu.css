@@ -1,0 +1,57 @@
+.account {
+  position: relative;
+}
+.account-face {
+  display: block;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 2.5px solid #ffffff;
+  border-radius: 50%;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 1.5px var(--line);
+  background: radial-gradient(circle at 30% 30%, #8c6cff 0 22%, transparent 58%), radial-gradient(circle at 72% 70%, #ffc145 0 18%, transparent 55%), #4cb5f5;
+}
+button.account-face {
+  cursor: pointer;
+}
+.account-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 40;
+  width: 270px;
+  padding: 8px;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 30px 70px -28px rgba(29, 33, 64, 0.38), 0 0 0 1px rgba(29, 33, 64, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.account-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 16px;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+}
+.account-item:hover {
+  background: var(--mist);
+}
+.panel-in {
+  animation: panel-in 0.45s var(--ease) backwards;
+}
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
