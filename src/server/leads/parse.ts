@@ -1,16 +1,8 @@
 import { parse } from 'csv-parse/sync';
-import type { LeadSource, PersonLead } from '../../shared/types.js';
+import type { LeadSource, PersonLead, Skipped, SkipReason } from '../../shared/types.js';
 import { normalizeEmail, normalizeLinkedinUrl, normalizeXHandle } from '../db/handles.js';
 
-export type SkipReason = 'duplicate' | 'known' | 'stopped' | 'no_channel' | 'other_project';
-export interface Skipped {
-  name: string;
-  reason: SkipReason;
-  /** The project the person is already in, for `other_project`. */
-  projectName?: string;
-  /** The line of the file or paste the person came from (1-based), when there is one. */
-  row?: number;
-}
+export type { Skipped, SkipReason };
 export interface ParseResult { people: PersonLead[]; skipped: Skipped[] }
 
 /** The file cannot be read at all (no header, a quote that never closes). The message is for the person who chose the file. */

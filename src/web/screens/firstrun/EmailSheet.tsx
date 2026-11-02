@@ -60,11 +60,14 @@ export function EmailSheet({ provider: initial, onConnect, onConnected, onClose,
           setError('Microsoft said no. Open Microsoft again when you are ready.');
           return;
         }
-      } catch (e) {
+      } catch {
+        // A request that failed says nothing about the code: ask again at the next interval, until the code runs out.
         if (stopped) return;
-        setDevice(null);
-        setError(messageOf(e));
-        return;
+        if (Date.parse(device.expiresAt) <= Date.now()) {
+          setDevice(null);
+          setError('That code ran out. Open Microsoft again for a new one.');
+          return;
+        }
       }
       timer = setTimeout(() => void tick(), pollMs);
     };

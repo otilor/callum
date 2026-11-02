@@ -32,7 +32,7 @@ export function App() {
 
   let body;
   if (locked) {
-    body = <SignInCard onDone={refresh} />;
+    body = <SignInCard onDone={() => refresh({ strict: true })} />;
   } else if (!state) {
     body = (
       <main className="shell shell-wait" data-screen="loading">

@@ -92,6 +92,19 @@ describe('App', () => {
     expect(mocks.login).toHaveBeenLastCalledWith('right');
   });
 
+  it('leaves the checking state and shows the error when the state cannot be fetched after signing in', async () => {
+    mocks.state.mockRejectedValueOnce(new ApiError(401, 'Sign in first'));
+    mocks.login.mockResolvedValueOnce({ ok: true });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'This Callum is private.' });
+    mocks.state.mockRejectedValue(new ApiError(0, "Callum can't be reached. Check that it is still running."));
+    await user.type(screen.getByPlaceholderText('Password'), 'right');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("Callum can't be reached. Check that it is still running.");
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+  });
+
   it('says plainly when Callum cannot be reached at first', async () => {
     mocks.state.mockRejectedValue(new ApiError(0, "Callum can't be reached. Check that it is still running."));
     render(<App />);

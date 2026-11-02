@@ -69,12 +69,21 @@ const PLAN = {
   line: 'Tomorrow from 9:00 their time: 2 hellos, 2 by email. Nothing goes out today.',
 };
 
+/** The plan's line without its closing sentence, which the line under it says again. */
+const PLAN_SHOWN = 'Tomorrow from 9:00 their time: 2 hellos, 2 by email.';
+
 const refresh = vi.fn(() => Promise.resolve());
 
-function setup(state: AppState = appState()) {
+function setup(state: AppState = appState(), now: Date = NOW) {
   const user = userEvent.setup();
-  render(<ToastProvider><FirstRun state={state} refresh={refresh} now={() => NOW} pollMs={20} /></ToastProvider>);
+  render(<ToastProvider><FirstRun state={state} refresh={refresh} now={() => now} pollMs={20} /></ToastProvider>);
   return user;
+}
+
+/** Everything a person can read, including what sits inside fields. */
+function everythingShown(): string {
+  const values = Array.from(document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')).map((el) => el.value);
+  return [document.body.textContent ?? '', ...values].join('\n');
 }
 
 async function connectGoogle(user: ReturnType<typeof userEvent.setup>) {
@@ -226,7 +235,7 @@ describe('Offer', () => {
     await reachOffer(user);
     await user.click(screen.getByRole('button', { name: 'Looks right' }));
     await screen.findByRole('heading', { name: 'Who do you want to meet?' });
-    expect(mocks.createProject).toHaveBeenCalledWith({ offer: OFFER });
+    expect(mocks.createProject).toHaveBeenCalledWith({ offer: OFFER, name: 'Reconciliation' });
     expect(screen.getByTestId('project-anchor')).toHaveTextContent('Reconciliation');
   });
 
@@ -309,6 +318,7 @@ describe('Who', () => {
     const user = setup();
     await reachWho(user);
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'Founders of startups{Enter}');
+    await user.click(await screen.findByRole('button', { name: 'Find them' }));
     expect(mocks.search).toHaveBeenCalledWith('Founders of startups', 25, 1);
     expect(await screen.findByText("That's about 48,000 people.")).toBeInTheDocument();
     expect(screen.getByText('Narrow it down?', { exact: false })).toBeInTheDocument();
@@ -321,6 +331,9 @@ describe('Who', () => {
     const user = setup();
     await reachWho(user);
     await user.click(screen.getByRole('button', { name: 'Seed-stage fintech founders in Lagos' }));
+    expect(screen.getByText('Callum can look for 25 people. That uses about 25 Apollo credits.')).toBeInTheDocument();
+    expect(mocks.search).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Find them' }));
     expect(mocks.search).toHaveBeenCalledWith('Seed-stage fintech founders in Lagos', 25, 1);
     await waitFor(() => expect(screen.getByTestId('found-count')).toHaveTextContent('2'));
     expect(screen.getByText('That used about 2 Apollo credits.')).toBeInTheDocument();
@@ -332,6 +345,7 @@ describe('Who', () => {
     const user = setup();
     await reachWho(user);
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'CFOs{Enter}');
+    await user.click(await screen.findByRole('button', { name: 'Find them' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Callum needs a list for that. Bring a CSV or a LinkedIn search link.');
     expect(screen.getByRole('button', { name: 'Bring a list' })).toBeInTheDocument();
   });
@@ -351,6 +365,7 @@ describe('Tone and Plan', () => {
     await reachTone(user);
     const box = await screen.findByLabelText('First message to Kemi');
     await waitFor(() => expect(box).toHaveValue('Hi Kemi, this is the warm hello.'));
+    expect(screen.getByText('First hello to Kemi Eze at Oko Pay, by email')).toBeInTheDocument();
     expect(mocks.sample).toHaveBeenCalledWith('warm', 1);
     await user.click(screen.getByRole('button', { name: 'Direct' }));
     await waitFor(() => expect(box).toHaveValue('Hi Kemi, this is the direct hello.'));
@@ -366,7 +381,7 @@ describe('Tone and Plan', () => {
     const user = setup();
     await reachTone(user);
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(PLAN.line)).toBeInTheDocument();
+    expect(await screen.findByText(PLAN_SHOWN)).toBeInTheDocument();
     expect(screen.getByText("Nothing goes out today. You'll OK the first 10 before they go.")).toBeInTheDocument();
     expect(mocks.plan).toHaveBeenCalledWith(1);
     refresh.mockClear();
@@ -389,23 +404,190 @@ describe('Tone and Plan', () => {
 describe('copy', () => {
   it('never uses an exclamation mark, on any step', async () => {
     const user = setup();
-    expect(document.body.textContent).not.toContain('!');
+    expect(everythingShown()).not.toContain('!');
     await connectGoogle(user);
-    expect(document.body.textContent).not.toContain('!');
+    expect(everythingShown()).not.toContain('!');
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await screen.findByLabelText('What you offer, in one line');
-    expect(document.body.textContent).not.toContain('!');
+    expect(everythingShown()).not.toContain('!');
     await user.click(screen.getByRole('button', { name: 'Looks right' }));
     await screen.findByRole('heading', { name: 'Who do you want to meet?' });
-    expect(document.body.textContent).not.toContain('!');
+    expect(everythingShown()).not.toContain('!');
     await importTwo(user);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled());
-    expect(document.body.textContent).not.toContain('!');
+    expect(everythingShown()).not.toContain('!');
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await screen.findByLabelText('First message to Kemi');
-    expect(document.body.textContent).not.toContain('!');
+    expect(everythingShown()).not.toContain('!');
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    await screen.findByText(PLAN.line);
-    expect(document.body.textContent).not.toContain('!');
+    await screen.findByText(PLAN_SHOWN);
+    expect(everythingShown()).not.toContain('!');
+  });
+});
+
+describe('going back and editing', () => {
+  it('updates the project with the new offer and the name it shows, rather than creating another', async () => {
+    const user = setup();
+    await reachWho(user);
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    const field = await screen.findByLabelText('What you offer, in one line');
+    await user.clear(field);
+    await user.click(field);
+    await user.paste('You help growing teams run payroll without spreadsheets.');
+    expect(screen.getByText('Payroll')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Looks right' }));
+    await screen.findByRole('heading', { name: 'Who do you want to meet?' });
+    expect(mocks.createProject).toHaveBeenCalledTimes(1);
+    expect(mocks.updateProject).toHaveBeenCalledWith(1, { offer: 'You help growing teams run payroll without spreadsheets.', name: 'Payroll' });
+  });
+
+  it('shows a taken name beside the pencil and keeps the person on the offer', async () => {
+    mocks.updateProject.mockRejectedValueOnce(new ApiError(422, 'You already have a project called Payroll. Pick another name.'));
+    const user = setup();
+    await reachWho(user);
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await user.click(screen.getByRole('button', { name: 'Rename this project' }));
+    const name = screen.getByLabelText('Project name');
+    await user.clear(name);
+    await user.type(name, 'Payroll');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Looks right' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('You already have a project called Payroll. Pick another name.');
+    expect(screen.getByRole('heading', { name: 'What do you offer?' })).toBeInTheDocument();
+    expect(mocks.updateProject).toHaveBeenCalledWith(1, { name: 'Payroll' });
+  });
+
+  it('writes the words used to search on the project as its audience, and an emptied sample as null', async () => {
+    mocks.search.mockResolvedValue({ total: 300, added: [person(21, 'Ngozi Obi')], skipped: [] });
+    const user = setup();
+    await reachWho(user);
+    await user.click(screen.getByRole('button', { name: 'Heads of finance at fintechs' }));
+    await user.click(screen.getByRole('button', { name: 'Find them' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    const box = await screen.findByLabelText('First message to Ngozi');
+    await waitFor(() => expect(box).toHaveValue('Hi Kemi, this is the warm hello.'));
+    await user.clear(box);
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByRole('heading', { name: "Here's tomorrow" });
+    expect(mocks.updateProject).toHaveBeenLastCalledWith(1, { tone: 'warm', sample: null, audience: 'Heads of finance at fintechs' });
+  });
+});
+
+describe('Microsoft sign-in', () => {
+  async function openMicrosoft(user: ReturnType<typeof userEvent.setup>) {
+    mocks.microsoftStart.mockResolvedValue({ userCode: 'ABCD-EFGH', verificationUri: 'https://microsoft.com/devicelogin', expiresAt: '2099-01-01T00:00:00.000Z' });
+    await user.click(screen.getByRole('button', { name: 'Continue with Microsoft' }));
+    const sheet = await screen.findByRole('dialog');
+    await user.type(within(sheet).getByLabelText('Your email address'), 'gabriel@yourcompany.com');
+    await user.click(within(sheet).getByRole('button', { name: 'Open Microsoft' }));
+    await within(sheet).findByText('ABCD-EFGH');
+    return sheet;
+  }
+
+  it('says when the code ran out and offers a new one', async () => {
+    mocks.microsoftPoll.mockResolvedValue({ status: 'expired' });
+    const sheet = await openMicrosoft(setup());
+    expect(await within(sheet).findByRole('alert')).toHaveTextContent('That code ran out. Open Microsoft again for a new one.');
+    expect(within(sheet).getByRole('button', { name: 'Open Microsoft' })).toBeEnabled();
+  });
+
+  it('says when Microsoft said no', async () => {
+    mocks.microsoftPoll.mockResolvedValue({ status: 'denied' });
+    const sheet = await openMicrosoft(setup());
+    expect(await within(sheet).findByRole('alert')).toHaveTextContent('Microsoft said no. Open Microsoft again when you are ready.');
+  });
+
+  it('keeps waiting through a failed request and a waiting answer until the code is entered', async () => {
+    mocks.microsoftPoll
+      .mockRejectedValueOnce(new ApiError(0, "Callum can't be reached. Check that it is still running."))
+      .mockResolvedValueOnce({ status: 'waiting' })
+      .mockResolvedValue({ status: 'connected', account: channel('email', 'connected', 'gabriel@yourcompany.com') });
+    await openMicrosoft(setup());
+    await screen.findByText('20 a day now, 120 by week 3');
+    expect(mocks.microsoftPoll).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('when Callum cannot be reached', () => {
+  it('says so under the Start button and lets the person try again', async () => {
+    mocks.start.mockRejectedValueOnce(new ApiError(0, "Callum can't be reached. Check that it is still running."));
+    const user = setup();
+    await connectGoogle(user);
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByLabelText('What you offer, in one line');
+    await user.click(screen.getByRole('button', { name: 'Looks right' }));
+    await screen.findByRole('heading', { name: 'Who do you want to meet?' });
+    await importTwo(user);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByLabelText('First message to Kemi');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(await screen.findByRole('button', { name: 'Start tomorrow at 9:00' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("Callum can't be reached. Check that it is still running.");
+    expect(screen.getByRole('button', { name: 'Start tomorrow at 9:00' })).toBeEnabled();
+  });
+
+  it('says so when the project cannot be saved, under the offer', async () => {
+    mocks.createProject.mockRejectedValueOnce(new ApiError(0, "Callum can't be reached. Check that it is still running."));
+    const user = setup();
+    await reachOffer(user);
+    await user.click(screen.getByRole('button', { name: 'Looks right' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("Callum can't be reached. Check that it is still running.");
+    expect(screen.getByRole('heading', { name: 'What do you offer?' })).toBeInTheDocument();
+  });
+});
+
+describe('Plan day', () => {
+  it('starts on the day the plan says, always at 9:00', async () => {
+    mocks.plan.mockResolvedValue({ ...PLAN, firstSendAt: '2026-11-09T09:00:00.000Z', line: 'Monday from 9:00 their time: 2 hellos, 2 by email. Nothing goes out today.' });
+    const user = setup(appState(), new Date('2026-11-06T10:00:00Z'));
+    await connectGoogle(user);
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByLabelText('What you offer, in one line');
+    await user.click(screen.getByRole('button', { name: 'Looks right' }));
+    await screen.findByRole('heading', { name: 'Who do you want to meet?' });
+    await importTwo(user);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByLabelText('First message to Kemi');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByRole('button', { name: 'Start Monday at 9:00' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: "Here's Monday" })).toBeInTheDocument();
+    expect(screen.getByText('Monday from 9:00 their time: 2 hellos, 2 by email.')).toBeInTheDocument();
+    expect(screen.getAllByText(/Nothing goes out today/)).toHaveLength(1);
+  });
+});
+
+describe('channel state', () => {
+  it('lets go of its own copy once the server state shows the same, so a later disconnect shows', async () => {
+    const user = userEvent.setup();
+    const first = appState();
+    const view = (state: AppState) => (
+      <ToastProvider><FirstRun state={state} refresh={refresh} now={() => NOW} pollMs={20} /></ToastProvider>
+    );
+    const { rerender } = render(view(first));
+    await connectGoogle(user);
+    expect(screen.getByRole('button', { name: 'Connect Email' })).toHaveAttribute('aria-pressed', 'true');
+    rerender(view(appState({ channels: [channel('email', 'connected', 'gabriel@yourcompany.com'), channel('linkedin'), channel('x')] })));
+    expect(screen.getByRole('button', { name: 'Connect Email' })).toHaveAttribute('aria-pressed', 'true');
+    rerender(view(appState()));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Connect Email' })).toHaveAttribute('aria-pressed', 'false'));
+  });
+});
+
+describe('the sheet as a modal', () => {
+  it('makes the page behind it inert and brings focus back to the disc that opened it', async () => {
+    const user = setup(appState({ channels: [channel('email', 'connected', 'gabriel@yourcompany.com'), channel('linkedin'), channel('x')] }));
+    await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    const linkedin = screen.getByRole('button', { name: 'Connect LinkedIn' });
+    linkedin.focus();
+    await user.click(linkedin);
+    const sheet = await screen.findByRole('dialog', { name: 'Connect LinkedIn' });
+    expect(linkedin.closest('.fr-root')?.parentElement).toHaveAttribute('inert');
+    await user.keyboard('{Escape}');
+    expect(sheet).not.toBeInTheDocument();
+    expect(linkedin.closest('.fr-root')?.parentElement).not.toHaveAttribute('inert');
+    expect(linkedin).toHaveFocus();
   });
 });

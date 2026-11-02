@@ -11,13 +11,16 @@ export interface OfferProps {
   /** The name Callum would give the project, or the one the person typed. Empty when there is nothing to name yet. */
   name: string;
   onRename(name: string): void;
+  /** Something went wrong with the offer or the save. */
   error: string;
+  /** The server refused the name, for example because another project already has it. Shown beside the pencil. */
+  nameProblem: string;
   busy: boolean;
   onBack(): void;
   onNext(): void;
 }
 
-export function Offer({ offer, onOffer, readFrom, reading, name, onRename, error, busy, onBack, onNext }: OfferProps) {
+export function Offer({ offer, onOffer, readFrom, reading, name, onRename, error, nameProblem, busy, onBack, onNext }: OfferProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [nameError, setNameError] = useState('');
@@ -100,7 +103,7 @@ export function Offer({ offer, onOffer, readFrom, reading, name, onRename, error
             <span className="fr-name-text">Callum suggests a short name as you type.</span>
           )}
         </div>
-        {nameError ? <ErrorLine>{nameError}</ErrorLine> : null}
+        {nameError || nameProblem ? <ErrorLine>{nameError || nameProblem}</ErrorLine> : null}
         {error ? <ErrorLine>{error}</ErrorLine> : null}
       </div>
       <div className="fr-actions">

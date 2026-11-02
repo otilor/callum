@@ -59,6 +59,10 @@ describe('api', () => {
     expect(lastCall()).toEqual({ url: '/api/projects/2', method: 'POST', body: { name: 'Payroll', tone: 'direct' } });
     await api.setCurrentProject(2);
     expect(lastCall()).toEqual({ url: '/api/projects/current', method: 'POST', body: { id: 2 } });
+    await api.switchChannel(9, 'linkedin');
+    expect(lastCall()).toEqual({ url: '/api/people/9/switch-channel', method: 'POST', body: { channel: 'linkedin' } });
+    await api.switchChannel(9, 'x', '@kemi');
+    expect(lastCall()).toEqual({ url: '/api/people/9/switch-channel', method: 'POST', body: { channel: 'x', handle: '@kemi' } });
     await api.moveToProject(9, 2);
     expect(lastCall()).toEqual({ url: '/api/people/9/move', method: 'POST', body: { projectId: 2 } });
     await api.seed('morning');

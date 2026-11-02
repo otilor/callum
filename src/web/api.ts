@@ -1,7 +1,7 @@
 import type {
-  AppState, AskAction, AskAnswer, Channel, ChannelAccount, Correction, Message, OutboxItem, PathStep, Person, Project, Settings, Tone,
+  AppState, AskAction, AskAnswer, Channel, ChannelAccount, Correction, Message, OutboxItem, PathStep, Person, Project, Settings, Skipped, Tone,
 } from '../shared/types.js';
-import type { Skipped } from '../server/leads/parse.js';
+
 
 export type { Skipped };
 
@@ -69,7 +69,8 @@ const post = <T>(path: string, body: unknown = {}) => request<T>('POST', path, b
 
 export interface PlanPreview { firstSendAt: string; total: number; byChannel: Record<Channel, number>; line: string }
 export interface ImportResult { added: Person[]; skipped: Skipped[] }
-export interface SearchResult { total: number; added: Person[]; skipped: Skipped[] }
+/** `creditsUsed` is Apollo's own count when the server has it. */
+export interface SearchResult { total: number; added: Person[]; skipped: Skipped[]; creditsUsed?: number }
 export interface ImportBody { csv?: string; paste?: string; linkedinSearchUrl?: string; projectId?: number }
 export interface PersonDetail { person: Person; messages: Message[]; path: PathStep[] }
 export interface DeviceCodeStart { userCode: string; verificationUri: string; expiresAt: string }
@@ -86,14 +87,14 @@ export type ProjectPatch = Partial<Pick<Project, 'name' | 'offer' | 'audience' |
 /** One typed function per route of the Callum HTTP API. Answers are the server's own JSON. */
 export const api = {
   state: () => get<AppState>('/state'),
-  login: (password: string) => post<{ ok?: boolean }>('/login', { password }),
-  logout: () => post<{ ok?: boolean }>('/logout'),
+  login: (password: string) => post<{ ok: true }>('/login', { password }),
+  logout: () => post<{ ok: true }>('/logout'),
 
   connect: (ch: Channel, fields: Record<string, string>) => post<ChannelAccount>(`/channels/${ch}/connect`, fields),
   disconnect: (ch: Channel) => post<ChannelAccount>(`/channels/${ch}/disconnect`),
   resumeChannel: (ch: Channel, pace: 'half' | 'full') => post<ChannelAccount>(`/channels/${ch}/resume`, { pace }),
   channelSummary: (ch: Channel) => get<ChannelSummary>(`/channels/${ch}/summary`),
-  microsoftStart: (address?: string) => post<DeviceCodeStart>('/channels/email/microsoft/start', address ? { address } : {}),
+  microsoftStart: (address: string) => post<DeviceCodeStart>('/channels/email/microsoft/start', { address }),
   microsoftPoll: (address?: string) => post<DevicePoll>('/channels/email/microsoft/poll', address ? { address } : {}),
 
   settings: (patch: SettingsPatch) => post<Settings>('/settings', patch),
@@ -108,6 +109,8 @@ export const api = {
   resumeProject: (id: number) => post<Project>(`/projects/${id}/resume`),
   wrapProject: (id: number) => post<{ cancelledFollowUps: number; cancelledHellos: number; summary: string }>(`/projects/${id}/wrap`),
   setCurrentProject: (id: number) => post<Settings>('/projects/current', { id }),
+  /** Moves a person to another channel; `handle` is the address on it when Callum does not know it yet. */
+  switchChannel: (personId: number, channel: Channel, handle?: string) => post<Person>(`/people/${personId}/switch-channel`, handle === undefined ? { channel } : { channel, handle }),
   moveToProject: (personId: number, projectId: number) => post<Person>(`/people/${personId}/move`, { projectId }),
 
   importLeads: (body: ImportBody) => post<ImportResult>('/leads/import', body),

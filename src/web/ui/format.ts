@@ -1,4 +1,4 @@
-import type { Skipped } from '../../server/leads/parse.js';
+import type { Skipped } from '../../shared/types.js';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -48,8 +48,8 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
- * A short project name read off the offer, shown under the offer field while the person types.
- * The server names the project when none is sent, so this is the preview of that, never a different rule.
+ * A short project name read off the offer, shown under the offer field while the person types. First run sends the
+ * name it shows, so the project is called exactly that unless the person renames it.
  */
 export function suggestProjectName(offer: string): string {
   const low = offer.toLowerCase();

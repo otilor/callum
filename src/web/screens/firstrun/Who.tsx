@@ -21,6 +21,10 @@ export function describePerson(p: Person): string {
   return [p.role, p.company].filter(Boolean).join(' at ');
 }
 
+function credits(n: number): string {
+  return `${formatCount(n)} Apollo ${n === 1 ? 'credit' : 'credits'}`;
+}
+
 function messageOf(e: unknown): string {
   return e instanceof ApiError ? e.message : 'Something went wrong. Callum kept everything as it was.';
 }
@@ -48,6 +52,8 @@ export function Who({ projectId, people, onAdded, onRemoved, onBack, onNext }: W
   const [out, setOut] = useState('');
   const [error, setError] = useState('');
   const [notes, setNotes] = useState<string[]>([]);
+  // A search can spend Apollo credits, so it waits here, with its price, until the person says go.
+  const [asking, setAsking] = useState<string | null>(null);
   const [tooMany, setTooMany] = useState<{ total: number; query: string } | null>(null);
   const [audience, setAudience] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -71,6 +77,7 @@ export function Who({ projectId, people, onAdded, onRemoved, onBack, onNext }: W
     const text = query.trim();
     if (!text || looking) return;
     setQ(text);
+    setAsking(null);
     setError('');
     setTooMany(null);
     setListOpen(false);
@@ -80,7 +87,9 @@ export function Who({ projectId, people, onAdded, onRemoved, onBack, onNext }: W
       setAudience(text);
       if (res.total > TOO_MANY) setTooMany({ total: res.total, query: text });
       const extra: string[] = [];
-      if (res.added.length > 0) extra.push(`That used about ${formatCount(res.added.length)} Apollo credits.`);
+      // Apollo's own count when the server has it; otherwise everyone it looked up, kept or skipped.
+      const spent = res.creditsUsed ?? res.added.length + res.skipped.length;
+      if (spent > 0) extra.push(`That used ${res.creditsUsed === undefined ? 'about ' : ''}${credits(spent)}.`);
       else if (res.total <= TOO_MANY) extra.push(`Nobody matched "${text}". Try a wider role or a nearby city.`);
       take(res.added, res.skipped, extra);
     } catch (e) {
@@ -143,10 +152,20 @@ export function Who({ projectId, people, onAdded, onRemoved, onBack, onNext }: W
     }
   };
 
+  const askFor = (query: string) => {
+    const text = query.trim();
+    if (!text || looking) return;
+    setQ(text);
+    setError('');
+    setTooMany(null);
+    setListOpen(false);
+    setAsking(text);
+  };
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!q.trim()) return setError('Describe them in a few words, or bring a list.');
-    void search(q);
+    askFor(q);
   };
 
   return (
@@ -166,12 +185,22 @@ export function Who({ projectId, people, onAdded, onRemoved, onBack, onNext }: W
         <button type="submit" className="ask-go" aria-label="Find people" disabled={looking}><ArrowUp /></button>
       </form>
 
-      {!listOpen && !looking ? (
+      {!listOpen && !looking && !asking ? (
         <div className="chip-row">
           {idle ? CHIPS.map((c) => (
-            <button key={c} type="button" className="chip" onClick={() => void search(c)}>{c}</button>
+            <button key={c} type="button" className="chip" onClick={() => askFor(c)}>{c}</button>
           )) : null}
           <button type="button" className="chip chip-dashed" onClick={() => setListOpen(true)}><UploadIcon />Bring a list</button>
+        </div>
+      ) : null}
+
+      {asking ? (
+        <div className="fr-estimate fade-in">
+          <p>{`Callum can look for ${SEARCH_COUNT} people. That uses about ${SEARCH_COUNT} Apollo credits.`}</p>
+          <div className="fr-actions">
+            <Button className="btn-sm" variant="ghost" onClick={() => setAsking(null)}>Not now</Button>
+            <Button className="btn-sm" onClick={() => void search(asking)}>Find them</Button>
+          </div>
         </div>
       ) : null}
 
@@ -225,7 +254,7 @@ export function Who({ projectId, people, onAdded, onRemoved, onBack, onNext }: W
           </p>
           <div className="chip-row">
             {NARROW.map((c) => (
-              <button key={c} type="button" className="chip chip-soft" onClick={() => void search(`${tooMany.query}, ${c}`)}>{c}</button>
+              <button key={c} type="button" className="chip chip-soft" onClick={() => askFor(`${tooMany.query}, ${c}`)}>{c}</button>
             ))}
           </div>
         </div>

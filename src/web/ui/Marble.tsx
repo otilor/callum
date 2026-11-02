@@ -20,21 +20,23 @@ export function marbleBackground(n: number): string {
   return `radial-gradient(circle at ${ax}% ${ay}%, ${b} 0 20%, transparent 58%), radial-gradient(circle at ${100 - ax}% ${100 - ay}%, ${c} 0 16%, transparent 54%), ${a}`;
 }
 
-export type MarbleTone = 'grey' | 'cool' | 'warm';
+/** `near` is a person Callum is following up with: nearly in colour. */
+export type MarbleTone = 'grey' | 'cool' | 'near' | 'warm';
 
 /** Grey for strangers, then colour as a person gets closer. */
 const LOOK: Record<MarbleTone, { filter: string; ring: string }> = {
   grey: { filter: 'grayscale(1) brightness(1.12)', ring: '#D5D9E4' },
   cool: { filter: 'grayscale(0.62)', ring: '#A9B8F5' },
+  near: { filter: 'grayscale(0.28)', ring: '#6E86F2' },
   warm: { filter: 'saturate(1.1)', ring: '#3F52D9' },
 };
 
-/** The look for each stage of the way to you: strangers grey, hello and following cool, talking in full colour. */
+/** The look for each stage of the way to you: strangers grey, hello cool, following nearly in colour, talking in full colour. */
 export function lookForStage(stage: Stage): { tone: MarbleTone; ring: string } {
   switch (stage) {
     case 'stranger': return { tone: 'grey', ring: '#D5D9E4' };
     case 'hello': return { tone: 'cool', ring: '#A9B8F5' };
-    case 'following': return { tone: 'cool', ring: '#6E86F2' };
+    case 'following': return { tone: 'near', ring: '#6E86F2' };
     case 'talking': return { tone: 'warm', ring: '#3F52D9' };
   }
 }
