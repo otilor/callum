@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type Ref } from 'react
 import type { AskAnswer, Person, Project } from '../../../shared/types.js';
 import { api } from '../../api.js';
 import { marbleBackground } from '../../ui/Marble.js';
+import { AskCaret } from './Quiet.js';
 import './AskBar.css';
 
 export interface AskBarProps {
@@ -21,6 +22,8 @@ export interface AskBarProps {
   prefill?: { text: string; n: number } | null;
   /** Opens the add people flow, for an answer that says Callum needs a list. */
   onBringList?: () => void;
+  /** The river is empty: a blinking caret waits in the bar while it has no words. */
+  caret?: boolean;
 }
 
 interface Turn { asked: string; answer: AskAnswer | null; result: AskAnswer | null; error: string; working: boolean }
@@ -33,7 +36,7 @@ function errorText(e: unknown): string {
  * The Ask bar: say what you want, or tap a chip. The answer opens above the bar with the people it is about and one
  * button that does the thing.
  */
-export function AskBar({ project, people, likeName, inputRef, onChanged, placeholder, prefill, onBringList }: AskBarProps) {
+export function AskBar({ project, people, likeName, inputRef, onChanged, placeholder, prefill, onBringList, caret = false }: AskBarProps) {
   const [text, setText] = useState('');
   const [chips, setChips] = useState(false);
   const [turn, setTurn] = useState<Turn | null>(null);
@@ -154,6 +157,7 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
       <div className="ab-pill">
         <span className="ab-dot" aria-hidden="true" />
         <label className="sr-only" htmlFor="ab-input">Ask Callum</label>
+        {caret && text === '' ? <AskCaret /> : null}
         <input
           id="ab-input"
           ref={(el) => {

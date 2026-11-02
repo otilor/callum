@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { WeeklyAnswer, WeeklyGroup, WeeklyReply, WeeklyRest, WeeklyWarm } from '../../../shared/types.js';
 import { api, ApiError, noteApi } from '../../api.js';
 import { trapTab } from '../../ui/focusTrap.js';
@@ -196,14 +197,15 @@ export function Weekly({ tz, onChanged, onOpenPerson, openSignal = 0 }: WeeklyPr
   const { note, email } = answer;
   if (note.hellos === 0 && note.replied.length === 0) {
     // Asked for from the menu in a week with nothing in it: say so, instead of doing nothing.
-    return open ? (
+    return open ? createPortal(
       <div className="wk-empty-back" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
         <div className="wk-empty" role="dialog" aria-modal="true" aria-label="Your week, in people">
           <h2>Your week, in people</h2>
           <p>Nothing to tell yet. Once Callum has said hello to people, their week shows up here.</p>
           <button type="button" ref={closeButton} className="wk-empty-close" onClick={close}>Close</button>
         </div>
-      </div>
+      </div>,
+      document.body,
     ) : null;
   }
 
@@ -244,7 +246,7 @@ export function Weekly({ tz, onChanged, onOpenPerson, openSignal = 0 }: WeeklyPr
         Your week, in people
       </button>
 
-      {open ? (
+      {open ? createPortal(
         <div className="wk-layer">
           <div className="wk-veil" onClick={close} aria-hidden="true" />
           <div ref={stage} className={emailOn ? 'wk-stage wk-stage-pair' : 'wk-stage'} role="dialog" aria-modal="true" aria-labelledby={titleId}>
@@ -341,7 +343,8 @@ export function Weekly({ tz, onChanged, onOpenPerson, openSignal = 0 }: WeeklyPr
               </section>
             ) : null}
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );

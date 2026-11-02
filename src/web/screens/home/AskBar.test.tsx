@@ -26,6 +26,16 @@ describe('AskBar', () => {
     expect(screen.getByPlaceholderText('Ask Callum about Reconciliation')).toBeInTheDocument();
   });
 
+  it('blinks a caret only while the river is empty and the bar has no words', async () => {
+    const user = userEvent.setup();
+    const { container, rerender } = render(<AskBar project={project} people={[]} />);
+    expect(container.querySelector('.qm-caret')).toBeNull();
+    rerender(<AskBar project={project} people={[]} caret />);
+    expect(container.querySelector('.qm-caret')).not.toBeNull();
+    await user.type(screen.getByRole('textbox', { name: 'Ask Callum' }), 'Find');
+    expect(container.querySelector('.qm-caret')).toBeNull();
+  });
+
   it('offers three chips on focus, the second named after the newest replier', async () => {
     const user = userEvent.setup();
     render(<AskBar project={project} people={[kemi]} likeName="Kemi" />);

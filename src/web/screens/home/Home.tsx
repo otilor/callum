@@ -374,6 +374,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
           inputRef={askInput}
           onChanged={refresh}
           prefill={prefill}
+          caret={empty && !stillAll}
           {...(onAddPeople ? { onBringList: onAddPeople } : {})}
         />
       </div>
