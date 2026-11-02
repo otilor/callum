@@ -32,6 +32,15 @@ describe('normalizeLinkedinUrl', () => {
     expect(normalizeLinkedinUrl('https://uk.linkedin.com/in/Kemi')).toBe('https://www.linkedin.com/in/kemi');
     expect(normalizeLinkedinUrl('/in/Kemi')).toBe('https://www.linkedin.com/in/kemi');
   });
+  it('accepts protocol-relative URLs', () => {
+    expect(normalizeLinkedinUrl('//linkedin.com/in/kemi')).toBe('https://www.linkedin.com/in/kemi');
+    expect(normalizeLinkedinUrl('//www.linkedin.com/in/Kemi-Eze/')).toBe('https://www.linkedin.com/in/kemi-eze');
+  });
+  it('does not decode escapes and rejects unsafe slugs', () => {
+    expect(normalizeLinkedinUrl('https://linkedin.com/in/kemi%20eze')).toBe('https://www.linkedin.com/in/kemi%20eze');
+    expect(normalizeLinkedinUrl('https://linkedin.com/in/kemi eze')).toBeNull();
+    expect(normalizeLinkedinUrl('https://linkedin.com/in/kemi<script>')).toBeNull();
+  });
 });
 
 describe('normalizeXHandle', () => {
@@ -39,6 +48,24 @@ describe('normalizeXHandle', () => {
     expect(normalizeXHandle('@KemiEze')).toBe('kemieze');
     expect(normalizeXHandle('https://x.com/kemieze')).toBe('kemieze');
     expect(normalizeXHandle('twitter.com/KemiEze/')).toBe('kemieze');
+  });
+  it('accepts x.com and twitter.com subdomains with or without a scheme', () => {
+    expect(normalizeXHandle('mobile.twitter.com/Kemi')).toBe('kemi');
+    expect(normalizeXHandle('https://mobile.twitter.com/kemi')).toBe('kemi');
+    expect(normalizeXHandle('https://www.x.com/Kemi_Eze')).toBe('kemi_eze');
+    expect(normalizeXHandle('//x.com/kemi')).toBe('kemi');
+    expect(normalizeXHandle('@Kemi_Eze')).toBe('kemi_eze');
+    expect(normalizeXHandle('Kemi_Eze')).toBe('kemi_eze');
+  });
+  it('rejects other sites and malformed handles', () => {
+    expect(normalizeXHandle('https://instagram.com/bola')).toBeNull();
+    expect(normalizeXHandle('http://x.co/kemi')).toBeNull();
+    expect(normalizeXHandle('https://notx.com/kemi')).toBeNull();
+    expect(normalizeXHandle('https://x.com.evil.io/kemi')).toBeNull();
+    expect(normalizeXHandle('https://x.com/')).toBeNull();
+    expect(normalizeXHandle('http:')).toBeNull();
+    expect(normalizeXHandle('kemi.eze')).toBeNull();
+    expect(normalizeXHandle('@thishandleiswaytoolong')).toBeNull();
   });
   it('keeps only the first path segment', () => {
     expect(normalizeXHandle('https://x.com/kemieze/status/1')).toBe('kemieze');
