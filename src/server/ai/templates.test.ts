@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { findPlaceholders } from '../engine/guard.js';
 import { fixedClock } from '../engine/clock.js';
-import { findDate, inlineOffer, isExplicitOptOut, nameFromOffer, offerSentence, stripQuoted, TemplateWriter } from './templates.js';
+import { findDate, inlineOffer, isExplicitOptOut, nameFromOffer, offerSentence, stripQuoted, stripSignature, TemplateWriter } from './templates.js';
 import { inbound, outbound, testCtx, testPerson, testProject } from './testing.test-helpers.js';
 import type { OutKind } from '../../shared/types.js';
 
@@ -310,7 +310,7 @@ describe('classify: ordinary replies that look like a stop, an insult or an auto
 
   it.each([
     'Stop', 'Stop.', 'Please stop.', 'STOP!', 'stop emailing me', 'Stop it', 'No thanks. Stop.',
-    'Unsubscribe', 'Remove me from your list', "Don't email me again", 'Please opt out', 'take me off',
+    'Unsubscribe', 'Remove me from your list', "Don't email me again", 'Please opt me out', 'take me off',
   ])('still stops: %s', async (text) => {
     expect(await kindOf(text)).toBe('stop');
   });
@@ -440,5 +440,105 @@ describe('an offer that is not written as "You ..."', () => {
     expect((await run('Oko Pay builds payroll for Lagos teams', 'direct')).body).toContain('Hi Kemi, Oko Pay builds');
     expect(inlineOffer('I help teams.')).toBe('I help teams.');
     expect(inlineOffer("I'm a bookkeeper.")).toBe("I'm a bookkeeper.");
+  });
+});
+
+describe('classify round 2: signatures, stop, hostile, out of office, other languages', () => {
+  const classify = (text: string, ctx = testCtx()) => writer.classify(text, ctx);
+  const kindOf = async (text: string) => (await classify(text)).kind;
+
+  it('stripSignature drops a short closing block and nothing else', () => {
+    expect(stripSignature('Yes\n\nSent from my iPhone')).toBe('Yes');
+    expect(stripSignature('Yes\n--\nKemi')).toBe('Yes');
+    expect(stripSignature('Yes please\n\nBest,\nKemi Eze\nHead of Finance | Oko Pay\nkemi@okopay.com')).toBe('Yes please');
+    expect(stripSignature('Thanks,\nnot interested at all')).toBe('Thanks,\nnot interested at all'); // nothing before the sign-off
+    const long = ['Hello', 'Thanks,', ...Array.from({ length: 8 }, (_, i) => `line ${i}`)].join('\n');
+    expect(stripSignature(long)).toBe(long); // too long to be a signature
+  });
+
+  it.each([
+    'STOP\n\nSent from my iPhone', 'Stop.\n--\nKemi', 'STOP STOP STOP', 'I said stop.', 'Please stop, thanks.', 'Stop. Not interested.', 'Just stop.',
+    'Stop.\n\nBest,\nKemi Eze\nHead of Finance | Oko Pay\nkemi@okopay.com | +234 803 555 0100', 'Stop sending me this.', 'Stop emailing, please',
+  ])('stop: %j', async (text) => {
+    expect(await kindOf(text)).toBe('stop');
+  });
+  it.each([
+    "We've been non-stop since launch. Can we talk next month?", "We're a one-stop shop, how is this different?", "Please don't stop, keen to hear more.",
+    'Full stop, we are happy with our setup.', 'Bus stop chat at the conference was fun, lets continue. Free Fri?', "Can't stop laughing at the timing, we literally just hired for this.",
+    "Stop me if you've heard this one: we built this in-house last year.", "We've stopped using spreadsheets for this already, so prob not a fit",
+    'Stop by our stand on Thursday?', 'stop by our booth at Afritech, stand 42',
+  ])('not a stop: %j', async (text) => {
+    expect(await kindOf(text)).not.toBe('stop');
+  });
+
+  it.each([
+    "I don't email much, WhatsApp me on 0803 555 0100 and let's talk.",
+    'Can we opt out of the annual plan and pay monthly?',
+    'We do not write our own recon scripts, so yes, interested.',
+    "Don't contact sales, contact me directly. When are you free?",
+    "Don't email me at this address, use kemi@okopay.com instead.",
+  ])('an opt-out phrase needs an object: %j', async (text) => {
+    expect(await kindOf(text)).not.toBe('stop');
+    expect(isExplicitOptOut(text)).toBe(false);
+  });
+  it.each(["Never email me again", "Do not contact us anymore.", "Don't write to me", 'Please opt me out', 'opt out of these emails', 'Stop emailing me'])('explicit opt-out: %s', async (text) => {
+    expect(await kindOf(text)).toBe('stop');
+    expect(isExplicitOptOut(text)).toBe(true);
+  });
+
+  it.each([
+    ["I'll report your note to my boss, sounds promising.", 'interested'],
+    ['We were targeted by scammers last year, how do you prevent fraud?', 'question'],
+    ["Our current vendor? It's garbage. Tell me more about yours.", 'question'],
+    ["Excel? It's rubbish for this. Let's talk Tuesday.", 'interested'],
+    ['The team will go away and think about it, then come back to you.', 'interested'],
+    ['We go away on holiday next week, after that keen to talk.', 'not_now'], // lands on the dock, never closed
+    ['I hate spam but this one is actually relevant. Call me.', 'interested'],
+    ['Is this spam?', 'question'],
+    ['Honestly the last vendor was a scam, so I am wary. What makes you different?', 'question'],
+  ])('not hostile: %s -> %s', async (text, kind) => {
+    expect(await kindOf(text)).toBe(kind);
+  });
+  it.each(['this is spam, f*** off', 'Go away.', 'Just go away', 'Please go away!', 'Go away, this is spam', 'Spam.', 'Spam.\n\nSent from my iPhone', 'This email is rubbish, remove it',
+    'You are a scammer', "You're spamming me.", 'I will report you to my lawyer'])('hostile: %j', async (text) => {
+    expect(['hostile', 'stop']).toContain(await kindOf(text));
+  });
+  it('one word "spam" is hostile and the aimed insults are hostile', async () => {
+    expect(await kindOf('this is spam, f*** off')).toBe('hostile');
+    expect(await kindOf('Go away.')).toBe('hostile');
+    expect(await kindOf('Spam.\n\nSent from my iPhone')).toBe('hostile');
+  });
+
+  it.each([
+    ['On leave from my old role, now at Paystack. Happy to chat there.', 'interested'],
+    ['We are fully remote and out of the office most days, but sure, a call works.', 'interested'],
+    ['I am on leave this week but yes, interested. Call me Friday.', 'interested'],
+  ])('not an auto-reply: %s', async (text, kind) => {
+    expect(await kindOf(text)).toBe(kind);
+  });
+  it.each([
+    'I am on leave until 20 November.',
+    'Out of Office Re: Quick question, Kemi',
+    'On parental leave, back 2 February 2027',
+    'I am on holiday until 14 December',
+  ])('auto-reply: %s', async (text) => {
+    expect(await kindOf(text)).toBe('out_of_office');
+  });
+
+  it('reads the common phrases in French, Spanish, German and Portuguese', async () => {
+    expect(await classify("Je suis absent jusqu'au 20 novembre.")).toMatchObject({ kind: 'out_of_office', returnDate: '2026-11-20' });
+    expect((await classify('Je suis en congé.')).kind).toBe('out_of_office');
+    expect(await classify('Estoy fuera de la oficina hasta el 20 de noviembre.')).toMatchObject({ kind: 'out_of_office' });
+    expect((await classify('Estoy de vacaciones hasta el 3 de diciembre.')).kind).toBe('out_of_office');
+    expect(await classify('Ich bin bis zum 20. November nicht im Büro.')).toMatchObject({ kind: 'out_of_office', returnDate: '2026-11-20' });
+    expect((await classify('Ich bin abwesend bis Montag.')).kind).toBe('out_of_office');
+    expect((await classify('Estou fora do escritório até 20 de novembro.')).kind).toBe('out_of_office');
+    expect((await classify('Estou de férias até 3 de dezembro.')).kind).toBe('out_of_office');
+    for (const text of ['Danke, kein Interesse.', 'Merci, pas intéressé.', 'Gracias, no me interesa.', 'Obrigado, não tenho interesse.']) {
+      expect(await classify(text)).toMatchObject({ kind: 'not_interested', suggested: 'close' });
+    }
+    for (const text of ['Je voudrais me désabonner.', 'Quiero darse de baja de esta lista.', 'Bitte abmelden.', 'Pode me descadastrar?']) {
+      expect(await classify(text)).toMatchObject({ kind: 'stop', suggested: 'close' });
+    }
   });
 });

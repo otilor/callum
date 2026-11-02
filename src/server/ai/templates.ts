@@ -30,14 +30,26 @@ export function inlineOffer(offer: string): string {
   return first && LEADING_FUNCTION_WORDS.has(first.toLowerCase()) ? first.toLowerCase() + offer.slice(first.length) : offer;
 }
 
-const MONTH_NAMES = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
-const MONTH_RE = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
+const MONTH_RE = [
+  'jan(?:uary)?', 'feb(?:ruary)?', 'mar(?:ch)?', 'apr(?:il)?', 'may', 'june?', 'july?', 'aug(?:ust)?', 'sep(?:t(?:ember)?)?', 'oct(?:ober)?', 'nov(?:ember)?', 'dec(?:ember)?',
+  // French, German, Spanish, Portuguese
+  'janvier', 'f[\\u00e9e]vr(?:ier)?', 'mars', 'avril', 'mai', 'juin', 'juillet', 'ao[u\\u00fb]t', 'septembre', 'octobre', 'novembre', 'd[\\u00e9e]cembre',
+  'januar', 'februar', 'm[\\u00e4a]rz', 'juni', 'juli', 'oktober', 'dezember',
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+  'janeiro', 'fevereiro', 'mar[\\u00e7c]o', 'maio', 'junho', 'julho', 'setembro', 'outubro', 'dezembro',
+].join('|');
+const MONTH_BY_PREFIX: Record<string, number> = {
+  jan: 0, ene: 0, feb: 1, fev: 1, mar: 2, apr: 3, avr: 3, abr: 3, mai: 4, may: 4, jun: 5, jul: 6, aug: 7, aou: 7, ago: 7,
+  sep: 8, set: 8, oct: 9, okt: 9, out: 9, nov: 10, dec: 11, dez: 11, dic: 11,
+};
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const DAY_MS = 86_400_000;
 
 function monthIndex(word: string): number {
-  const key = word.toLowerCase().slice(0, 3);
-  return MONTH_NAMES.findIndex((m) => m.startsWith(key));
+  const w = word.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (w === 'juin') return 5;
+  if (w === 'juillet') return 6;
+  return MONTH_BY_PREFIX[w.slice(0, 3)] ?? -1;
 }
 
 function utcDay(y: number, m: number, d: number): Date | null {
@@ -56,7 +68,7 @@ export function findDate(text: string, today: Date): string | null {
   const candidates: { index: number; y: number | null; m: number; d: number }[] = [];
   const isoRe = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
   const monthDayRe = new RegExp(`\\b(${MONTH_RE})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b(?:,?\\s+(\\d{4})\\b)?`, 'gi');
-  const dayMonthRe = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(${MONTH_RE})\\b\\.?(?:,?\\s+(\\d{4})\\b)?`, 'gi');
+  const dayMonthRe = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th|er|\\.)?\\s+(?:of\\s+|de\\s+|do\\s+)?(${MONTH_RE})\\b\\.?(?:,?\\s+(\\d{4})\\b)?`, 'gi');
   for (const m of text.matchAll(isoRe)) candidates.push({ index: m.index, y: Number(m[1]), m: Number(m[2]) - 1, d: Number(m[3]) });
   for (const m of text.matchAll(monthDayRe)) candidates.push({ index: m.index, y: m[3] ? Number(m[3]) : null, m: monthIndex(m[1] ?? ''), d: Number(m[2]) });
   for (const m of text.matchAll(dayMonthRe)) candidates.push({ index: m.index, y: m[3] ? Number(m[3]) : null, m: monthIndex(m[2] ?? ''), d: Number(m[1]) });
@@ -108,38 +120,85 @@ export function stripQuoted(text: string): string {
   return kept.join('\n').replace(OPT_OUT_QUOTE, ' ').replace(/[‘’]/g, "'").trim();
 }
 
+/** The reply as the person wrote it: no quoted history, no signature or "Sent from my iPhone" footer. */
+export function cleanReply(rawText: string): string {
+  return stripSignature(stripQuoted(rawText));
+}
+
+const SIGNATURE_START_RE = /^\s*(?:(?:-{2,}|—+|–+|_{2,})\s*|sent from my .*|sent from (?:outlook|mail|yahoo|gmail|my).*|get outlook for .*|(?:best|(?:(?:best|kind|warm|many)\s+)?(?:regards|wishes|thanks|thank you|cheers|sincerely))\s*[,.!]?\s*)$/i;
+
+/** Drops a short closing block ("--", "Sent from my ...", "Best,\nName\nTitle") so it cannot be read as part of the reply. */
+export function stripSignature(text: string): string {
+  const lines = text.split('\n');
+  const first = lines.findIndex((l) => l.trim() !== '');
+  for (let i = first + 1; i < lines.length; i++) {
+    if (!SIGNATURE_START_RE.test(lines[i] ?? '')) continue;
+    const block = lines.slice(i + 1).filter((l) => l.trim() !== '');
+    if (block.length <= 6 && block.every((l) => l.length <= 90)) return lines.slice(0, i).join('\n').trim();
+  }
+  return text;
+}
+
+const OBJECT = String.raw`(?:me|us|this (?:address|e-?mail|inbox))(?:\s+(?:again|anymore|any more|any longer))?(?!\s+(?:on|via|through|by|at|over|with|only)\b)`;
 /** Explicit opt-out phrases: these win over any softer reading, including Claude's. */
-const STOP_RE = /\b(?:unsubscribe|opt(?:ing)?[ -]?out|remove me|take me off|do not (?:contact|email|e-mail|message|write)|don'?t (?:contact|email|e-mail|message|write)|stop (?:emailing|e-mailing|messaging|writing|contacting|sending|following up))\b/i;
-/** "Stop." as the whole message. */
-const BARE_STOP_WHOLE_RE = /^[\s"'*_>-]*(?:please\s+)?stop[\s.!,"'*_-]*$/i;
-/** "Stop it", "please stop." at the start or as the last sentence; never "non-stop", "don't stop", "full stop", "stop by". */
-const BARE_STOP_IMPERATIVE_RE = /(?:^|[.!?]\s+)[\s"'*_>-]*(?:please\s+)?stop(?:\s+(?:it|this|now|please|all of this|the (?:e-?mails?|messages?|notes?))\b|[\s.!,]*$)/i;
-const HOSTILE_RE = new RegExp(
+const STOP_RE = new RegExp(
   [
-    'go away', 'leave me alone', 'go to hell', 'piss off', 'screw you',
+    String.raw`\bunsubscribe\b`, String.raw`\bremove me\b`, String.raw`\btake me off\b`,
+    String.raw`\bopt(?:ing)? me out\b`,
+    String.raw`\bopt(?:ing)?[ -]out of (?:these|your|this|the|any|all)(?: \w+)? (?:e-?mails?|messages?|list|mailing|newsletters?|updates)\b`,
+    String.raw`\b(?:do not|don'?t|never)\s+(?:e-?mail|contact|write(?: to)?|message|text|call)\s+${OBJECT}`,
+    String.raw`\bstop (?:emailing|e-?mailing|messaging|contacting|writing|sending|texting|calling|following up)(?=\s*[.,!?;]|\s*$|\s+(?:me|us|this|my|our|again|please|now)\b)`,
+    // other languages
+    String.raw`d[ée]sabonner|d[ée]sinscri\w+|darse de baja|dar de baja|\babmelden\b|\bdescadastr\w+`,
+  ].join('|'),
+  'i',
+);
+/** "Stop" as the whole message, even repeated ("STOP STOP STOP"). */
+const STOP_ONLY_RE = /^[\s"'*_>-]*(?:(?:please|pls|just)\s+)?stop(?:[\s,.!]*\bstop\b)*[\s.!,"'*_-]*$/i;
+/** A message that opens with "stop": "Stop.", "Stop, not interested", "stop it", "stop emailing". Never "stop me if", "stop by". */
+const STOP_FIRST_RE = /^[\s"'*_>-]*(?:(?:please|pls|just)\s+)?stop\b(?:[\s,.!]*\bstop\b)*(?:[.,!?;:]|\s*$|[ \t]*\n|\s+(?:it|this|now|please|pls|emailing|e-?mailing|messaging|contacting|writing|sending|texting|calling|following)\b)/i;
+/** "I said stop.", "Please stop, thanks.", "Just stop." as a sentence of its own. Never "full stop", "bus stop", "don't stop". */
+const STOP_SENTENCE_RE = /(?:^|[.!?\n]\s*)(?:(?:i\s+(?:said|asked you to|told you to|already said)|please|pls|just|so|oh|ok|okay|yes)[\s,]+)*stop(?:[\s.!,]+(?:thanks|thank you|please|pls)\b)?[\s.!,]*$/i;
+
+const GO_AWAY = String.raw`(?:^|[.!?;\n]\s*)(?:(?:just|please|pls|oh|now)[\s,]+)*go away(?=\s*(?:[.!,;?]|$))`;
+const HOSTILE_RE = new RegExp(
+  '(?<![\\w*])(?:' + [
+    GO_AWAY, 'leave me alone', 'go to hell', 'piss off', 'screw you',
     '(?:fuck|fck|f\\*+k?) (?:off|you)', 'asshole', 'bastard',
     'harass(?:ing|ment)', 'report(?:ing|ed)? you',
     // aimed at the sender or the message, not incidental
-    '(?:this|that|it)(?:\'s| is| was) (?:just |pure |total |complete |utter |a |an |nothing but )*(?:spam|scam|bullshit|rubbish|garbage)',
-    '(?:you(?:\'re| are)|you\'ve been) (?:just |a |an |nothing but )*(?:spam|scam|spammers?|scammers?|spamming|harassing)',
-    'what an? (?:spam|scam)', 'stop spamming', '(?:spammers?|scammers?)',
-    '(?:your|the|this) (?:e-?mails?|messages?|notes?) (?:is|are) (?:just |pure )?(?:spam|a scam)',
-    '(?:^|[.!?]\\s+)(?:spam|scam)[\\s.!]*$',
+    "(?:this|that|it)(?:'s| is| was) (?:just |pure |total |complete |utter |a |an |nothing but )*(?:spam|scam|bullshit)",
+    "(?:this|your|the) (?:e-?mail|message|note|pitch|offer) (?:is|was) (?:just |total |complete |utter |pure )*(?:rubbish|garbage|spam|a scam|bullshit)",
+    "(?:you(?:'re| are)|you've been) (?:just |a |an |such |nothing but )*(?:spam|scam|spammers?|scammers?|spamming|harassing)",
+    'what an? (?:spam|scam)', 'stop spamming',
+    '(?:^|[.!?\\n]\\s*)(?:spam|scam)(?:[\\s.!]+(?:reported|blocked|deleted))?[\\s.!]*$',
+  ].join('|') + ')(?![\\w])',
+  'i',
+);
+const OOO_STRONG_RE = new RegExp(
+  [
+    'on (?:annual|maternity|paternity|parental|medical|sick|extended|study|compassionate) leave\\b',
+    'auto-?\\s?reply', 'automatic reply', 'automated (?:reply|response)',
+    'limited access to (?:my )?(?:e-?mail|messages)',
+    // other languages
+    "absent(?:e)? jusqu['\\u2019]?(?:au|\\u00e0)", 'en cong[\\u00e9e]', 'fuera de la oficina', 'de vacaciones hasta',
+    'nicht im b(?:\\u00fc|ue)ro', 'abwesend bis', 'fora do escrit[\\u00f3o]rio', 'de f[\\u00e9e]rias at[\\u00e9e]',
   ].join('|'),
   'i',
 );
-/** Unambiguous out-of-office wording. "Back on Monday" or "away" alone is not enough; those only give the date. */
-const OOO_RE = new RegExp(
+/** These can be a human talking about their week; they count as an auto-reply only when the person does not also engage. */
+const OOO_SOFT_RE = new RegExp(
   [
-    '\\booo\\b', 'out of (?:the )?office', 'out-of-office',
-    'on (?:annual |maternity |paternity |parental |medical |sick |extended |study )?leave\\b',
+    '\\booo\\b', 'out of (?:the )?office', 'out-of-office', 'out sick',
+    'on leave(?=\\s+(?:until|till|and will|returning|back)\\b)',
     'on (?:vacation|holiday|sabbatical)(?=\\s+(?:until|till|through|from|and|now|this|next|for)\\b|\\s*[.,;]|\\s*$)',
     'away (?:until|till)\\b', 'away from (?:the )?office\\b',
-    'auto-?\\s?reply', 'automatic reply', 'automated (?:reply|response)',
-    'out sick', 'limited access to (?:my )?(?:e-?mail|messages)',
   ].join('|'),
   'i',
 );
+const ENGAGED_RE = /\b(?:sure|yes|yeah|yep|happy to|glad to|keen|interested|a call works|let'?s|sounds (?:good|great))\b|\?/i;
+const isOutOfOffice = (text: string): boolean => OOO_STRONG_RE.test(text) || (OOO_SOFT_RE.test(text) && !ENGAGED_RE.test(text));
+const NOT_INTERESTED_FOREIGN_RE = /kein interesse|pas int[\u00e9e]ress[\u00e9e]e?|no me interesa|n[\u00e3a]o tenho interesse/i;
 const NOT_INTERESTED_RE = /\b(?:not interested|no,? thank(?:s| you)|not (?:a )?(?:good )?fit|no need|not (?:looking|in the market)|not for (?:us|me)|we(?:'re| are) (?:all )?set|already (?:have|use|work with)|not a priority|(?:don'?t|do not|no) (?:have )?(?:the )?time for|not relevant|no interest|(?:we(?:'re| are)|i(?:'m| am)) (?:very |perfectly |quite |really )?happy with (?:our|what|the|my)|i'?ll pass|we'?ll pass|pass on this)\b/i;
 const NOT_NOW_RE = /\b(?:not (?:right |just )?now|not (?:at the moment|this (?:week|month|quarter|year))|not until|bad timing|next (?:month|quarter|year|week)|circle back|(?:reach|get|come|check) back (?:to me |in )|later this|in (?:a |a few |a couple of |few |couple of |\d+ )?(?:weeks?|months?)|after (?:the )?(?:holidays?|summer|new year|q[1-4]|our (?:launch|audit|fundraise)|christmas)|try (?:me )?again|ping me (?:in|again|next)|touch base (?:in|next)|busy (?:right now|at the moment|with))\b/i;
 const BOOK_RE = /\b(?:calls?|chat|meet(?:ing)?|time|calendar|demo|catch up|zoom|google meet|schedule|let'?s (?:talk|speak|connect)|(?:talk|speak) (?:soon|more|then)|tomorrow|(?:mon|tues|wednes|thurs|fri|satur|sun)day)\b/i;
@@ -222,8 +281,8 @@ const BACK_DAY_RE = '(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday
 
 /** True when the reply says, in so many words, to stop writing. */
 export function isExplicitOptOut(rawText: string): boolean {
-  const text = stripQuoted(rawText);
-  return STOP_RE.test(text) || BARE_STOP_WHOLE_RE.test(text);
+  const text = cleanReply(rawText);
+  return STOP_RE.test(text) || STOP_ONLY_RE.test(text);
 }
 
 export interface ClassifyOptions { ownEmail?: string | null; excludeNames?: (string | null)[]; excludeEmails?: (string | null)[] }
@@ -234,15 +293,15 @@ export interface ClassifyOptions { ownEmail?: string | null; excludeNames?: (str
  * `today` is the date of the message being read.
  */
 export function classifyReply(rawText: string, today: Date, opts: ClassifyOptions = {}): Classification {
-  const text = stripQuoted(rawText);
+  const text = cleanReply(rawText);
   // "it went to my spam folder" is not a complaint
   const hostileText = text.replace(/\b(?:in|into|to|from|via|my|the)\s+(?:my\s+|the\s+)?(?:spam|junk)(?:\s+(?:folder|box|filter))?\b/gi, ' ');
-  if (STOP_RE.test(text) || BARE_STOP_WHOLE_RE.test(text) || BARE_STOP_IMPERATIVE_RE.test(text)) return result('stop');
+  if (STOP_RE.test(text) || STOP_ONLY_RE.test(text) || STOP_FIRST_RE.test(text) || STOP_SENTENCE_RE.test(text)) return result('stop');
   if (HOSTILE_RE.test(hostileText)) return result('hostile');
-  if (OOO_RE.test(text)) return result('out_of_office', { returnDate: findDate(text, today) ?? findRelativeReturn(text, today) });
+  if (isOutOfOffice(text)) return result('out_of_office', { returnDate: findDate(text, today) ?? findRelativeReturn(text, today) });
   const referral = findReferral(text, { emails: [opts.ownEmail ?? null, ...(opts.excludeEmails ?? [])], names: opts.excludeNames ?? [] });
   if (referral) return result('referral', { referral });
-  if (NOT_INTERESTED_RE.test(text) || /^\s*no[\s.,]*$/i.test(text)) return result('not_interested');
+  if (NOT_INTERESTED_RE.test(text) || NOT_INTERESTED_FOREIGN_RE.test(text) || /^\s*no[\s.,]*$/i.test(text)) return result('not_interested');
   // "let's circle back on Monday" proposes a day; it is not a request to wait
   const waiting = text.replace(new RegExp(`\\b(?:circle|get|come|check|reach) back (?:to me )?(?:on |by |this )?${BACK_DAY_RE}\\b`, 'gi'), ' ');
   if (NOT_NOW_RE.test(waiting)) return result('not_now', { returnDate: findDate(text, today) });

@@ -5,7 +5,7 @@ import type { Channel, Message, OutKind, Tone } from '../../shared/types.js';
 import { clampNote } from '../channels/linkedin-detect.js';
 import { type Clock, systemClock } from '../engine/clock.js';
 import { findPlaceholders } from '../engine/guard.js';
-import { OFFER_PLACEHOLDER, isExplicitOptOut, messageDate, stripQuoted } from './templates.js';
+import { OFFER_PLACEHOLDER, cleanReply, isExplicitOptOut, messageDate } from './templates.js';
 import type { AskIntent, Classification, Writer, WriteContext } from './writer.js';
 
 const MAX_TOKENS = 4000;
@@ -171,7 +171,7 @@ export class ClaudeWriter implements Writer {
 
   async classify(text: string, ctx: WriteContext): Promise<Classification> {
     const template = await this.fallback.classify(text, ctx);
-    const reply = stripQuoted(text) || text.trim();
+    const reply = cleanReply(text) || text.trim();
     const system = [
       'You read one reply to an outreach message and say what it means. Answer only with the structured fields.',
       'kind: interested (wants to talk or hear more), question (asks something before deciding), not_now (maybe later), not_interested (a clear no), stop (asks not to be contacted again, unsubscribes), hostile (angry, abusive, calls it spam), out_of_office (automatic or personal away reply), referral (points to someone else to talk to).',

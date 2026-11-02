@@ -164,6 +164,13 @@ describe('ClaudeWriter.classify guards', () => {
     expect(content).not.toContain('just reply stop');
     expect(content).not.toContain('wrote:');
   });
+  it('sends the reply without its signature or footer', async () => {
+    const { writer, parse } = writerWith({ parsed_output: classified('interested', 'reply') });
+    await writer.classify('Yes, happy to talk.\n\nBest,\nKemi Eze\nHead of Finance | Oko Pay\n\nSent from my iPhone', testCtx());
+    const content = requestOf(parse).messages[0]!.content;
+    expect(content).toContain('Yes, happy to talk.');
+    expect(content).not.toContain('Head of Finance');
+  });
   it.each([
     ['stop', 'reply', 'close'],
     ['hostile', 'book', 'close'],
