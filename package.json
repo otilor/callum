@@ -22,6 +22,7 @@
   "dependencies": {
     "imapflow": "^2.10.0",
     "mailparser": "^3.14.1",
-    "nodemailer": "^10.3.1"
+    "nodemailer": "^10.3.1",
+    "playwright": "1.63.0"
   }
 }

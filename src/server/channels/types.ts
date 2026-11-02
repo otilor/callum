@@ -18,6 +18,10 @@ export interface ChannelAdapter {
   poll(since: Date | null): Promise<InboundEvent[]>;
   knownAddresses?(): Promise<string[]>;
   searchPeople?(url: string, limit: number): Promise<NewPerson[]>;
+  /** Drops anything the adapter keeps on this machine for the account (a signed-in browser profile). */
+  forget?(): Promise<void>;
   close(): Promise<void>;
 }
-export type AdapterFactory = (channel: Channel, secret: Record<string, string> | null) => ChannelAdapter;
+/** What the registry hands every adapter so it can keep its own secret current (rotated tokens). */
+export interface AdapterHooks { saveSecret(secret: Record<string, string>): void }
+export type AdapterFactory = (channel: Channel, secret: Record<string, string> | null, hooks?: AdapterHooks) => ChannelAdapter;

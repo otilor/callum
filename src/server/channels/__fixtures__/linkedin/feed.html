@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Feed | LinkedIn</title></head>
+<body>
+  <header class="global-nav">
+    <nav>
+      <a href="/feed/" aria-label="Home">Home</a>
+      <a href="/mynetwork/" aria-label="My Network">My Network</a>
+      <a href="/messaging/" aria-label="Messaging">Messaging</a>
+      <div class="global-nav__me">
+        <button class="global-nav__primary-link-me-menu-trigger artdeco-dropdown__trigger" aria-label="Me" aria-expanded="false" id="me-trigger">
+          <span class="global-nav__primary-link-text">Me</span>
+        </button>
+        <div class="global-nav__me-content artdeco-dropdown__content" id="me-content" hidden>
+          <div class="t-16 t-black t-bold">%%me%%</div>
+          <div class="t-12 t-black--light">Founder at Callum</div>
+          <a href="/in/me/">View Profile</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+  <main>
+    <section class="feed-identity-module"><h2 class="visually-hidden">Your profile</h2></section>
+    <section><h2>Start a post</h2></section>
+  </main>
+  <script>
+    document.getElementById('me-trigger').addEventListener('click', () => {
+      const content = document.getElementById('me-content');
+      content.hidden = !content.hidden;
+    });
+  </script>
+</body></html>
