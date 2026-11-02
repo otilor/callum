@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AppState } from '../shared/types.js';
+import { fixedClock } from './engine/clock.js';
 import { Runner } from './runner/runner.js';
 import { startServer, type RunningServer } from './main.js';
 
@@ -44,6 +45,15 @@ describe('startServer', () => {
     await new Promise<void>((resolve, reject) => {
       const probe = createServer().once('error', reject).listen(port, '127.0.0.1', () => probe.close(() => resolve()));
     });
+  });
+
+  it('goes by the clock it is given, and the runner can be driven by the caller', async () => {
+    const clock = fixedClock('2026-11-03T09:00:00.000Z');
+    const { server } = await start({ clock, tickEveryMs: 3_600_000 });
+    expect(server.ctx.clock).toBe(clock);
+    // What the demo scene wrote is stamped with that clock, not the computer's.
+    expect(server.ctx.repo.listProjects()[0]?.createdAt).toBe('2026-11-03T09:00:00.000Z');
+    await expect(server.runner.tick()).resolves.toBeUndefined();
   });
 
   it('waits for the runner for at most 5 seconds when it closes', async () => {

@@ -10,7 +10,8 @@ import { createCtx, type Ctx } from './context.js';
 import { openDb } from './db/db.js';
 import { seedScene } from './demo/seed.js';
 import { readEnv } from './env.js';
-import { Runner } from './runner/runner.js';
+import type { Clock } from './engine/clock.js';
+import { Runner, type RunnerOptions } from './runner/runner.js';
 
 export const TICK_EVERY_MS = 5_000;
 /** How long closing waits for a poll that does not answer before the database is closed anyway. */
@@ -27,12 +28,20 @@ export interface StartOptions {
   env?: NodeJS.ProcessEnv;
   /** Where the one line saying Callum is running goes. Defaults to the console. */
   log?: (line: string) => void;
+  /** The time Callum goes by. Defaults to the computer's clock; tests and the real-mail run set their own. */
+  clock?: Clock;
+  /** How often Callum looks for work, in milliseconds. A test that runs the passes itself sets this high. */
+  tickEveryMs?: number;
+  /** How the runner polls and plans. Tests shorten the time between polls. */
+  runnerOptions?: RunnerOptions;
 }
 
 export interface RunningServer {
   url: string;
   close(): Promise<void>;
   ctx: Ctx;
+  /** The one doing the work, so a test can run a pass now instead of waiting for the next. */
+  runner: Runner;
 }
 
 /** The built web app next to the server code, when there is one. */
@@ -88,7 +97,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   chmodSync(opts.dataDir, 0o700);
   const db = openDb(join(opts.dataDir, 'callum.db'));
   const conf = readEnv(env);
-  const ctx = createCtx({ db, demo: conf.demo, dataDir: opts.dataDir, env });
+  const ctx = createCtx({ db, demo: conf.demo, dataDir: opts.dataDir, env, ...(opts.clock ? { clock: opts.clock } : {}) });
   setDefaultTimezone(ctx, conf.timezone);
   // A demo Callum with nothing in it starts with a scene to look at.
   if (conf.demo && ctx.repo.listProjects().length === 0) {
@@ -96,8 +105,8 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     setDefaultTimezone(ctx, conf.timezone);
   }
 
-  const runner = new Runner(ctx);
-  runner.start(TICK_EVERY_MS);
+  const runner = new Runner(ctx, opts.runnerOptions);
+  runner.start(opts.tickEveryMs ?? TICK_EVERY_MS);
 
   let server: Server;
   const stopWork = async () => {
@@ -125,6 +134,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   return {
     url,
     ctx,
+    runner,
     close() {
       closing ??= (async () => {
         // Live-event streams stay open for as long as a page is, so they are cut for the port to be freed.
