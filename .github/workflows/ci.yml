@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Callum drives the browser already installed on the computer, so installs download no browser or Electron binary.
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+jobs:
+  check:
+    name: Typecheck, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Build the web app
+        run: npm run build
+      - name: Build the server
+        run: npm run build:server
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build --tag callum:ci .
+
+  # Slot for the jobs that come with the end-to-end tests and the desktop app. They are added when those land,
+  # not before, so nothing here claims to run what does not exist yet.
+  #
+  # e2e:
+  #   name: End-to-end tests
+  #   runs-on: ubuntu-latest
+  #   needs: check
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: 22, cache: npm }
+  #     - run: npm ci
+  #     - run: npx playwright install --with-deps chromium
+  #     - run: npm run e2e
+  #
+  # desktop:
+  #   name: Desktop app
+  #   runs-on: ubuntu-latest
+  #   needs: check
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: 22, cache: npm }
+  #     - run: npm ci
+  #     - run: xvfb-run -a npx playwright test e2e/desktop.spec.ts
+  #
+  # release:
+  #   on tags v*, a matrix of macos-latest (dmg), windows-latest (nsis) and ubuntu-latest (AppImage)

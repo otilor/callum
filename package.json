@@ -10,11 +10,13 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
     "dev:web": "vite",
     "test:mail": "bash scripts/mail-it.sh",
     "start": "node --disable-warning=ExperimentalWarning --import tsx src/server/main.ts",
     "dev:server": "CALLUM_DEMO=1 node --disable-warning=ExperimentalWarning --watch --import tsx src/server/main.ts",
-    "demo": "CALLUM_DEMO=1 npm start"
+    "demo": "CALLUM_DEMO=1 npm start",
+    "start:dist": "node --disable-warning=ExperimentalWarning dist/server/main.js"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.2",
