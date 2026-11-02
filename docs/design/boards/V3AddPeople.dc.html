@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Callum v3, add people</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1D2140}a:hover{color:#3F52D9}
+button,input,textarea{font-family:inherit}
+button:focus-visible,a:focus-visible,textarea:focus-visible{outline:2px solid #3F52D9;outline-offset:3px}
+input:focus,textarea:focus{outline:none}
+.ask-pill:focus-within{box-shadow:0 0 0 2px #3F52D9,0 18px 44px -24px rgba(29,33,64,.3)!important}
+.soft-field:focus{box-shadow:0 0 0 2px #3F52D9!important}
+input::placeholder,textarea::placeholder{color:#646B85}
+.way{transition:transform .25s ease}
+.way:hover{transform:translateY(-3px)}
+.way-disc{transition:background-color .35s ease,box-shadow .35s ease}
+.drop{transition:background-color .25s ease,border-color .25s ease}
+.drop:hover{background:#F4F5F9!important;border-color:#8A92A8!important}
+.peek{transition:transform .2s ease,box-shadow .25s ease,opacity .4s ease}
+.peek:hover{transform:translateY(-3px) scale(1.06)}
+.grow{transition:background-color .2s ease}
+.grow:hover{background:#F4F5F9!important}
+.face{position:absolute;border:2px solid #FFFFFF;border-radius:50%;box-sizing:border-box;transition:filter .6s ease,box-shadow .6s ease,opacity .6s ease;animation:face-in .9s cubic-bezier(.2,.7,.2,1) backwards}
+@keyframes face-in{from{opacity:0;transform:translateX(-56px) scale(.4)}}
+.pour{animation:pour .7s cubic-bezier(.2,.7,.2,1) backwards}
+@keyframes pour{from{opacity:0;transform:translateY(-14px) scale(.5)}}
+.current{stroke-dasharray:1 22;animation:flow 2.4s linear infinite}
+.current-slow{animation-duration:3.8s}
+@keyframes flow{to{stroke-dashoffset:-23}}
+.step-a{animation:step-a .45s cubic-bezier(.2,.8,.2,1) backwards}
+.step-b{animation:step-b .45s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes step-a{from{opacity:0;transform:translateY(12px)}}
+@keyframes step-b{from{opacity:0;transform:translateY(12px)}}
+.fade-in{animation:fade-in .4s ease backwards}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}}
+.pulse{animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(.55);opacity:.45}}
+.spin{animation:spin .9s linear infinite;transform-origin:50% 50%}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast-a{animation:toast-a .4s cubic-bezier(.2,.8,.2,1) backwards}
+.toast-b{animation:toast-b .4s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes toast-a{from{opacity:0;transform:translateY(-10px)}}
+@keyframes toast-b{from{opacity:0;transform:translateY(-10px)}}
+@media (max-width: 760px){
+.ways{flex-wrap:wrap!important;justify-content:center!important}
+.preview{flex-direction:column!important}
+.river{height:150px!important}
+.lane-names{display:none!important}
+.hdr-extra{display:none!important}
+}
+@media (prefers-reduced-motion: reduce){
+.way,.way-disc,.drop,.peek,.grow,.face{transition:none!important}
+.face,.pour,.step-a,.step-b,.fade-in,.toast-a,.toast-b{animation:none!important}
+.current,.pulse,.spin{animation:none}
+}
+</style>
+</helmet>
+<div class="callum-root" style="position: relative; min-height: 900px; background: #FFFFFF; color: #1D2140; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums; overflow: hidden">
+
+<p aria-live="polite" style="position: absolute; left: 0; right: 0; top: 78px; z-index: 40; margin: 0; display: flex; justify-content: center; pointer-events: none">
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{false}}"><span class="{{toastCls}}" style="display: inline-flex; align-items: center; gap: 11px; background: #1D2140; color: #FFFFFF; border-radius: 24px; min-height: 46px; box-sizing: border-box; padding: 5px 18px 5px 16px; font-size: 15px; font-weight: 500; box-shadow: 0 18px 40px -18px rgba(29,33,64,0.55); pointer-events: auto; {{toastPad}}"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #FFB020"></span>{{toast}}<sc-if value="{{canUndo}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{undo}}" style="min-height: 36px; padding: 0 15px; border-radius: 18px; border: none; background: rgba(255,255,255,0.14); color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">Undo</button></sc-if></span></sc-if>
+</p>
+
+<div style="padding: 22px 32px 18px; box-sizing: border-box; min-height: 900px; display: flex; flex-direction: column; gap: 18px">
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+<a href="V2Morning.dc.html" style="display: inline-flex; align-items: center; gap: 9px; font-size: 22px; font-weight: 700; letter-spacing: -0.03em; text-decoration: none; color: #1D2140"><span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 50%; background: #FFB020"></span>callum</a>
+<div style="display: flex; align-items: center; gap: 10px">
+<span class="hdr-extra" style="display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: 18px; background: #F4F5F9; font-size: 14px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #22B07D"></span>Running</span>
+<a href="V2Morning.dc.html" style="min-height: 40px; padding: 0 16px 0 12px; border-radius: 20px; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>River</a>
+</div>
+</header>
+
+<div style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; margin-top: 4px">
+<h1 style="margin: 0; font-size: 38px; font-weight: 600; letter-spacing: -0.03em">Who else should Callum meet?</h1>
+<p style="margin: 0; font-size: 17px; color: #646B85">New people join the river as strangers. Nobody hears from Callum before tomorrow at 9:00.</p>
+</div>
+
+<div class="ways" role="tablist" aria-label="Ways to add people" style="display: flex; justify-content: center; gap: 34px; margin-top: 6px">
+<sc-for list="{{ways}}" as="w" hint-placeholder-count="4">
+<button type="button" role="tab" class="way" onClick="{{w.pick}}" aria-selected="{{w.on}}" style="width: 150px; border: none; background: transparent; padding: 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px; color: #1D2140">
+<span aria-hidden="true" class="way-disc" style="width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; {{w.disc}}">
+<sc-if value="{{w.isCsv}}" hint-placeholder-val="{{true}}"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="{{w.ink}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"></path></svg></sc-if>
+<sc-if value="{{w.isPaste}}" hint-placeholder-val="{{false}}"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="{{w.ink}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16" rx="2.5"></rect><path d="M9 9.5h6M9 13h6M9 16.5h3.5"></path></svg></sc-if>
+<sc-if value="{{w.isLink}}" hint-placeholder-val="{{false}}"><span style="font-size: 19px; font-weight: 700; color: {{w.ink}}">in</span></sc-if>
+<sc-if value="{{w.isDescribe}}" hint-placeholder-val="{{false}}"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="{{w.ink}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4 4"></path></svg></sc-if>
+</span>
+<span style="font-size: 15px; {{w.labelStyle}}">{{w.label}}</span>
+</button>
+</sc-for>
+</div>
+
+<section class="{{stepCls}}" aria-live="polite" style="flex: 1 1 auto; width: 100%; max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 16px; min-height: 300px">
+
+<sc-if value="{{csvIdle}}" hint-placeholder-val="{{true}}">
+<button type="button" class="drop" onClick="{{chooseFile}}" style="width: 100%; min-height: 200px; border-radius: 32px; border: 2px dashed #C5CAD6; background: #FFFFFF; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #1D2140; padding: 24px">
+<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"></path></svg>
+<span style="font-size: 20px; font-weight: 600">Drop a CSV here, or choose one</span>
+<span style="font-size: 15px; color: #646B85; max-width: 46ch; line-height: 1.45">A name and an email, a LinkedIn link or an X handle on each row. Callum checks every name and skips people you already know.</span>
+</button>
+</sc-if>
+
+<sc-if value="{{csvReading}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="width: 100%; min-height: 200px; border-radius: 32px; background: #F4F5F9; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px">
+<span style="display: inline-flex; gap: 6px"><span class="pulse" style="width: 10px; height: 10px; border-radius: 50%; background: #FFB020"></span><span class="pulse" style="width: 10px; height: 10px; border-radius: 50%; background: #FFB020; animation-delay: .15s"></span><span class="pulse" style="width: 10px; height: 10px; border-radius: 50%; background: #FFB020; animation-delay: .3s"></span></span>
+<span style="font-size: 20px; font-weight: 600">Reading founders.csv</span>
+<span style="font-size: 32px; font-weight: 600; letter-spacing: -0.03em">{{readCount}}</span>
+<span style="font-size: 14px; color: #646B85">people so far</span>
+</div>
+</sc-if>
+
+<sc-if value="{{hasPreview}}" hint-placeholder-val="{{false}}">
+<div class="preview fade-in" style="width: 100%; display: flex; gap: 22px; align-items: flex-start">
+<div style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 12px; min-width: 0">
+<p style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em">{{prev.title}}</p>
+<div role="list" aria-label="{{prev.title}}" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 136px; overflow: hidden">
+<sc-for list="{{prev.faces}}" as="pf" hint-placeholder-count="20"><button type="button" role="listitem" class="peek pour" onClick="{{pf.pick}}" aria-label="{{pf.label}}" aria-pressed="{{pf.on}}" style="width: 32px; height: 32px; padding: 0; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; cursor: pointer; {{pf.style}}"></button></sc-for>
+</div>
+<sc-if value="{{hasPeek}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; align-items: center; gap: 12px; background: #F4F5F9; border-radius: 22px; padding: 10px 10px 10px 12px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; {{peek.avatar}}"></span>
+<span style="flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0"><span style="font-size: 15px; font-weight: 600">{{peek.name}}</span><span style="font-size: 13px; color: #646B85">{{peek.sub}}</span></span>
+<button type="button" onClick="{{notFit}}" style="min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #FFFFFF; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">Not a fit</button>
+</div>
+</sc-if>
+<sc-if value="{{noPeek}}" hint-placeholder-val="{{true}}"><p style="margin: 0; font-size: 14px; color: #646B85">{{prev.hint}}</p></sc-if>
+</div>
+<sc-if value="{{prev.hasSkipped}}" hint-placeholder-val="{{true}}">
+<div style="flex: 0 0 340px; display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0 0 4px; font-size: 16px; font-weight: 600">{{prev.skipTitle}}</p>
+<sc-for list="{{prev.groups}}" as="g" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column">
+<button type="button" class="grow" onClick="{{g.toggle}}" aria-expanded="{{g.open}}" style="display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 12px; border: none; border-radius: 16px; background: transparent; cursor: pointer; color: #1D2140; font-size: 15px; text-align: left">
+<span aria-hidden="true" style="flex: 0 0 auto; min-width: 26px; height: 26px; padding: 0 7px; box-sizing: border-box; border-radius: 13px; background: #F4F5F9; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center">{{g.n}}</span>
+<span style="flex: 1 1 auto">{{g.reason}}</span>
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transition: transform .25s ease; {{g.chev}}"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<sc-if value="{{g.isOpen}}" hint-placeholder-val="{{false}}"><p class="fade-in" style="margin: 2px 12px 8px 48px; font-size: 14px; line-height: 1.5; color: #646B85">{{g.detail}}</p></sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 4px">
+<button type="button" onClick="{{addPreview}}" style="min-height: 52px; padding: 0 28px; border-radius: 26px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 18px 36px -18px rgba(29,33,64,0.6)">{{prev.addLabel}}</button>
+<button type="button" onClick="{{again}}" style="min-height: 52px; padding: 0 22px; border-radius: 26px; border: none; background: #F4F5F9; color: #1D2140; font-size: 16px; font-weight: 600; cursor: pointer">{{prev.againLabel}}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{isDone}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; margin-top: 18px">
+<span aria-hidden="true" style="width: 64px; height: 64px; border-radius: 50%; background: #1D2140; display: flex; align-items: center; justify-content: center"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
+<p style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em">{{doneTitle}}</p>
+<p style="margin: 0; font-size: 16px; color: #646B85">First hellos go out from tomorrow at 9:00, within your daily limits.</p>
+<button type="button" onClick="{{again}}" style="min-height: 46px; padding: 0 22px; border-radius: 23px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Add more people</button>
+</div>
+</sc-if>
+
+<sc-if value="{{isPaste}}" hint-placeholder-val="{{false}}">
+<div style="width: 100%; display: flex; flex-direction: column; gap: 12px">
+<label for="paste" style="font-size: 15px; color: #646B85">One person per line. A name, then an email, a LinkedIn link or an X handle.</label>
+<textarea id="paste" class="soft-field" value="{{pasteText}}" onChange="{{onPaste}}" placeholder="Kwame Asante, kwame@osupay.com, Osu Pay&#10;Abena Mensah, linkedin.com/in/abena-mensah&#10;Yaw Darko, @yawdarko" style="width: 100%; min-height: 170px; resize: none; border: none; border-radius: 26px; background: #F4F5F9; padding: 18px 20px; font-size: 16px; line-height: 1.6; color: #1D2140; box-sizing: border-box"></textarea>
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<span style="font-size: 15px; {{pasteNoteStyle}}">{{pasteNote}}</span>
+<button type="button" onClick="{{addPaste}}" aria-disabled="{{pasteOff}}" style="min-height: 50px; padding: 0 26px; border-radius: 25px; border: none; font-size: 16px; font-weight: 600; {{pasteBtn}}">{{pasteLabel}}</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isLink}}" hint-placeholder-val="{{false}}">
+<div style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 14px">
+<div class="ask-pill" style="width: 100%; display: flex; align-items: center; gap: 12px; background: #FFFFFF; border-radius: 30px; padding: 6px 6px 6px 20px; box-shadow: 0 18px 44px -24px rgba(29,33,64,0.3), 0 0 0 1px rgba(29,33,64,0.07)">
+<label for="link" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">LinkedIn search link</label>
+<input id="link" type="url" value="{{linkText}}" onChange="{{onLink}}" onKeyDown="{{onLinkKey}}" placeholder="Paste a LinkedIn people search link" style="flex: 1 1 auto; min-width: 0; height: 50px; border: none; background: transparent; font-size: 17px; color: #1D2140">
+<button type="button" onClick="{{readLink}}" style="flex: 0 0 auto; min-height: 50px; padding: 0 22px; border-radius: 25px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Read it</button>
+</div>
+<sc-if value="{{linkBad}}" hint-placeholder-val="{{false}}"><p class="fade-in" role="alert" style="margin: 0; display: flex; align-items: center; gap: 8px; background: #FFF1EC; border-radius: 16px; padding: 10px 14px; font-size: 14px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D9480F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5M12 16.6v.01"></path></svg>That isn't a LinkedIn people search. It should start with linkedin.com/search/results/people.</p></sc-if>
+<sc-if value="{{linkIdle}}" hint-placeholder-val="{{true}}"><p style="margin: 0; font-size: 15px; color: #646B85; line-height: 1.5; text-align: center; max-width: 52ch">Search LinkedIn the way you normally would, then copy the link. Callum reads up to 100 people from it, on this computer, at a human pace.</p>
+<button type="button" onClick="{{sampleLink}}" style="min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">Try a sample search</button></sc-if>
+<sc-if value="{{linkReading}}" hint-placeholder-val="{{false}}"><div class="fade-in" style="display: flex; align-items: center; gap: 12px; font-size: 16px"><span style="display: inline-flex; gap: 6px"><span class="pulse" style="width: 9px; height: 9px; border-radius: 50%; background: #FFB020"></span><span class="pulse" style="width: 9px; height: 9px; border-radius: 50%; background: #FFB020; animation-delay: .15s"></span><span class="pulse" style="width: 9px; height: 9px; border-radius: 50%; background: #FFB020; animation-delay: .3s"></span></span>Callum is reading the search on this computer</div></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{isDescribe}}" hint-placeholder-val="{{false}}">
+<div style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 14px">
+<div class="ask-pill" style="width: 100%; display: flex; align-items: center; gap: 12px; background: #FFFFFF; border-radius: 30px; padding: 6px 6px 6px 22px; box-shadow: 0 18px 44px -24px rgba(29,33,64,0.3), 0 0 0 1px rgba(29,33,64,0.07)">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; background: #FFB020"></span>
+<label for="desc" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Describe who you want to meet</label>
+<input id="desc" type="text" value="{{descText}}" onChange="{{onDesc}}" onKeyDown="{{onDescKey}}" placeholder="Describe who you want to meet" style="flex: 1 1 auto; min-width: 0; height: 50px; border: none; background: transparent; font-size: 17px; color: #1D2140">
+<button type="button" onClick="{{look}}" aria-label="Look" style="flex: 0 0 auto; width: 50px; height: 50px; border-radius: 50%; border: none; background: #1D2140; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+</div>
+<sc-if value="{{descChipsOn}}" hint-placeholder-val="{{true}}"><div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px"><sc-for list="{{descChips}}" as="dc" hint-placeholder-count="3"><button type="button" onClick="{{dc.pick}}" style="min-height: 42px; padding: 0 16px; border-radius: 21px; border: none; background: #FFFFFF; box-shadow: 0 0 0 1.5px #E7E9F0; color: #1D2140; font-size: 15px; font-weight: 500; cursor: pointer">{{dc.text}}</button></sc-for></div></sc-if>
+
+<sc-if value="{{noSource}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="width: 100%; max-width: 640px; background: #F4F5F9; border-radius: 26px; padding: 20px 22px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px">
+<p style="margin: 0; font-size: 16px; line-height: 1.5">Describing people needs a people search connected. Bring a list instead, or connect Apollo and Callum can look for you.</p>
+<sc-if value="{{apolloClosed}}" hint-placeholder-val="{{true}}"><div style="display: flex; flex-wrap: wrap; gap: 10px"><button type="button" onClick="{{openApollo}}" style="min-height: 46px; padding: 0 20px; border-radius: 23px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Connect Apollo</button><button type="button" onClick="{{toCsv}}" style="min-height: 46px; padding: 0 20px; border-radius: 23px; border: none; background: #FFFFFF; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Bring a list</button></div></sc-if>
+<sc-if value="{{apolloOpen}}" hint-placeholder-val="{{false}}"><div class="fade-in" style="display: flex; gap: 8px; align-items: center"><label for="apollo" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Apollo API key</label><input id="apollo" type="password" value="{{apolloKey}}" onChange="{{onApollo}}" placeholder="Apollo API key" class="soft-field" style="flex: 1 1 auto; min-width: 0; height: 46px; border: none; border-radius: 23px; background: #FFFFFF; padding: 0 16px; font-size: 15px; color: #1D2140; box-sizing: border-box"><button type="button" onClick="{{connectApollo}}" style="min-height: 46px; padding: 0 20px; border-radius: 23px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px"><sc-if value="{{apolloBusy}}" hint-placeholder-val="{{false}}"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 1-9 9"></path></svg></sc-if>Connect</button></div><span style="font-size: 13px; color: #646B85">Find it in Apollo under Settings, then API. Callum only uses it to search for people.</span></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{narrowing}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; flex-direction: column; align-items: center; gap: 12px">
+<p style="margin: 0; font-size: 18px"><span style="font-weight: 600">{{aboutText}}</span> {{narrowAsk}}</p>
+<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px"><sc-for list="{{narrowChips}}" as="nc" hint-placeholder-count="3"><button type="button" onClick="{{nc.toggle}}" aria-pressed="{{nc.on}}" style="min-height: 42px; padding: 0 16px; border-radius: 21px; border: none; font-size: 15px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; {{nc.style}}"><sc-if value="{{nc.isOn}}" hint-placeholder-val="{{false}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></sc-if>{{nc.text}}</button></sc-for></div>
+<button type="button" onClick="{{find20}}" style="min-height: 50px; padding: 0 26px; border-radius: 25px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 4px">Find the 20 closest fits</button>
+</div>
+</sc-if>
+
+<sc-if value="{{looking}}" hint-placeholder-val="{{false}}"><div class="fade-in" style="display: flex; align-items: center; gap: 12px; font-size: 16px"><span style="display: inline-flex; gap: 6px"><span class="pulse" style="width: 9px; height: 9px; border-radius: 50%; background: #FFB020"></span><span class="pulse" style="width: 9px; height: 9px; border-radius: 50%; background: #FFB020; animation-delay: .15s"></span><span class="pulse" style="width: 9px; height: 9px; border-radius: 50%; background: #FFB020; animation-delay: .3s"></span></span>Callum is looking</div></sc-if>
+
+<sc-if value="{{nobody}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center">
+<p style="margin: 0; font-size: 18px; line-height: 1.45; max-width: 46ch">{{nobodyText}}</p>
+<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px"><sc-for list="{{wider}}" as="wd" hint-placeholder-count="2"><button type="button" onClick="{{wd.pick}}" style="min-height: 42px; padding: 0 16px; border-radius: 21px; border: none; background: #FFFFFF; box-shadow: 0 0 0 1.5px #E7E9F0; color: #1D2140; font-size: 15px; font-weight: 500; cursor: pointer">{{wd.text}}</button></sc-for></div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+</section>
+
+<div style="position: relative">
+<div class="river" style="position: relative; height: 176px">
+<svg aria-hidden="true" viewBox="0 0 1000 200" preserveAspectRatio="none" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible">
+<defs>
+<linearGradient id="v3-add-bed" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#EEF0F6" stop-opacity="0"></stop>
+<stop offset="0.07" stop-color="#EEF0F6" stop-opacity="1"></stop>
+<stop offset="0.5" stop-color="#ECEFFB" stop-opacity="1"></stop>
+<stop offset="0.82" stop-color="#FFF4DD" stop-opacity="1"></stop>
+<stop offset="1" stop-color="#FFEBC2" stop-opacity="1"></stop>
+</linearGradient>
+</defs>
+<path d="M0,22 C160,6 320,36 500,18 C680,2 840,32 1000,12 L1000,188 C840,200 680,172 500,188 C320,202 160,176 0,184 Z" fill="url(#v3-add-bed)"></path>
+<path class="current" d="M0,70 C180,54 340,88 500,70 C660,54 820,84 1000,64" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+<path class="current current-slow" d="M0,130 C170,116 330,148 500,128 C670,110 830,142 1000,122" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+</svg>
+<sc-for list="{{riverFaces}}" as="f" hint-placeholder-count="40"><span aria-hidden="true" class="face" style="{{f.style}}"></span></sc-for>
+</div>
+<div class="lane-names" style="position: relative; height: 40px; margin-top: 6px">
+<sc-for list="{{lanes}}" as="z" hint-placeholder-count="4">
+<span style="position: absolute; top: 0; transform: translateX(-50%); display: inline-flex; align-items: baseline; gap: 8px; white-space: nowrap; {{z.pos}}"><span style="font-size: 22px; font-weight: 600; letter-spacing: -0.03em; transition: color .4s ease; {{z.numStyle}}">{{z.n}}</span><span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; color: #646B85"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; {{z.dot}}"></span>{{z.name}}</span></span>
+</sc-for>
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      way: 'csv', wayKey: 0,
+      csv: 'idle', readCount: 0, openGroup: -1,
+      pasteText: '',
+      linkText: '', link: 'idle',
+      descText: '', desc: 'idle', narrow: {}, apollo: false, apolloOpen: false, apolloKey: '', apolloBusy: false,
+      removed: {}, peek: -1,
+      batches: [], batchKey: 0, doneTitle: '',
+      toast: '', toastKey: 0, undoFn: null
+    };
+    this._to = [];
+    this._tk = 0;
+  }
+
+  componentWillUnmount() { this._to.forEach(function (h) { clearTimeout(h); }); this._to = []; }
+
+  later(fn, ms) { this._to.push(setTimeout(fn, ms)); }
+
+  d() {
+    if (this._d) return this._d;
+    function hash(n) { var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+    var PAL = ['#FF7A59', '#FFC145', '#4CB5F5', '#7BC67E', '#8C6CFF', '#F26CA7', '#2EC4B6', '#FF9F1C'];
+    function marble(n) {
+      var a = PAL[n % 8], b = PAL[(n * 3 + 2) % 8], c = PAL[(n * 5 + 5) % 8];
+      if (b === a) b = PAL[(n + 3) % 8];
+      if (c === a || c === b) c = PAL[(n + 6) % 8];
+      var ax = Math.round(18 + hash(n * 1.7) * 44), ay = Math.round(14 + hash(n * 2.3) * 44);
+      return 'background: radial-gradient(circle at ' + ax + '% ' + ay + '%, ' + b + ' 0 20%, transparent 58%), radial-gradient(circle at ' + (100 - ax) + '% ' + (100 - ay) + '%, ' + c + ' 0 16%, transparent 54%), ' + a + ';';
+    }
+    var FIRST = ['Kwame', 'Abena', 'Kofi', 'Efua', 'Yaw', 'Akosua', 'Kojo', 'Ama', 'Tobi', 'Ebuka', 'Rukayat', 'Kayode', 'Mariam', 'Jide', 'Esi', 'Nana', 'Ola', 'Zara', 'Dapo', 'Ijeoma', 'Bola', 'Kunmi', 'Tayo', 'Fola', 'Uzo', 'Chika', 'Remi', 'Yemi', 'Bukola', 'Toyin', 'Sola', 'Lanre', 'Ifeanyi', 'Ayo', 'Damilola', 'Kehinde', 'Taiwo', 'Wunmi', 'Kojo', 'Adjoa', 'Fiifi', 'Selasi', 'Edem', 'Mawuli', 'Dzifa'];
+    var LAST = ['Asante', 'Mensah', 'Boateng', 'Owusu', 'Darko', 'Addo', 'Appiah', 'Ofori', 'Ogun', 'Anyanwu', 'Yusuf', 'Akande', 'Abubakar', 'Oduya', 'Quaye', 'Agyei', 'Ayodele', 'Ibrahim', 'Olaniyan', 'Nwachukwu'];
+    var TOWN = ['Osu', 'Labone', 'Tema', 'Kaneshie', 'Ridge', 'Adabraka', 'Cantonments', 'Dansoman', 'Opebi', 'Allen', 'Ojuelegba', 'Ilasan', 'Omole', 'Ikorodu', 'Teshie', 'Madina', 'Ogombo', 'Airport', 'Spintex', 'Achimota'];
+    var KIND = ['Pay', 'Ledger', 'Wallet', 'Labs', 'Money', 'Books', 'Credit', 'Finance'];
+    var ROLE = ['Founder', 'CEO', 'Co-founder', 'Head of Finance', 'CFO', 'COO'];
+    function person(seed) {
+      return { id: seed, first: FIRST[seed % FIRST.length], last: LAST[(seed * 7) % LAST.length], role: ROLE[(seed * 5) % ROLE.length], co: TOWN[(seed * 3) % TOWN.length] + ' ' + KIND[(seed * 11) % KIND.length], avatar: marble(300 + seed) };
+    }
+    var Z = [
+      { name: 'strangers', x0: 4, x1: 25, size: 18, ring: '#D5D9E4', filter: 'grayscale(1) brightness(1.12)', op: 0.62, n: 16 },
+      { name: 'said hello', x0: 29, x1: 49, size: 22, ring: '#A9B8F5', filter: 'grayscale(0.62)', op: 0.9, n: 18 },
+      { name: 'following up', x0: 53, x1: 72, size: 28, ring: '#6E86F2', filter: 'grayscale(0.28)', op: 1, n: 2 },
+      { name: 'talking', x0: 76, x1: 94, size: 34, ring: '#3F52D9', filter: 'none', op: 1, n: 1 }
+    ];
+    var base = [];
+    Z.forEach(function (z, zi) {
+      var cols = Math.max(1, Math.ceil(z.n / 4)), cw = (z.x1 - z.x0) / Math.max(cols, 3);
+      for (var k = 0; k < z.n; k++) {
+        var col = Math.floor(k / 4), row = k % 4;
+        var id = zi * 20 + k;
+        var x = z.x0 + (col + 0.5) * cw + (hash(id * 3.1 + 1) - 0.5) * cw * 0.4 + (zi > 1 ? (z.x1 - z.x0) * 0.3 : 0);
+        var y = 22 + row * 18 + (col % 2) * 6 + (hash(id * 5.7 + 2) - 0.5) * 5;
+        if (z.n <= 2) y = 34 + k * 30;
+        base.push({ zi: zi, x: x, y: y, avatar: marble(300 + id) });
+      }
+    });
+    var SKIP = [
+      { n: 3, reason: "You've emailed before", detail: 'Tunde Bello, Ada Nwosu and Seun Ojo are in your Sent folder, so no cold hello for them.' },
+      { n: 2, reason: 'Already in Callum', detail: 'Kemi Eze is talking with you and Chidi Okeke is following up. They hear from you once.' },
+      { n: 1, reason: 'Asked not to be contacted', detail: 'Ruth Adeleke asked to stop on Thursday. Callum will never reach out again.' },
+      { n: 1, reason: 'Has no email or LinkedIn', detail: 'Row 31 only says Bola. Add an email or a profile link and bring the list again.' }
+    ];
+    this._d = { hash: hash, marble: marble, person: person, Z: Z, base: base, SKIP: SKIP };
+    return this._d;
+  }
+
+  showToast(text, undoFn) {
+    var self = this;
+    this._tk += 1;
+    var key = this._tk;
+    this.setState({ toast: text, toastKey: key, undoFn: undoFn || null });
+    this.later(function () { if (self.state.toastKey === key) self.setState({ toast: '', undoFn: null }); }, undoFn ? 6000 : 3400);
+  }
+
+  setWay(w) {
+    this.setState(function (s) { return { way: w, wayKey: s.wayKey + 1, peek: -1, openGroup: -1 }; });
+  }
+
+  readCsv() {
+    var self = this;
+    this.setState({ csv: 'reading', readCount: 0, removed: {}, peek: -1, openGroup: -1 });
+    var steps = [3, 9, 14, 22, 27, 33, 38, 44, 48];
+    steps.forEach(function (n, i) { self.later(function () { if (self.state.csv === 'reading') self.setState({ readCount: n }); }, 140 + i * 150); });
+    this.later(function () { if (self.state.csv === 'reading') self.setState({ csv: 'preview' }); }, 140 + steps.length * 150 + 300);
+  }
+
+  addBatch(seeds, label) {
+    var self = this;
+    var key = this.state.batchKey + 1;
+    var batch = { key: key, seeds: seeds };
+    var title = seeds.length + (seeds.length === 1 ? ' person joins the river.' : ' people join the river.');
+    this.setState(function (s) { return { batches: s.batches.concat([batch]), batchKey: key, csv: s.way === 'csv' ? 'done' : s.csv, link: s.way === 'link' ? 'done' : s.link, desc: s.way === 'describe' ? 'done' : s.desc, pasteText: s.way === 'paste' ? '' : s.pasteText, doneTitle: title, peek: -1 }; });
+    this.showToast(label, function () {
+      self.setState(function (s) { return { batches: s.batches.filter(function (b) { return b.key !== key; }), csv: s.csv === 'done' ? 'preview' : s.csv, link: s.link === 'done' ? 'preview' : s.link, desc: s.desc === 'done' ? 'found' : s.desc }; });
+      self.showToast('Undone. Nobody was added.');
+    });
+  }
+
+  runDescribe(text) {
+    var self = this, t = (text || '').trim();
+    if (!t) return;
+    if (!this.state.apollo) { this.setState({ descText: t, desc: 'nosource' }); return; }
+    if (/\bops\b/i.test(t)) { this.setState({ descText: t, desc: 'nobody' }); return; }
+    this.setState({ descText: t, desc: 'narrow', narrow: {}, removed: {}, peek: -1 });
+  }
+
+  renderVals() {
+    var self = this, D = this.d(), s = this.state;
+    var WAYS = [['csv', 'Drop a CSV'], ['paste', 'Paste names'], ['link', 'LinkedIn search'], ['describe', 'Describe who']];
+    var ways = WAYS.map(function (w) {
+      var on = s.way === w[0];
+      return {
+        label: w[1], on: on ? 'true' : 'false', ink: on ? '#FFFFFF' : '#1D2140',
+        disc: on ? 'background: #1D2140; box-shadow: 0 16px 32px -16px rgba(29,33,64,0.7);' : 'background: #F4F5F9;',
+        labelStyle: on ? 'font-weight: 600;' : 'color: #646B85; font-weight: 500;',
+        isCsv: w[0] === 'csv', isPaste: w[0] === 'paste', isLink: w[0] === 'link', isDescribe: w[0] === 'describe',
+        pick: function () { self.setWay(w[0]); }
+      };
+    });
+
+    var prev = null;
+    if (s.way === 'csv' && s.csv === 'preview') {
+      var seeds = []; for (var i = 0; i < 41; i++) seeds.push(100 + i);
+      prev = { seeds: seeds, word: 'new people', groups: D.SKIP, hint: 'Tap a face to check anyone before they join.', againLabel: 'Choose another file', label: function (n) { return n + ' people join the river. First hellos from tomorrow at 9:00.'; } };
+    } else if (s.way === 'link' && s.link === 'preview') {
+      var ls = []; for (var j = 0; j < 25; j++) ls.push(200 + j);
+      prev = { seeds: ls, word: 'people from the search', groups: [{ n: 2, reason: 'Already in Callum', detail: 'Ngozi Ibe and Temi Coker are already in the river. They hear from you once.' }], hint: 'Callum will invite them on LinkedIn, 15 a day.', againLabel: 'Use another link', label: function (n) { return n + ' people join the river. Invites from tomorrow at 9:00.'; } };
+    } else if (s.way === 'describe' && s.desc === 'found') {
+      var ds = []; for (var k = 0; k < 20; k++) ds.push(300 + k);
+      prev = { seeds: ds, word: 'close fits', groups: [], hint: 'Tap a face to check anyone. Not a fit teaches Callum too.', againLabel: 'Describe again', label: function (n) { return n + ' people join the river. First hellos from tomorrow at 9:00.'; } };
+    }
+    var vp = { title: '', faces: [], hint: '', hasSkipped: false, skipTitle: '', groups: [], addLabel: '', againLabel: '' };
+    var kept = [];
+    if (prev) {
+      kept = prev.seeds.filter(function (sd) { return !s.removed[sd]; });
+      var skipN = prev.groups.reduce(function (a, g) { return a + g.n; }, 0);
+      vp = {
+        title: prev.word === 'close fits' ? 'Callum found ' + kept.length : kept.length + ' ' + prev.word,
+        faces: prev.seeds.filter(function (sd) { return !s.removed[sd]; }).map(function (sd, idx) {
+          var p = D.person(sd), on = s.peek === sd;
+          return { label: p.first + ' ' + p.last + ', ' + p.role + ' at ' + p.co, on: on ? 'true' : 'false', style: p.avatar + ' filter: ' + (on ? 'none' : 'grayscale(1) brightness(1.12)') + '; box-shadow: 0 0 0 ' + (on ? '3px #3F52D9' : '1.5px #D5D9E4') + '; animation-delay: ' + (idx * 0.025).toFixed(3) + 's;', pick: function () { self.setState(function (st) { return { peek: st.peek === sd ? -1 : sd }; }); } };
+        }),
+        hint: prev.hint,
+        hasSkipped: prev.groups.length > 0,
+        skipTitle: skipN + ' skipped, and why',
+        groups: prev.groups.map(function (g, gi) {
+          var open = s.openGroup === gi;
+          return { n: String(g.n), reason: g.reason, detail: g.detail, open: open ? 'true' : 'false', isOpen: open, chev: open ? 'transform: rotate(180deg);' : '', toggle: function () { self.setState(function (st) { return { openGroup: st.openGroup === gi ? -1 : gi }; }); } };
+        }),
+        addLabel: 'Add ' + kept.length + (kept.length === 1 ? ' person' : ' people'),
+        againLabel: prev.againLabel
+      };
+    }
+    var pk = s.peek >= 0 ? D.person(s.peek) : null;
+
+    var lines = s.pasteText.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 1; });
+    var noWay = lines.filter(function (l) { return !/@|linkedin\.com\/in\//i.test(l); }).length;
+    var pasteN = lines.length;
+    var pasteNote = !pasteN ? 'Callum checks every name and skips people you already know.' : (pasteN + (pasteN === 1 ? ' person' : ' people') + (noWay ? '. ' + noWay + ' ' + (noWay === 1 ? 'has' : 'have') + ' no email, LinkedIn or X yet, so Callum will skip ' + (noWay === 1 ? 'that row' : 'those rows') + '.' : ', all reachable.'));
+    var pasteOk = pasteN - noWay;
+
+    var narrowDefs = [['seed', 'Seed to Series A', 3], ['size', '20 to 200 people', 2], ['accra', 'Accra only', 2.6]];
+    var about = 2300;
+    narrowDefs.forEach(function (n) { if (s.narrow[n[0]]) about = about / n[2]; });
+    about = Math.round(about / 10) * 10;
+
+    var descChips = ['Heads of finance at fintechs in Accra', 'Founders like Kemi', 'Heads of ops in Accra'].map(function (t) { return { text: t, pick: function () { self.runDescribe(t); } }; });
+
+    var Z = D.Z, added = [];
+    s.batches.forEach(function (b) { b.seeds.forEach(function (sd) { added.push({ sd: sd, key: b.key }); }); });
+    var riverFaces = D.base.map(function (f) {
+      var z = Z[f.zi], half = z.size / 2;
+      return { style: 'left: ' + f.x.toFixed(2) + '%; top: ' + f.y.toFixed(1) + '%; width: ' + z.size + 'px; height: ' + z.size + 'px; margin: -' + half + 'px 0 0 -' + half + 'px; ' + f.avatar + ' filter: ' + z.filter + '; opacity: ' + z.op + '; box-shadow: 0 0 0 1.5px ' + z.ring + ';' };
+    });
+    added.forEach(function (a, i) {
+      var col = Math.floor(i / 7), row = i % 7;
+      var x = 2.2 + (col * 2.15) % 23 + D.hash(a.sd * 2.1) * 0.7;
+      var y = 12 + row * 12 + (col % 2) * 5 + (D.hash(a.sd * 4.3) - 0.5) * 3;
+      var p = D.person(a.sd);
+      riverFaces.push({ style: 'left: ' + x.toFixed(2) + '%; top: ' + y.toFixed(1) + '%; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; ' + p.avatar + ' filter: grayscale(1) brightness(1.12); opacity: 0.7; box-shadow: 0 0 0 1.5px #D5D9E4; animation-delay: ' + (0.3 + (i % 41) * 0.03).toFixed(2) + 's;' });
+    });
+    var lanes = Z.map(function (z, zi) {
+      var n = z.n + (zi === 0 ? added.length : 0);
+      return { n: String(n), name: z.name, pos: 'left: ' + ((z.x0 + z.x1) / 2).toFixed(1) + '%;', dot: zi === 0 ? 'border: 2px solid #C5CAD6;' : 'background: ' + z.ring + ';', numStyle: zi === 0 && added.length ? 'color: #3F52D9;' : '' };
+    });
+
+    var isCsv = s.way === 'csv', isLinkW = s.way === 'link', isDesc = s.way === 'describe';
+    var hasPreview = !!prev;
+    var isDone = (isCsv && s.csv === 'done') || (isLinkW && s.link === 'done') || (isDesc && s.desc === 'done');
+    return {
+      ways: ways, stepCls: s.wayKey % 2 ? 'step-a' : 'step-b',
+      csvIdle: isCsv && s.csv === 'idle', csvReading: isCsv && s.csv === 'reading', readCount: String(s.readCount),
+      chooseFile: function () { self.readCsv(); },
+      hasPreview: hasPreview, prev: vp, hasPeek: hasPreview && !!pk, noPeek: hasPreview && !pk,
+      peek: pk ? { avatar: pk.avatar, name: pk.first + ' ' + pk.last, sub: pk.role + ' at ' + pk.co } : { avatar: '', name: '', sub: '' },
+      notFit: function () {
+        var sd = s.peek; if (sd < 0) return;
+        var r = Object.assign({}, s.removed); r[sd] = true;
+        var p = D.person(sd);
+        self.setState({ removed: r, peek: -1 });
+        self.showToast(p.first + ' is out. Callum will find fewer people like ' + p.first + '.');
+      },
+      addPreview: function () { if (!prev || !kept.length) return; self.addBatch(kept.slice(), prev.label(kept.length)); },
+      again: function () {
+        if (isCsv) self.setState({ csv: 'idle', removed: {}, peek: -1 });
+        else if (isLinkW) self.setState({ link: 'idle', linkText: '', removed: {}, peek: -1 });
+        else if (isDesc) self.setState({ desc: 'idle', descText: '', removed: {}, peek: -1, narrow: {} });
+        else self.setState({ pasteText: '' });
+      },
+      isDone: isDone, doneTitle: s.doneTitle,
+      isPaste: s.way === 'paste' && true, pasteText: s.pasteText,
+      onPaste: function (e) { self.setState({ pasteText: e.target.value }); },
+      pasteNote: pasteNote, pasteNoteStyle: noWay ? 'color: #1D2140;' : 'color: #646B85;',
+      pasteOff: pasteOk > 0 ? 'false' : 'true',
+      pasteBtn: pasteOk > 0 ? 'background: #1D2140; color: #FFFFFF; cursor: pointer;' : 'background: #E7E9F0; color: #9AA0B4; cursor: default;',
+      pasteLabel: pasteOk > 0 ? 'Add ' + pasteOk + (pasteOk === 1 ? ' person' : ' people') : 'Add people',
+      addPaste: function () {
+        if (pasteOk <= 0) return;
+        var seeds = []; for (var q = 0; q < pasteOk; q++) seeds.push(400 + s.batchKey * 10 + q);
+        self.addBatch(seeds, pasteOk + (pasteOk === 1 ? ' person joins' : ' people join') + ' the river. First hellos from tomorrow at 9:00.');
+      },
+      isLink: isLinkW && (s.link === 'idle' || s.link === 'bad' || s.link === 'reading'),
+      linkText: s.linkText, linkBad: s.link === 'bad', linkIdle: s.link === 'idle', linkReading: s.link === 'reading',
+      onLink: function (e) { self.setState({ linkText: e.target.value, link: 'idle' }); },
+      onLinkKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.readLink(); } },
+      readLink: function () { self.readLink(); },
+      sampleLink: function () { self.setState({ linkText: 'https://www.linkedin.com/search/results/people/?keywords=fintech%20founder%20accra' }); self.later(function () { self.readLink(); }, 400); },
+      isDescribe: isDesc && s.desc !== 'found' && s.desc !== 'done',
+      descText: s.descText,
+      onDesc: function (e) { self.setState({ descText: e.target.value }); },
+      onDescKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.runDescribe(self.state.descText); } },
+      look: function () { self.runDescribe(s.descText); },
+      descChipsOn: s.desc === 'idle', descChips: descChips,
+      noSource: s.desc === 'nosource', apolloClosed: !s.apolloOpen, apolloOpen: s.apolloOpen, apolloKey: s.apolloKey, apolloBusy: s.apolloBusy,
+      openApollo: function () { self.setState({ apolloOpen: true }); },
+      onApollo: function (e) { self.setState({ apolloKey: e.target.value }); },
+      connectApollo: function () {
+        if (s.apolloBusy) return;
+        self.setState({ apolloBusy: true });
+        self.later(function () { self.setState({ apolloBusy: false, apollo: true, apolloOpen: false }); self.showToast('Apollo is connected. Callum can look for people now.'); self.runDescribe(self.state.descText); }, 1200);
+      },
+      toCsv: function () { self.setWay('csv'); },
+      narrowing: s.desc === 'narrow',
+      aboutText: "That's about " + about.toLocaleString('en-US') + ' people.',
+      narrowAsk: about > 500 ? 'Narrow it down?' : 'That looks focused.',
+      narrowChips: narrowDefs.map(function (n) {
+        var on = !!s.narrow[n[0]];
+        return { text: n[1], on: on ? 'true' : 'false', isOn: on, style: on ? 'background: #1D2140; color: #FFFFFF;' : 'background: #FFFFFF; box-shadow: 0 0 0 1.5px #E7E9F0; color: #1D2140;', toggle: function () { var m = Object.assign({}, self.state.narrow); if (m[n[0]]) delete m[n[0]]; else m[n[0]] = true; self.setState({ narrow: m }); } };
+      }),
+      find20: function () { self.setState({ desc: 'looking' }); self.later(function () { if (self.state.desc === 'looking') self.setState({ desc: 'found', removed: {}, peek: -1 }); }, 1400); },
+      looking: s.desc === 'looking',
+      nobody: s.desc === 'nobody', nobodyText: "Nobody matched '" + s.descText + "'. Try a wider role or a nearby city.",
+      wider: ['Heads of finance in Accra', 'Heads of ops in Ghana'].map(function (t) { return { text: t, pick: function () { if (/\bops\b/i.test(t)) { self.setState({ descText: t, desc: 'narrow', narrow: {} }); } else self.runDescribe(t); } }; }),
+      riverFaces: riverFaces, lanes: lanes,
+      hasToast: !!s.toast, toast: s.toast, toastCls: s.toastKey % 2 ? 'toast-a' : 'toast-b',
+      toastPad: s.undoFn ? 'padding-right: 6px;' : '', canUndo: !!s.undoFn,
+      undo: function () { var f = self.state.undoFn; if (!f) return; self._tk += 1; self.setState({ toast: '', undoFn: null }); f(); }
+    };
+  }
+
+  readLink() {
+    var self = this, t = this.state.linkText.trim();
+    if (!/linkedin\.com\/search\/results\/people/i.test(t)) { this.setState({ link: 'bad' }); return; }
+    this.setState({ link: 'reading', removed: {}, peek: -1, openGroup: -1 });
+    this.later(function () { if (self.state.link === 'reading') self.setState({ link: 'preview' }); }, 1600);
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Callum v3, your Callum</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1D2140}a:hover{color:#3F52D9}
+button,input,textarea{font-family:inherit}
+button:focus-visible,a:focus-visible{outline:2px solid #3F52D9;outline-offset:3px}
+input:focus,textarea:focus{outline:none}
+input::placeholder{color:#646B85}
+.row-head{transition:background-color .2s ease}
+.row-head:hover{background:#F4F5F9!important}
+.chev{transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+.field{transition:box-shadow .2s ease,background-color .2s ease}
+.field:focus{box-shadow:0 0 0 2px #3F52D9!important;background:#FFFFFF!important}
+.bubble-edit:focus{box-shadow:0 0 0 3px rgba(63,82,217,.5)}
+.open-a{animation:open-a .42s cubic-bezier(.2,.8,.2,1) backwards}
+.open-b{animation:open-b .42s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes open-a{from{opacity:0;transform:translateY(-6px)}}
+@keyframes open-b{from{opacity:0;transform:translateY(-6px)}}
+.bubble-a{animation:bubble-a .45s cubic-bezier(.2,.8,.2,1) backwards}
+.bubble-b{animation:bubble-b .45s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes bubble-a{from{opacity:0;transform:translateY(8px)}}
+@keyframes bubble-b{from{opacity:0;transform:translateY(8px)}}
+.fade-in{animation:fade-in .45s ease backwards}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}}
+.pop-in{animation:pop-in .45s cubic-bezier(.2,.8,.2,1.4) backwards}
+@keyframes pop-in{from{opacity:0;transform:scale(.3)}}
+.toast-a{animation:toast-a .4s cubic-bezier(.2,.8,.2,1) backwards}
+.toast-b{animation:toast-b .4s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes toast-a{from{opacity:0;transform:translateY(-10px)}}
+@keyframes toast-b{from{opacity:0;transform:translateY(-10px)}}
+.spin{animation:spin .9s linear infinite;transform-origin:50% 50%}
+@keyframes spin{to{transform:rotate(360deg)}}
+.switch-knob{transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.switch-track{transition:background-color .25s ease}
+.ch-disc{transition:background-color .35s ease,color .35s ease,opacity .3s ease}
+.current{stroke-dasharray:1 22;animation:flow 2.4s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-23}}
+.face{position:absolute;border:2px solid #FFFFFF;border-radius:50%;box-sizing:border-box;animation:face-in .9s cubic-bezier(.2,.7,.2,1) backwards}
+@keyframes face-in{from{opacity:0;transform:translateX(-40px) scale(.5)}}
+@media (max-width: 760px){
+.set-root{padding:18px 16px 24px!important}
+.cols{flex-direction:column!important;gap:22px!important}
+.col{width:100%!important}
+.big-title{font-size:34px!important}
+.bed{display:none!important}
+}
+@media (prefers-reduced-motion: reduce){
+.row-head,.chev,.field,.switch-knob,.switch-track,.ch-disc{transition:none!important}
+.open-a,.open-b,.bubble-a,.bubble-b,.fade-in,.pop-in,.toast-a,.toast-b,.face{animation:none!important}
+.spin,.current{animation:none}
+}
+</style>
+</helmet>
+<div class="set-root" style="position: relative; min-height: 900px; background: #FFFFFF; color: #1D2140; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums; padding: 22px 32px 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden">
+
+<p aria-live="polite" style="position: absolute; left: 0; right: 0; top: 78px; z-index: 40; margin: 0; display: flex; justify-content: center; pointer-events: none">
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{false}}"><span class="{{toastCls}}" style="display: inline-flex; align-items: center; gap: 10px; background: #1D2140; color: #FFFFFF; border-radius: 22px; padding: 11px 18px; font-size: 15px; font-weight: 500; box-shadow: 0 18px 40px -18px rgba(29,33,64,0.55)"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #22B07D"></span>{{toast}}</span></sc-if>
+</p>
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; position: relative; z-index: 5">
+<span style="display: inline-flex; align-items: center; gap: 9px; font-size: 22px; font-weight: 700; letter-spacing: -0.03em"><span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 50%; background: #FFB020"></span>callum</span>
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: 18px; background: #F4F5F9; font-size: 14px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #22B07D"></span>Running</span>
+<a href="V2Morning.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px 0 14px; border-radius: 22px; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; text-decoration: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Back to the river</a>
+</div>
+</header>
+
+<main style="flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; padding: 26px 0 20px; position: relative; z-index: 2">
+<div style="width: 100%; max-width: 1184px; display: flex; flex-direction: column; gap: 26px">
+
+<div style="display: flex; align-items: flex-end; gap: 18px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 64px; height: 64px; border-radius: 50%; border: 3px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #E7E9F0; background: radial-gradient(circle at 30% 30%, #8C6CFF 0 22%, transparent 58%), radial-gradient(circle at 72% 70%, #FFC145 0 18%, transparent 55%), #4CB5F5"></span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 class="big-title" style="margin: 0; font-size: 44px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.05">Your Callum</h1>
+<span style="font-size: 16px; color: #646B85">{{subline}}</span>
+</div>
+</div>
+
+<div class="cols" style="display: flex; gap: 64px; align-items: flex-start">
+
+<div class="col" style="width: calc(50% - 32px); display: flex; flex-direction: column; border-top: 1px solid #E7E9F0">
+
+<section style="border-bottom: 1px solid #E7E9F0">
+<button type="button" class="row-head" onClick="{{rowYou.toggle}}" aria-expanded="{{rowYou.open}}" style="width: 100%; min-height: 66px; padding: 0 12px; border: none; background: transparent; border-radius: 16px; cursor: pointer; display: flex; align-items: center; gap: 14px; text-align: left; color: #1D2140">
+<span style="flex: 0 0 168px; font-size: 16px; font-weight: 600">You</span>
+<span style="flex: 1 1 auto; min-width: 0; font-size: 15px; color: #646B85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{youSummary}}</span>
+<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="{{rowYou.chev}}"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<sc-if value="{{rowYou.open}}" hint-placeholder-val="{{false}}">
+<div class="{{openCls}}" style="padding: 4px 12px 22px; display: flex; flex-direction: column; gap: 12px">
+<label for="nm" style="font-size: 14px; color: #646B85">Your first name, as people see it</label>
+<input id="nm" class="field" type="text" value="{{name}}" onChange="{{onName}}" style="height: 52px; border: none; border-radius: 18px; background: #F4F5F9; padding: 0 18px; font-size: 18px; font-weight: 500; color: #1D2140">
+<span style="display: flex; align-items: center; gap: 10px; font-size: 15px; color: #646B85"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M4 7.5l8 6 8-6"></path></svg>Emails go out from gabriel@yourcompany.com</span>
+</div>
+</sc-if>
+</section>
+
+<section style="border-bottom: 1px solid #E7E9F0">
+<button type="button" class="row-head" onClick="{{rowOffer.toggle}}" aria-expanded="{{rowOffer.open}}" style="width: 100%; min-height: 66px; padding: 0 12px; border: none; background: transparent; border-radius: 16px; cursor: pointer; display: flex; align-items: center; gap: 14px; text-align: left; color: #1D2140">
+<span style="flex: 0 0 168px; font-size: 16px; font-weight: 600">What you offer</span>
+<span style="flex: 1 1 auto; min-width: 0; font-size: 15px; color: #646B85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{offer}}</span>
+<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="{{rowOffer.chev}}"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<sc-if value="{{rowOffer.open}}" hint-placeholder-val="{{false}}">
+<div class="{{openCls}}" style="padding: 4px 12px 22px; display: flex; flex-direction: column; gap: 10px">
+<label for="offer" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">What you offer, in one line</label>
+<textarea id="offer" class="field" value="{{offer}}" onChange="{{onOffer}}" rows="2" style="width: 100%; box-sizing: border-box; resize: none; border: none; border-radius: 22px; background: #F4F5F9; padding: 16px 20px; font-size: 20px; font-weight: 500; line-height: 1.35; letter-spacing: -0.01em; color: #1D2140; height: 92px"></textarea>
+<span style="font-size: 14px; color: #646B85; padding-left: 4px">{{offerHint}}</span>
+</div>
+</sc-if>
+</section>
+
+<section style="border-bottom: 1px solid #E7E9F0">
+<button type="button" class="row-head" onClick="{{rowTone.toggle}}" aria-expanded="{{rowTone.open}}" style="width: 100%; min-height: 66px; padding: 0 12px; border: none; background: transparent; border-radius: 16px; cursor: pointer; display: flex; align-items: center; gap: 14px; text-align: left; color: #1D2140">
+<span style="flex: 0 0 168px; font-size: 16px; font-weight: 600">How you sound</span>
+<span style="flex: 1 1 auto; min-width: 0; font-size: 15px; color: #646B85">{{toneName}}</span>
+<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="{{rowTone.chev}}"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<sc-if value="{{rowTone.open}}" hint-placeholder-val="{{true}}">
+<div class="{{openCls}}" style="padding: 4px 12px 22px; display: flex; flex-direction: column; gap: 14px">
+<div role="group" aria-label="Tone" style="align-self: flex-start; display: flex; gap: 4px; padding: 5px; background: #F4F5F9; border-radius: 26px">
+<sc-for list="{{tones}}" as="t" hint-placeholder-count="3"><button type="button" onClick="{{t.pick}}" aria-pressed="{{t.on}}" style="min-height: 42px; padding: 0 20px; border-radius: 21px; border: none; font-size: 15px; font-weight: 600; cursor: pointer; transition: background-color .25s ease, color .25s ease, box-shadow .25s ease; {{t.style}}">{{t.name}}</button></sc-for>
+</div>
+<div style="display: flex; align-items: center; gap: 10px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #D5D9E4; filter: grayscale(1) brightness(1.12); {{kemi}}"></span>
+<span style="font-size: 14px; color: #646B85">A first hello to Kemi at Oko Pay</span>
+</div>
+<label for="draft" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Sample first message</label>
+<textarea id="draft" class="bubble-edit {{bubbleCls}}" value="{{message}}" onChange="{{onDraft}}" rows="3" style="margin-left: 40px; width: calc(100% - 40px); box-sizing: border-box; resize: none; border: none; background: #1D2140; color: #FFFFFF; caret-color: #FFFFFF; border-radius: 8px 26px 26px 26px; padding: 16px 20px; font-size: 17px; line-height: 1.45; height: 116px"></textarea>
+<span style="margin-left: 40px; font-size: 14px; color: #646B85">{{draftHint}}</span>
+</div>
+</sc-if>
+</section>
+
+<section style="border-bottom: 1px solid #E7E9F0">
+<button type="button" class="row-head" onClick="{{rowCal.toggle}}" aria-expanded="{{rowCal.open}}" style="width: 100%; min-height: 66px; padding: 0 12px; border: none; background: transparent; border-radius: 16px; cursor: pointer; display: flex; align-items: center; gap: 14px; text-align: left; color: #1D2140">
+<span style="flex: 0 0 168px; font-size: 16px; font-weight: 600">Calendar link</span>
+<span style="flex: 1 1 auto; min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; {{calSummaryStyle}}">{{calSummary}}</span>
+<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="{{rowCal.chev}}"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<sc-if value="{{rowCal.open}}" hint-placeholder-val="{{false}}">
+<div class="{{openCls}}" style="padding: 4px 12px 22px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; gap: 10px">
+<label for="cal" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Your calendar link</label>
+<input id="cal" class="field" type="text" value="{{calDraft}}" onChange="{{onCal}}" onKeyDown="{{onCalKey}}" placeholder="cal.com/gabriel" style="flex: 1 1 auto; min-width: 0; height: 52px; border: none; border-radius: 18px; background: #F4F5F9; padding: 0 18px; font-size: 17px; color: #1D2140; {{calFieldStyle}}">
+<button type="button" onClick="{{saveCal}}" style="flex: 0 0 auto; min-height: 52px; padding: 0 22px; border-radius: 26px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Save</button>
+</div>
+<span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; padding-left: 4px; {{calHintStyle}}">
+<sc-if value="{{calSaved}}" hint-placeholder-val="{{false}}"><svg class="pop-in" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22B07D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></sc-if>{{calHint}}</span>
+</div>
+</sc-if>
+</section>
+
+</div>
+
+<div class="col" style="width: calc(50% - 32px); display: flex; flex-direction: column; gap: 18px">
+
+<section aria-labelledby="ch-title" style="display: flex; flex-direction: column; gap: 10px">
+<h2 id="ch-title" style="margin: 0; padding: 0 4px; font-size: 16px; font-weight: 600">Where Callum reaches people</h2>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{channels}}" as="c" hint-placeholder-count="3">
+<div style="background: #F4F5F9; border-radius: 22px; padding: 12px 12px 12px 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="ch-disc" aria-hidden="true" style="position: relative; flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; {{c.discStyle}}">
+<sc-if value="{{c.isEmail}}" hint-placeholder-val="{{true}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M4 7.5l8 6 8-6"></path></svg></sc-if>
+<sc-if value="{{c.isLi}}" hint-placeholder-val="{{false}}"><span style="font-size: 17px; font-weight: 700; letter-spacing: -0.04em; line-height: 1">in</span></sc-if>
+<sc-if value="{{c.isX}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"></path></svg></sc-if>
+<sc-if value="{{c.busy}}" hint-placeholder-val="{{false}}"><svg class="spin" viewBox="0 0 56 56" style="position: absolute; left: -6px; top: -6px; width: 56px; height: 56px"><circle cx="28" cy="28" r="26" fill="none" stroke="#3F52D9" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="40 200"></circle></svg></sc-if>
+</span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600">{{c.name}}<span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; {{c.dot}}"></span><span style="font-size: 14px; font-weight: 500; color: #646B85">{{c.account}}</span></span>
+<span style="font-size: 14px; color: #646B85">{{c.pace}}</span>
+</span>
+<sc-if value="{{c.showButtons}}" hint-placeholder-val="{{true}}">
+<span style="flex: 0 0 auto; display: flex; gap: 6px">
+<sc-if value="{{c.isOn}}" hint-placeholder-val="{{true}}">
+<button type="button" onClick="{{c.reconnect}}" style="min-height: 40px; padding: 0 14px; border-radius: 20px; border: none; background: #FFFFFF; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">Reconnect</button>
+<button type="button" onClick="{{c.askOff}}" aria-label="{{c.offLabel}}" style="min-height: 40px; padding: 0 14px; border-radius: 20px; border: none; background: transparent; color: #646B85; font-size: 14px; font-weight: 600; cursor: pointer">Disconnect</button>
+</sc-if>
+<sc-if value="{{c.isOff}}" hint-placeholder-val="{{false}}">
+<button type="button" onClick="{{c.connect}}" style="min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #1D2140; color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">Connect</button>
+</sc-if>
+</span>
+</sc-if>
+</div>
+<sc-if value="{{c.confirming}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: #FFFFFF; border-radius: 16px; padding: 10px 10px 10px 14px">
+<span style="flex: 1 1 220px; font-size: 14px; line-height: 1.45">{{c.confirmText}}</span>
+<button type="button" onClick="{{c.keep}}" style="min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">Keep it</button>
+<button type="button" onClick="{{c.doOff}}" style="min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #1D2140; color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">Disconnect</button>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</section>
+
+<div style="display: flex; flex-direction: column; border-top: 1px solid #E7E9F0">
+
+<section style="border-bottom: 1px solid #E7E9F0">
+<button type="button" class="row-head" onClick="{{rowWhen.toggle}}" aria-expanded="{{rowWhen.open}}" style="width: 100%; min-height: 62px; padding: 0 12px; border: none; background: transparent; border-radius: 16px; cursor: pointer; display: flex; align-items: center; gap: 14px; text-align: left; color: #1D2140">
+<span style="flex: 0 0 168px; font-size: 16px; font-weight: 600">When Callum sends</span>
+<span style="flex: 1 1 auto; min-width: 0; font-size: 15px; color: #646B85">Weekdays, 9:00 to 17:00 their time</span>
+<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="{{rowWhen.chev}}"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<sc-if value="{{rowWhen.open}}" hint-placeholder-val="{{false}}">
+<div class="{{openCls}}" style="padding: 4px 12px 20px; display: flex; flex-direction: column; gap: 14px">
+<div aria-hidden="true" style="display: flex; gap: 8px; align-items: flex-end">
+<sc-for list="{{week}}" as="w" hint-placeholder-count="7">
+<div style="flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<span style="position: relative; width: 100%; height: 64px; border-radius: 12px; background: #F4F5F9; overflow: hidden"><span style="position: absolute; left: 0; right: 0; top: 37.5%; height: 33.3%; {{w.band}}"></span></span>
+<span style="font-size: 13px; {{w.labelStyle}}">{{w.day}}</span>
+</div>
+</sc-for>
+</div>
+<span style="font-size: 15px; line-height: 1.5">Messages land when people read them, in each person's own time zone. Callum never sends at night or on weekends.</span>
+</div>
+</sc-if>
+</section>
+
+<section style="border-bottom: 1px solid #E7E9F0">
+<button type="button" class="row-head" onClick="{{rowTaps.toggle}}" aria-expanded="{{rowTaps.open}}" style="width: 100%; min-height: 62px; padding: 0 12px; border: none; background: transparent; border-radius: 16px; cursor: pointer; display: flex; align-items: center; gap: 14px; text-align: left; color: #1D2140">
+<span style="flex: 0 0 168px; font-size: 16px; font-weight: 600">Taps</span>
+<span style="flex: 1 1 auto; min-width: 0; font-size: 15px; color: #646B85">{{tapsSummary}}</span>
+<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="{{rowTaps.chev}}"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<sc-if value="{{rowTaps.open}}" hint-placeholder-val="{{false}}">
+<div class="{{openCls}}" style="padding: 2px 12px 18px; display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{taps}}" as="tp" hint-placeholder-count="2">
+<div style="display: flex; align-items: center; gap: 14px; min-height: 52px">
+<span style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 600">{{tp.title}}</span><span style="font-size: 14px; color: #646B85">{{tp.sub}}</span></span>
+<button type="button" role="switch" aria-checked="{{tp.on}}" aria-label="{{tp.title}}" onClick="{{tp.toggle}}" class="switch-track" style="flex: 0 0 auto; width: 52px; height: 32px; padding: 0; border: none; border-radius: 16px; cursor: pointer; position: relative; {{tp.track}}"><span aria-hidden="true" class="switch-knob" style="position: absolute; left: 3px; top: 3px; width: 26px; height: 26px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 3px rgba(29,33,64,0.25); {{tp.knob}}"></span></button>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</section>
+
+<section style="border-bottom: 1px solid #E7E9F0; padding: 14px 12px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+<span style="flex: 0 0 168px; font-size: 16px; font-weight: 600">Your data</span>
+<span style="flex: 1 1 auto; display: flex; gap: 8px; flex-wrap: wrap">
+<button type="button" onClick="{{download}}" style="min-height: 42px; padding: 0 16px 0 13px; border-radius: 21px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>Download everything</button>
+<a href="V2Leave.dc.html" style="min-height: 42px; padding: 0 16px; border-radius: 21px; background: transparent; box-shadow: inset 0 0 0 1.5px #E7E9F0; color: #1D2140; font-size: 14px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center">Take a break or wrap up</a>
+</span>
+</section>
+
+</div>
+</div>
+
+</div>
+</div>
+</main>
+
+<div class="bed" aria-hidden="true" style="position: relative; height: 92px; margin: 0 -32px">
+<svg viewBox="0 0 1000 100" preserveAspectRatio="none" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%">
+<defs>
+<linearGradient id="v3-set-bed" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#EEF0F6" stop-opacity="0"></stop>
+<stop offset="0.08" stop-color="#EEF0F6"></stop>
+<stop offset="0.55" stop-color="#ECEFFB"></stop>
+<stop offset="0.86" stop-color="#FFF4DD"></stop>
+<stop offset="1" stop-color="#FFEBC2"></stop>
+</linearGradient>
+</defs>
+<path d="M0,30 C180,14 340,44 500,28 C660,12 820,40 1000,22 L1000,100 L0,100 Z" fill="url(#v3-set-bed)"></path>
+<path class="current" d="M0,62 C180,48 340,76 500,60 C660,46 820,72 1000,56" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+</svg>
+<sc-for list="{{faces}}" as="f" hint-placeholder-count="20"><span class="face" style="{{f.style}}"></span></sc-for>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      open: 'tone', openKey: 0, name: 'Gabriel', offer: null, tone: 'warm', toneKey: 0, drafts: {},
+      cal: '', calDraft: '', calErr: false, calSaved: false,
+      conn: { email: 'on', li: 'on', x: 'on' },
+      taps: { replies: true, brief: true },
+      toast: '', toastKey: 0
+    };
+    this._to = [];
+    this._tk = 0;
+  }
+
+  componentWillUnmount() { this._to.forEach(function (h) { clearTimeout(h); }); }
+
+  later(fn, ms) { this._to.push(setTimeout(fn, ms)); }
+
+  d() {
+    if (this._d) return this._d;
+    function hash(n) { var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+    var PAL = ['#FF7A59', '#FFC145', '#4CB5F5', '#7BC67E', '#8C6CFF', '#F26CA7', '#2EC4B6', '#FF9F1C'];
+    function marble(n) {
+      var a = PAL[n % 8], b = PAL[(n * 3 + 2) % 8], c = PAL[(n * 5 + 5) % 8];
+      if (b === a) b = PAL[(n + 3) % 8];
+      if (c === a || c === b) c = PAL[(n + 6) % 8];
+      var ax = Math.round(18 + hash(n * 1.7) * 44), ay = Math.round(14 + hash(n * 2.3) * 44);
+      return 'background: radial-gradient(circle at ' + ax + '% ' + ay + '%, ' + b + ' 0 20%, transparent 58%), radial-gradient(circle at ' + (100 - ax) + '% ' + (100 - ay) + '%, ' + c + ' 0 16%, transparent 54%), ' + a + ';';
+    }
+    var STAGES = [
+      { x0: 6, x1: 30, size: 16, ring: '#D5D9E4', filter: 'grayscale(1) brightness(1.12)', op: 0.6 },
+      { x0: 32, x1: 56, size: 18, ring: '#A9B8F5', filter: 'grayscale(0.62)', op: 0.8 },
+      { x0: 58, x1: 78, size: 20, ring: '#6E86F2', filter: 'grayscale(0.28)', op: 0.9 },
+      { x0: 80, x1: 95, size: 22, ring: '#3F52D9', filter: 'none', op: 1 }
+    ];
+    var faces = [];
+    var per = [6, 6, 5, 3];
+    var id = 0;
+    STAGES.forEach(function (z, zi) {
+      for (var k = 0; k < per[zi]; k++) {
+        var x = z.x0 + (k + 0.5) * (z.x1 - z.x0) / per[zi] + (hash(id * 3.1 + 1) - 0.5) * 2;
+        var y = 46 + (k % 2) * 22 + (hash(id * 5.7 + 2) - 0.5) * 10;
+        var half = z.size / 2;
+        faces.push({ style: 'left: ' + x.toFixed(2) + '%; top: ' + y.toFixed(1) + '%; width: ' + z.size + 'px; height: ' + z.size + 'px; margin: -' + half + 'px 0 0 -' + half + 'px; ' + marble(300 + id) + ' filter: ' + z.filter + '; opacity: ' + z.op + '; box-shadow: 0 0 0 1.5px ' + z.ring + '; animation-delay: ' + (id * 40) + 'ms;' });
+        id += 1;
+      }
+    });
+    this._d = {
+      faces: faces,
+      kemi: marble(300),
+      OFFER: "You help fintech teams take reconciliation off their ops team's plate.",
+      TONES: [
+        { key: 'warm', name: 'Warm', text: "Hi Kemi, I've been following what Oko Pay is building. I help fintech teams take reconciliation off their ops team's plate. Would a quick chat be useful?" },
+        { key: 'direct', name: 'Direct', text: 'Hi Kemi, I help fintech teams like Oko Pay close their books faster. Worth 15 minutes next week?' },
+        { key: 'playful', name: 'Playful', text: 'Hi Kemi, quick question: who at Oko Pay loses the most sleep over reconciliation? I might be able to give them a few nights back.' }
+      ],
+      CH: [
+        { key: 'email', name: 'Email', account: 'gabriel@yourcompany.com', pace: '20 a day this week, 120 by week 3', confirm: 'Disconnect email? 14 emails wait until you connect again. Replies still reach your inbox.', back: 'Email is back. Nothing was lost.' },
+        { key: 'li', name: 'LinkedIn', account: 'Gabriel', pace: '15 invites a day, on this computer while Callum is open', confirm: 'Disconnect LinkedIn? 6 invites and 2 follow-ups wait until you connect again.', back: 'LinkedIn is back. Waiting invites go out from 9:00 tomorrow.' },
+        { key: 'x', name: 'X', account: '@gabriel', pace: '20 messages a day', confirm: 'Disconnect X? 3 messages wait until you connect again.', back: 'X is back. Waiting messages go out from 9:00 tomorrow.' }
+      ],
+      DAYS: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    };
+    return this._d;
+  }
+
+  showToast(text) {
+    var self = this;
+    this._tk += 1;
+    var key = this._tk;
+    this.setState({ toast: text, toastKey: key });
+    this.later(function () { if (self.state.toastKey === key) self.setState({ toast: '' }); }, 3200);
+  }
+
+  toggleRow(key) {
+    this.setState(function (s) { return { open: s.open === key ? '' : key, openKey: s.openKey + 1 }; });
+  }
+
+  setConn(key, val) {
+    this.setState(function (s) { var c = Object.assign({}, s.conn); c[key] = val; return { conn: c }; });
+  }
+
+  connectCh(ch, msg) {
+    var self = this;
+    this.setConn(ch.key, 'busy');
+    this.later(function () { self.setConn(ch.key, 'on'); self.showToast(msg); }, 1100);
+  }
+
+  saveCal() {
+    var v = (this.state.calDraft || '').trim();
+    if (!v) { this.setState({ cal: '', calErr: false, calSaved: false }); return; }
+    if (!/^(https?:\/\/)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(v)) { this.setState({ calErr: true, calSaved: false }); return; }
+    this.setState({ cal: v.replace(/^https?:\/\//i, ''), calDraft: v.replace(/^https?:\/\//i, ''), calErr: false, calSaved: true });
+  }
+
+  renderVals() {
+    var self = this, D = this.d(), s = this.state;
+    function row(key) {
+      var isOpen = s.open === key;
+      return { open: isOpen, chev: isOpen ? 'transform: rotate(180deg);' : 'transform: rotate(0deg);', toggle: function () { self.toggleRow(key); } };
+    }
+    var offer = s.offer === null ? D.OFFER : s.offer;
+    var tones = D.TONES.map(function (t) {
+      var on = s.tone === t.key;
+      return {
+        name: t.name, on: on,
+        style: on ? 'background: #FFFFFF; color: #1D2140; box-shadow: 0 6px 16px -8px rgba(29,33,64,0.35);' : 'background: transparent; color: #646B85;',
+        pick: function () { if (self.state.tone !== t.key) self.setState(function (s2) { return { tone: t.key, toneKey: s2.toneKey + 1 }; }); }
+      };
+    });
+    var tone = D.TONES.filter(function (t) { return t.key === s.tone; })[0];
+    var edited = s.drafts[s.tone] !== undefined;
+
+    var onCount = 0;
+    var channels = D.CH.map(function (ch) {
+      var st = s.conn[ch.key];
+      var isOn = st === 'on' || st === 'confirm';
+      if (isOn) onCount += 1;
+      return {
+        name: ch.name,
+        isEmail: ch.key === 'email', isLi: ch.key === 'li', isX: ch.key === 'x',
+        busy: st === 'busy', isOn: isOn, isOff: st === 'off', confirming: st === 'confirm',
+        showButtons: st !== 'busy' && st !== 'confirm',
+        discStyle: st === 'off' ? 'background: #FFFFFF; color: #646B85; box-shadow: inset 0 0 0 1.5px #E7E9F0;' : 'background: #1D2140; color: #FFFFFF;' + (st === 'busy' ? ' opacity: 0.7;' : ''),
+        dot: st === 'off' ? 'background: #C5CAD6;' : (st === 'busy' ? 'background: #A9B8F5;' : 'background: #22B07D;'),
+        account: st === 'off' ? 'Not connected' : (st === 'busy' ? 'Connecting' : ch.account),
+        pace: st === 'off' ? 'Nobody hears from Callum here' : ch.pace,
+        offLabel: 'Disconnect ' + ch.name,
+        confirmText: ch.confirm,
+        reconnect: function () { self.connectCh(ch, ch.name + ' reconnected. Nothing was lost.'); },
+        askOff: function () { self.setConn(ch.key, 'confirm'); },
+        keep: function () { self.setConn(ch.key, 'on'); },
+        doOff: function () { self.setConn(ch.key, 'off'); self.showToast(ch.name + ' is disconnected. Everyone there waits.'); },
+        connect: function () { self.connectCh(ch, ch.back); }
+      };
+    });
+
+    var week = D.DAYS.map(function (day, i) {
+      var work = i < 5;
+      return { day: day, band: work ? 'background: #A9B8F5;' : 'background: transparent;', labelStyle: work ? 'color: #1D2140; font-weight: 600;' : 'color: #646B85;' };
+    });
+
+    var TAPDEF = [
+      { key: 'replies', title: 'When someone replies', on: 'A tap the moment a person writes back', off: 'Replies wait for you here' },
+      { key: 'brief', title: 'Morning brief at 8:30', on: 'Who wants to talk, in one line', off: 'No morning brief' }
+    ];
+    var taps = TAPDEF.map(function (t) {
+      var on = !!s.taps[t.key];
+      return {
+        title: t.title, sub: on ? t.on : t.off, on: on ? 'true' : 'false',
+        track: on ? 'background: #1D2140;' : 'background: #D5D9E4;',
+        knob: on ? 'transform: translateX(20px);' : 'transform: translateX(0);',
+        toggle: function () { self.setState(function (s2) { var tp = Object.assign({}, s2.taps); tp[t.key] = !tp[t.key]; return { taps: tp }; }); }
+      };
+    });
+    var tapsSummary = s.taps.replies && s.taps.brief ? 'Replies, and a brief at 8:30' : (s.taps.replies ? 'Replies only' : (s.taps.brief ? 'A brief at 8:30 only' : 'None. Replies wait here'));
+
+    var calSummary = s.cal ? s.cal : 'Add one so Book a call works';
+    var calHint = s.calErr ? "That doesn't look like a link. Try something like cal.com/gabriel." : (s.calSaved ? 'Saved. Book a call sends this link.' : 'Used when you tap Book a call.');
+
+    return {
+      hasToast: !!s.toast, toast: s.toast, toastCls: s.toastKey % 2 ? 'toast-a' : 'toast-b',
+      subline: onCount === 3 ? 'Running on email, LinkedIn and X since 3 November' : (onCount === 0 ? 'Nothing is connected, so nobody hears from Callum' : 'Running on ' + onCount + ' of 3 channels'),
+      openCls: s.openKey % 2 ? 'open-a' : 'open-b',
+      rowYou: row('you'), rowOffer: row('offer'), rowTone: row('tone'), rowCal: row('cal'), rowWhen: row('when'), rowTaps: row('taps'),
+      youSummary: (s.name || 'You') + ', sending as gabriel@yourcompany.com',
+      name: s.name,
+      onName: function (e) { self.setState({ name: e.target.value }); },
+      offer: offer,
+      onOffer: function (e) { self.setState({ offer: e.target.value }); },
+      offerHint: s.offer !== null && s.offer !== D.OFFER ? 'Got it. Callum uses your words from the next hello.' : 'Callum read yourcompany.com and wrote this. Change any word.',
+      toneName: tone.name,
+      tones: tones, kemi: D.kemi,
+      message: edited ? s.drafts[s.tone] : tone.text,
+      bubbleCls: s.toneKey % 2 ? 'bubble-a' : 'bubble-b',
+      onDraft: function (e) { var v = e.target.value; self.setState(function (s2) { var d2 = Object.assign({}, s2.drafts); d2[s2.tone] = v; return { drafts: d2 }; }); },
+      draftHint: edited ? 'Nice. Callum learns from every edit you make.' : 'Click the message to change any words.',
+      calSummary: calSummary,
+      calSummaryStyle: s.cal ? 'color: #646B85;' : 'color: #1D2140; font-weight: 500;',
+      calDraft: s.calDraft,
+      onCal: function (e) { self.setState({ calDraft: e.target.value, calErr: false, calSaved: false }); },
+      onCalKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.saveCal(); } },
+      saveCal: function () { self.saveCal(); },
+      calFieldStyle: s.calErr ? 'box-shadow: 0 0 0 2px #D9480F; background: #FFF1EC;' : '',
+      calSaved: s.calSaved,
+      calHint: calHint,
+      calHintStyle: s.calErr ? 'color: #D9480F;' : (s.calSaved ? 'color: #1D2140;' : 'color: #646B85;'),
+      channels: channels,
+      week: week,
+      taps: taps, tapsSummary: tapsSummary,
+      download: function () { self.showToast('callum-export.zip is downloading'); },
+      faces: D.faces
+    };
+  }
+}
+</script>
+</body>
+</html>

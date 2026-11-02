@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Callum v3, sign in</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1D2140}a:hover{color:#3F52D9}
+button,input{font-family:inherit}
+button:focus-visible,a:focus-visible{outline:2px solid #3F52D9;outline-offset:3px}
+input:focus{outline:none}
+input::placeholder{color:#8A90A6}
+.field{transition:box-shadow .2s ease,background-color .2s ease}
+.field:focus{box-shadow:0 0 0 2px #3F52D9!important;background:#FFFFFF!important}
+.face{position:absolute;border:2.5px solid #FFFFFF;border-radius:50%;box-sizing:border-box;transition:filter 1.4s ease,opacity 1.2s ease,box-shadow 1s ease;animation:face-in .9s cubic-bezier(.2,.7,.2,1) backwards}
+@keyframes face-in{from{opacity:0;transform:translateX(-48px) scale(.4)}}
+.current{stroke-dasharray:1 22;animation:flow 2.4s linear infinite}
+.current-slow{animation-duration:3.8s}
+@keyframes flow{to{stroke-dashoffset:-23}}
+.is-still .current{animation-play-state:paused;opacity:.45}
+.bed-tint{transition:opacity 1.4s ease}
+.card-a{animation:card-a .5s cubic-bezier(.2,.8,.2,1) backwards}
+.card-b{animation:card-b .5s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes card-a{from{opacity:0;transform:translateY(14px)}}
+@keyframes card-b{from{opacity:0;transform:translateY(14px)}}
+.fade-in{animation:fade-in .45s ease backwards}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}}
+.shake{animation:shake .4s ease}
+@keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.pulse{animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(.55);opacity:.45}}
+.spin{animation:spin .9s linear infinite;transform-origin:50% 50%}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sun-breathe{animation:sun-breathe 2.6s ease-in-out infinite}
+@keyframes sun-breathe{50%{box-shadow:0 0 0 10px rgba(255,176,32,.16)}}
+@media (max-width: 760px){
+.sign-root{padding:18px 16px 0!important}
+.card{width:100%!important;padding:24px 20px!important}
+.big-title{font-size:30px!important}
+.river{height:200px!important}
+}
+@media (prefers-reduced-motion: reduce){
+.face,.field,.bed-tint{transition:none!important}
+.face,.card-a,.card-b,.fade-in,.shake{animation:none!important}
+.current,.pulse,.spin,.sun-breathe{animation:none}
+}
+</style>
+</helmet>
+<div class="sign-root {{rootClass}}" style="position: relative; min-height: 900px; background: #FFFFFF; color: #1D2140; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums; padding: 22px 32px 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden">
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; position: relative; z-index: 4">
+<span style="display: inline-flex; align-items: center; gap: 9px; font-size: 22px; font-weight: 700; letter-spacing: -0.03em"><span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 50%; {{logoDot}}"></span>callum</span>
+<span style="display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: 18px; background: #F4F5F9; font-size: 14px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; {{statusDot}}"></span>{{statusText}}</span>
+</header>
+
+<main style="flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 0 0; position: relative; z-index: 3">
+
+<sc-if value="{{isStarting}}" hint-placeholder-val="{{false}}">
+<section class="fade-in" aria-live="polite" style="display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center">
+<span aria-hidden="true" style="display: inline-flex; gap: 8px"><span class="pulse" style="width: 12px; height: 12px; border-radius: 50%; background: #FFB020"></span><span class="pulse" style="width: 12px; height: 12px; border-radius: 50%; background: #FFB020; animation-delay: .15s"></span><span class="pulse" style="width: 12px; height: 12px; border-radius: 50%; background: #FFB020; animation-delay: .3s"></span></span>
+<h1 class="big-title" style="margin: 0; font-size: 38px; font-weight: 600; letter-spacing: -0.035em">Callum is starting</h1>
+<p style="margin: 0; font-size: 17px; color: #646B85">The server just came back. This takes a few seconds, and nothing was sent while it was down.</p>
+</section>
+</sc-if>
+
+<sc-if value="{{isLocked}}" hint-placeholder-val="{{true}}">
+<section class="card {{cardCls}}" aria-labelledby="sign-title" style="width: 480px; box-sizing: border-box; background: #FFFFFF; border-radius: 34px; padding: 34px 36px 30px; box-shadow: 0 40px 90px -40px rgba(29,33,64,0.45), 0 0 0 1px rgba(29,33,64,0.06); display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center">
+<span aria-hidden="true" style="position: relative; width: 72px; height: 72px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2.5"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+<span class="sun-breathe" style="position: absolute; right: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #FFB020; border: 3px solid #FFFFFF; box-sizing: border-box"></span>
+</span>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h1 id="sign-title" class="big-title" style="margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1">This Callum is private</h1>
+<p style="margin: 0; font-size: 16px; line-height: 1.45; color: #646B85">Enter the password you set when you installed it.</p>
+</div>
+<div class="{{fieldCls}}" style="width: 100%; display: flex; flex-direction: column; gap: 10px">
+<div style="position: relative; width: 100%">
+<label for="pw" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Password</label>
+<input id="pw" class="field" type="{{pwType}}" value="{{pw}}" onChange="{{onPw}}" onKeyDown="{{onKey}}" disabled="{{coolingDown}}" placeholder="Password" autocomplete="current-password" style="width: 100%; box-sizing: border-box; height: 56px; border: none; border-radius: 20px; background: #F4F5F9; padding: 0 60px 0 20px; font-size: 18px; color: #1D2140; {{pwStyle}}">
+<button type="button" onClick="{{toggleShow}}" aria-label="{{showLabel}}" aria-pressed="{{showPw}}" style="position: absolute; right: 6px; top: 6px; width: 44px; height: 44px; border-radius: 50%; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{showPw}}" hint-placeholder-val="{{false}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></sc-if>
+<sc-if value="{{hidePw}}" hint-placeholder-val="{{true}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3 3.7M6.3 6.9A16.6 16.6 0 0 0 2.5 12s3.5 6.5 9.5 6.5a9 9 0 0 0 4.2-1"></path></svg></sc-if>
+</button>
+</div>
+<button type="button" onClick="{{signIn}}" disabled="{{cantSign}}" style="width: 100%; min-height: 56px; border-radius: 28px; border: none; background: #1D2140; color: #FFFFFF; font-size: 17px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 10px; transition: opacity .3s ease; {{signStyle}}">
+<sc-if value="{{checking}}" hint-placeholder-val="{{false}}"><svg class="spin" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2.4"></circle><path d="M9 2a7 7 0 0 1 7 7" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round"></path></svg></sc-if>{{signLabel}}</button>
+</div>
+<sc-if value="{{hasErr}}" hint-placeholder-val="{{false}}">
+<p class="fade-in" role="alert" style="margin: 0; width: 100%; box-sizing: border-box; display: flex; align-items: flex-start; gap: 10px; background: #FFF1EC; border-radius: 18px; padding: 12px 14px; font-size: 15px; line-height: 1.45; text-align: left"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D9480F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 auto; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16.5v.01"></path></svg><span>{{errText}}</span></p>
+</sc-if>
+</section>
+</sc-if>
+
+<sc-if value="{{isWaking}}" hint-placeholder-val="{{false}}">
+<section class="fade-in" aria-live="polite" style="display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center">
+<span aria-hidden="true" class="sun-breathe" style="width: 22px; height: 22px; border-radius: 50%; background: #FFB020"></span>
+<h1 class="big-title" style="margin: 0; font-size: 40px; font-weight: 600; letter-spacing: -0.035em">{{wakeTitle}}</h1>
+<p style="margin: 0; font-size: 18px; color: #646B85">{{wakeSub}}</p>
+<sc-if value="{{isIn}}" hint-placeholder-val="{{false}}">
+<a class="fade-in" href="V2Morning.dc.html" style="margin-top: 6px; display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 26px 0 20px; border-radius: 26px; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; background: #FFB020"></span>See who wants to talk</a>
+</sc-if>
+</section>
+</sc-if>
+
+</main>
+
+<div class="river" aria-hidden="true" style="position: relative; height: 270px; margin: 0 -32px; z-index: 1">
+<svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible">
+<defs>
+<linearGradient id="v3-sign-bed" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#EEF0F6" stop-opacity="0"></stop>
+<stop offset="0.07" stop-color="#EEF0F6"></stop>
+<stop offset="0.5" stop-color="#ECEFFB"></stop>
+<stop offset="0.82" stop-color="#FFF4DD"></stop>
+<stop offset="1" stop-color="#FFEBC2"></stop>
+</linearGradient>
+<linearGradient id="v3-sign-grey" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#F2F3F7" stop-opacity="0"></stop>
+<stop offset="0.07" stop-color="#F2F3F7"></stop>
+<stop offset="1" stop-color="#F2F3F7"></stop>
+</linearGradient>
+</defs>
+<path d="M0,60 C160,35 320,80 500,55 C680,30 840,75 1000,45 L1000,300 L0,300 Z" fill="url(#v3-sign-grey)"></path>
+<path class="bed-tint" d="M0,60 C160,35 320,80 500,55 C680,30 840,75 1000,45 L1000,300 L0,300 Z" fill="url(#v3-sign-bed)" style="{{tintStyle}}"></path>
+<path class="current" d="M0,120 C180,97 340,145 500,119 C660,95 820,139 1000,111" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+<path class="current current-slow" d="M0,180 C170,161 330,205 500,179 C670,155 830,199 1000,171" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+<path class="current" d="M0,240 C180,227 340,263 500,239 C660,219 820,257 1000,231" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+</svg>
+<sc-for list="{{faces}}" as="f" hint-placeholder-count="26"><span class="face" style="{{f.style}}"></span></sc-for>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { mode: 'starting', pw: '', show: false, checking: false, err: '', tries: 0, shake: 0, cardKey: 0, coolUntil: 0, now: 0 };
+    this._to = [];
+  }
+
+  componentDidMount() {
+    var self = this;
+    this.later(function () { self.go('locked'); }, 1600);
+  }
+
+  componentWillUnmount() { this._to.forEach(function (h) { clearTimeout(h); }); }
+
+  later(fn, ms) { this._to.push(setTimeout(fn, ms)); }
+
+  go(mode) { this.setState(function (s) { return { mode: mode, cardKey: s.cardKey + 1 }; }); }
+
+  d() {
+    if (this._d) return this._d;
+    function hash(n) { var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+    var PAL = ['#FF7A59', '#FFC145', '#4CB5F5', '#7BC67E', '#8C6CFF', '#F26CA7', '#2EC4B6', '#FF9F1C'];
+    function marble(n) {
+      var a = PAL[n % 8], b = PAL[(n * 3 + 2) % 8], c = PAL[(n * 5 + 5) % 8];
+      if (b === a) b = PAL[(n + 3) % 8];
+      if (c === a || c === b) c = PAL[(n + 6) % 8];
+      var ax = Math.round(18 + hash(n * 1.7) * 44), ay = Math.round(14 + hash(n * 2.3) * 44);
+      return 'background: radial-gradient(circle at ' + ax + '% ' + ay + '%, ' + b + ' 0 20%, transparent 58%), radial-gradient(circle at ' + (100 - ax) + '% ' + (100 - ay) + '%, ' + c + ' 0 16%, transparent 54%), ' + a + ';';
+    }
+    var Z = [
+      { n: 8, x0: 5, x1: 26, size: 20, ring: '#D5D9E4', filter: 'grayscale(1) brightness(1.12)', op: 0.62 },
+      { n: 8, x0: 29, x1: 50, size: 24, ring: '#A9B8F5', filter: 'grayscale(0.62)', op: 0.9 },
+      { n: 6, x0: 53, x1: 72, size: 28, ring: '#6E86F2', filter: 'grayscale(0.28)', op: 1 },
+      { n: 4, x0: 76, x1: 93, size: 34, ring: '#3F52D9', filter: 'none', op: 1 }
+    ];
+    var faces = [], id = 0;
+    Z.forEach(function (z) {
+      var cols = Math.ceil(z.n / 2), cw = (z.x1 - z.x0) / cols;
+      for (var k = 0; k < z.n; k++) {
+        var col = Math.floor(k / 2), row = k % 2;
+        var x = z.x0 + (col + 0.5) * cw + (hash(id * 3.1 + 1) - 0.5) * cw * 0.4;
+        var y = 0.42 + row * 0.24 + (col % 2) * 0.06 + (hash(id * 5.7 + 2) - 0.5) * 0.05;
+        faces.push({ id: id, x: x, y: y, z: z, avatar: marble(300 + id) });
+        id += 1;
+      }
+    });
+    this._d = { faces: faces };
+    return this._d;
+  }
+
+  signIn() {
+    var self = this, s = this.state;
+    if (s.checking || s.mode !== 'locked' || this.cooling()) return;
+    if (!(s.pw || '').length) { this.setState(function (s2) { return { err: 'Type the password first.', shake: s2.shake + 1 }; }); return; }
+    this.setState({ checking: true, err: '' });
+    this.later(function () {
+      if (self.state.pw !== 'reconcile') {
+        var tries = self.state.tries + 1;
+        if (tries >= 5) {
+          self.setState(function (s2) { return { checking: false, tries: tries, coolUntil: 60, err: "That's 5 wrong tries, so sign-in is paused for a minute. Nothing else changed.", shake: s2.shake + 1 }; });
+          self.coolDown();
+          return;
+        }
+        self.setState(function (s2) { return { checking: false, tries: tries, err: "That's not the password. Ask whoever set up this Callum, or check CALLUM_PASSWORD on the server.", shake: s2.shake + 1 }; });
+        return;
+      }
+      self.setState({ checking: false });
+      self.go('waking');
+      self.later(function () { self.go('in'); }, 2200);
+    }, 900);
+  }
+
+  cooling() { return this.state.coolUntil > 0; }
+
+  coolDown() {
+    var self = this;
+    var tick = function () {
+      var left = self.state.coolUntil - 1;
+      if (left <= 0) { self.setState({ coolUntil: 0, tries: 0, err: '' }); return; }
+      self.setState({ coolUntil: left });
+      self.later(tick, 1000);
+    };
+    this.later(tick, 1000);
+  }
+
+  renderVals() {
+    var self = this, D = this.d(), s = this.state;
+    var awake = s.mode === 'waking' || s.mode === 'in';
+    var faces = D.faces.map(function (f) {
+      var filter = awake ? f.z.filter : 'grayscale(1) brightness(1.1)';
+      var op = awake ? f.z.op : 0.35;
+      var half = f.z.size / 2;
+      return { style: 'left: ' + f.x.toFixed(2) + '%; top: ' + (f.y * 100).toFixed(1) + '%; width: ' + f.z.size + 'px; height: ' + f.z.size + 'px; margin: -' + half + 'px 0 0 -' + half + 'px; ' + f.avatar + ' filter: ' + filter + '; opacity: ' + op + '; box-shadow: 0 0 0 1.5px ' + (awake ? f.z.ring : '#E7E9F0') + '; transition-delay: ' + (awake ? (f.id * 45) : 0) + 'ms; animation-delay: ' + (f.id * 30) + 'ms;' };
+    });
+    var cooling = this.cooling();
+    var canSign = !s.checking && !cooling && (s.pw || '').length > 0;
+    var statusText = s.mode === 'starting' ? 'Starting' : (s.mode === 'locked' ? 'Locked' : (s.mode === 'waking' ? 'Waking up' : 'Running'));
+    return {
+      rootClass: awake ? '' : 'is-still',
+      logoDot: awake ? 'background: #FFB020;' : 'background: #C5CAD6;',
+      statusText: statusText,
+      statusDot: awake ? 'background: #22B07D;' : (s.mode === 'starting' ? 'background: #A9B8F5;' : 'background: #C5CAD6;'),
+      isStarting: s.mode === 'starting', isLocked: s.mode === 'locked', isWaking: awake, isIn: s.mode === 'in',
+      cardCls: s.cardKey % 2 ? 'card-a' : 'card-b',
+      pw: s.pw, pwType: s.show ? 'text' : 'password',
+      onPw: function (e) { self.setState({ pw: e.target.value, err: cooling ? self.state.err : '' }); },
+      onKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.signIn(); } },
+      coolingDown: cooling,
+      showPw: s.show, hidePw: !s.show, showLabel: s.show ? 'Hide password' : 'Show password',
+      toggleShow: function () { self.setState({ show: !self.state.show }); },
+      pwStyle: s.err ? 'box-shadow: 0 0 0 2px #D9480F; background: #FFF1EC;' : '',
+      fieldCls: s.err ? (s.shake % 2 ? 'shake' : 'fade-in') : '',
+      signIn: function () { self.signIn(); },
+      cantSign: !canSign, checking: s.checking,
+      signLabel: s.checking ? 'Checking' : (cooling ? 'Try again in ' + s.coolUntil + ' s' : 'Sign in'),
+      signStyle: canSign || s.checking ? '' : 'opacity: 0.4; cursor: default;',
+      hasErr: !!s.err, errText: s.err,
+      wakeTitle: s.mode === 'in' ? 'Good morning, Gabriel' : 'Callum is waking up',
+      wakeSub: s.mode === 'in' ? '3 people want to talk. Kemi asked about Thursday.' : 'Picking up where it left off',
+      tintStyle: awake ? 'opacity: 1;' : 'opacity: 0;',
+      faces: faces
+    };
+  }
+}
+</script>
+</body>
+</html>
