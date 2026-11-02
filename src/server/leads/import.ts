@@ -30,6 +30,8 @@ export function importPeople(repo: Repo, projectId: number, people: PersonLead[]
       for (const k of identityKeys(p)) index.set(k, [...(index.get(k) ?? []).filter((q) => q.id !== p.id), p]);
     };
     const updated = new Map<number, Person>();
+    const added: Person[] = [];
+    const skipped: Skipped[] = [];
     // A repeat may carry a handle Callum does not have yet. Keeping it means a stop, or a later list that knows the
     // person only by that handle, still finds them. Never overwrites, and never takes a handle someone else holds.
     const learnHandles = (person: Person, lead: PersonLead) => {
@@ -43,7 +45,10 @@ export function importPeople(repo: Repo, projectId: number, people: PersonLead[]
       if (Object.keys(patch).length === 0) return;
       const next = repo.updatePerson(person.id, patch);
       remember(next);
-      updated.set(next.id, next);
+      // Someone added earlier in this same import is reported once, as added, with the fresh record.
+      const at = added.findIndex((a) => a.id === next.id);
+      if (at >= 0) added[at] = next;
+      else updated.set(next.id, next);
     };
     repo.listPeople().forEach(remember);
     const projectNames = new Map<number, string>();
@@ -56,8 +61,6 @@ export function importPeople(repo: Repo, projectId: number, people: PersonLead[]
       return name;
     };
 
-    const added: Person[] = [];
-    const skipped: Skipped[] = [];
     for (const { row, ...lead } of people) {
       const at = row === undefined ? {} : { row };
       const name = lead.name.trim() || fallbackName(lead) || '';

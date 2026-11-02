@@ -259,7 +259,7 @@ describe('isPublicAddress', () => {
     '0.0.0.0', '0.1.2.3', '10.0.0.1', '10.255.255.255', '127.0.0.1', '127.8.8.8', '100.64.0.1', '100.127.255.255', '169.254.169.254', '172.16.0.1', '172.31.255.255',
     '192.168.1.1', '192.0.0.8', '192.0.2.1', '198.18.0.1', '198.19.255.255', '198.51.100.7', '203.0.113.9', '224.0.0.1', '240.0.0.1', '255.255.255.255',
     '::', '::1', 'fc00::1', 'fd00:abcd::1', 'fe80::1', 'fe80::a%eth0', 'febf::1', 'fec0::1', 'ff02::1', '2001:db8::1', '2001::1', '::ffff:10.0.0.1', '::ffff:7f00:1', '::ffff:a9fe:a9fe',
-    '64:ff9b::a00:1', '2002:7f00:1::', '::10.0.0.1', 'not an address', '', '1.2.3', '1.2.3.4.5', '999.1.1.1', '[::1]',
+    '64:ff9b::a00:1', '64:ff9b:1::808:808', '64:ff9b:1::1', '::ffff:0:8.8.8.8', '::ffff:0:10.0.0.1', '2002:7f00:1::', '::10.0.0.1', 'not an address', '', '1.2.3', '1.2.3.4.5', '999.1.1.1', '[::1]',
   ])('%s is not', (a) => expect(isPublicAddress(a)).toBe(false));
 });
 
@@ -283,6 +283,15 @@ describe('fetchSiteText: broken and hostile pages', () => {
     const out = await read(page);
     expect(performance.now() - started).toBeLessThan(500);
     expect(out.length).toBeLessThan(2100);
+  });
+
+  it('a meta tag that is one long run of attribute-name characters is read in linear time', async () => {
+    const page = '<title>T</title>' + `<meta ${'a:-_'.repeat(1020)}>`.repeat(64) + '<p>Words</p>';
+    const started = performance.now();
+    expect(await read(page)).toBe('T\nWords');
+    expect(performance.now() - started).toBeLessThan(200);
+    // The attributes of an ordinary tag are still read.
+    expect(await read('<meta name="description" content="Fine"><p>Words</p>')).toBe('Fine\nWords');
   });
 
   it('still finds the title and words in a page that is mostly broken', async () => {

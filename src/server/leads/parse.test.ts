@@ -231,7 +231,7 @@ describe('parseCsv: headers', () => {
   });
 
   it('reads a file with no header row one person per line, keeping source csv', () => {
-    const { people, skipped } = parseCsv('Kemi Eze,kemi@okopay.com,Oko Pay\nFemi Ade\tfemi@ledgerly.io\tLedgerly\nTunde Bakare, Paystack\n');
+    const { people, skipped } = parseCsv('Kemi Eze,kemi@okopay.com,Oko Pay\nFemi Ade,femi@ledgerly.io,Ledgerly\nTunde Bakare, Paystack\n');
     expect(people).toEqual([
       { name: 'Kemi Eze', email: 'kemi@okopay.com', company: 'Oko Pay', source: 'csv' },
       { name: 'Femi Ade', email: 'femi@ledgerly.io', company: 'Ledgerly', source: 'csv' },
@@ -310,13 +310,45 @@ describe('parsePaste', () => {
   });
 
   it('accepts the pieces in any order, tabs from a spreadsheet, and Windows line endings', () => {
-    const text = 'kemi@okopay.com\tKemi Eze\tOko Pay\r\n\r\nFemi Ade, @femiade, Ledgerly\r\nada@okafor.dev\r\n';
+    const text = 'kemi@okopay.com\tKemi Eze\tOko Pay\r\n\r\nFemi Ade\t@femiade\tLedgerly\r\nada@okafor.dev\r\n';
     const { people } = parsePaste(text);
     expect(people).toEqual([
       { name: 'Kemi Eze', email: 'kemi@okopay.com', company: 'Oko Pay', source: 'paste' },
       { name: 'Femi Ade', xHandle: 'femiade', company: 'Ledgerly', source: 'paste' },
       { name: 'ada', email: 'ada@okafor.dev', source: 'paste' },
     ]);
+  });
+
+  it('decides the separator once for the whole paste: a "|" in a headline on a comma line stays in the headline', () => {
+    expect(parsePaste('Kemi Eze, kemi@okopay.com, Head of Finance | Oko Pay').people).toEqual([
+      { name: 'Kemi Eze', email: 'kemi@okopay.com', company: 'Head of Finance | Oko Pay', source: 'paste' },
+    ]);
+    expect(parseCsv('Kemi Eze,kemi@okopay.com,Oko | Pay\nFemi Ade,femi@ledgerly.io,Ledgerly\n').people.map((p) => [p.name, p.company])).toEqual([
+      ['Kemi Eze', 'Oko | Pay'], ['Femi Ade', 'Ledgerly'],
+    ]);
+  });
+
+  it('still reads a real pipe-separated paste, even with commas inside the cells', () => {
+    const { people } = parsePaste('Kemi Eze | kemi@okopay.com | Oko Pay, Lagos\nFemi Ade | femi@ledgerly.io | Ledgerly\n');
+    expect(people.map((p) => [p.name, p.email, p.company])).toEqual([
+      ['Kemi Eze', 'kemi@okopay.com', 'Oko Pay, Lagos'], ['Femi Ade', 'femi@ledgerly.io', 'Ledgerly'],
+    ]);
+  });
+
+  it('a tab line among comma lines does not corrupt the comma lines', () => {
+    const { people } = parsePaste('Kemi Eze, kemi@okopay.com, Oko Pay\nFemi Ade, femi@ledgerly.io, Ledgerly, CTO\nAda Okafor\tada@okafor.dev\nTunde Bakare, tunde@paystack.example, Paystack');
+    expect(people.map((p) => [p.name, p.email, p.company, p.role])).toEqual([
+      ['Kemi Eze', 'kemi@okopay.com', 'Oko Pay', undefined],
+      ['Femi Ade', 'femi@ledgerly.io', 'Ledgerly', 'CTO'],
+      ['Ada Okafor', 'ada@okafor.dev', undefined, undefined],
+      ['Tunde Bakare', 'tunde@paystack.example', 'Paystack', undefined],
+    ]);
+  });
+
+  it('on a tie the order is tab, comma, semicolon, pipe', () => {
+    expect(parsePaste('Kemi Eze\tkemi@okopay.com\tOko Pay\nFemi Ade, femi@ledgerly.io, Ledgerly').people[0]).toMatchObject({ name: 'Kemi Eze', company: 'Oko Pay' });
+    expect(parsePaste('Kemi Eze, kemi@okopay.com, Oko Pay\nFemi Ade; femi@ledgerly.io; Ledgerly').people[0]).toMatchObject({ name: 'Kemi Eze', company: 'Oko Pay' });
+    expect(parsePaste('Kemi Eze; kemi@okopay.com; Oko Pay\nFemi Ade | femi@ledgerly.io | Ledgerly').people[0]).toMatchObject({ name: 'Kemi Eze', company: 'Oko Pay' });
   });
 
   it('reads "Name <email>" and bare lines with only spaces', () => {

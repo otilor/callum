@@ -395,8 +395,25 @@ export function parseCsv(text: string): ParseResult {
 
 // ---- paste ------------------------------------------------------------------------------------
 
-function splitLine(line: string): string[] {
-  const delimiter = line.includes('\t') ? '\t' : line.includes('|') ? '|' : line.includes(',') ? ',' : line.includes(';') ? ';' : null;
+/** Tried in this order when two separators are equally common. */
+const LINE_DELIMITERS = ['\t', ',', ';', '|'] as const;
+type LineDelimiter = (typeof LINE_DELIMITERS)[number];
+
+/**
+ * The one separator for a whole paste or file: the one found on the most lines, tab before comma before semicolon
+ * before pipe on a tie. Chosen once, so a "|" inside a headline on a comma line never splits that line.
+ */
+function pickLineDelimiter(lines: string[]): LineDelimiter | null {
+  let best: LineDelimiter | null = null;
+  let bestCount = 0;
+  for (const d of LINE_DELIMITERS) {
+    const count = lines.filter((l) => l.includes(d)).length;
+    if (count > bestCount) { best = d; bestCount = count; }
+  }
+  return best;
+}
+
+function splitLine(line: string, delimiter: LineDelimiter | null): string[] {
   if (!delimiter) return [line];
   const fields: string[] = [];
   let cur = '';
@@ -415,10 +432,10 @@ function splitLine(line: string): string[] {
 const X_URL = /(?:^|\/\/)(?:[a-z0-9-]+\.)*(?:x|twitter)\.com\//i;
 
 /** One person per line, with names, emails, LinkedIn links and @handles recognised by their shape. */
-function parsePasteLine(line: string): Parts {
+function parsePasteLine(line: string, delimiter: LineDelimiter | null): Parts {
   const parts: Parts = { name: null, first: null, email: null, company: null, role: null, linkedinUrl: null, xHandle: null, timezone: null };
   const texts: string[] = [];
-  for (const field of splitLine(line)) {
+  for (const field of splitLine(line, delimiter)) {
     const words: string[] = [];
     for (const token of field.trim().split(/\s+/).filter(Boolean)) {
       const bare = token.replace(/^[<("']+|[>)"',;]+$/g, '');
@@ -460,7 +477,9 @@ function startsWithHeader(text: string): boolean {
 function parseLines(raw: string, source: LeadSource): ParseResult {
   const text = stripBom(raw);
   const out = new Collector(source);
-  text.split(/\r?\n/).forEach((line, i) => {
+  const lines = text.split(/\r?\n/);
+  const delimiter = pickLineDelimiter(lines.filter((l) => l.trim() !== '' && !emailsOnly(l)));
+  lines.forEach((line, i) => {
     if (line.trim() === '') return;
     const row = i + 1;
     const many = emailsOnly(line);
@@ -468,7 +487,7 @@ function parseLines(raw: string, source: LeadSource): ParseResult {
       for (const email of many) out.add({ name: null, first: null, email: cleanEmail(email), company: null, role: null, linkedinUrl: null, xHandle: null, timezone: null }, row);
       return;
     }
-    out.add(parsePasteLine(line), row);
+    out.add(parsePasteLine(line, delimiter), row);
   });
   return out.result();
 }

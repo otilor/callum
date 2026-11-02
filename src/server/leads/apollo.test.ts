@@ -251,11 +251,11 @@ describe('ApolloSource.enrich against a local Apollo-shaped server (real fetch)'
 
   it.each([
     [401, 'bad_key', "Apollo didn't accept the API key. Check it in Your Callum."],
-    [403, 'not_allowed', "This Apollo key can't search people. Use a master key or allow People Search."],
+    [403, 'not_allowed', "This Apollo key can't look up people. Check its permissions in Apollo."],
     [422, 'bad_search', "Apollo couldn't understand that search. Try fewer words."],
     [429, 'rate_limited', "Apollo's hourly search limit is reached. Try again in an hour."],
-    [500, 'failed', 'Apollo search failed.'],
-  ] as const)('maps status %i to a plain sentence, never showing the key', async (status, code, message) => {
+    [500, 'failed', 'Apollo lookup failed. Try again in a minute.'],
+  ] as const)('maps status %i to a plain sentence in lookup words, never showing the key', async (status, code, message) => {
     respond = () => ({ status, body: { error: 'bad key super-secret-key' } });
     const err = await apollo('super-secret-key').enrich(['x']).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApolloError);
@@ -278,8 +278,22 @@ describe('ApolloSource.enrich against a local Apollo-shaped server (real fetch)'
     expect(seen).toHaveLength(2);
   });
 
-  it('says "Apollo search failed." for an answer that is not JSON', async () => {
+  it('says "Apollo lookup failed. Try again in a minute." for an answer that is not JSON, or when Apollo cannot be reached', async () => {
     respond = () => ({ status: 200, body: null, raw: 'nope' });
-    await expect(apollo().enrich(['x'])).rejects.toMatchObject({ code: 'failed', message: 'Apollo search failed.' });
+    await expect(apollo().enrich(['x'])).rejects.toMatchObject({ code: 'failed', status: 200, message: 'Apollo lookup failed. Try again in a minute.' });
+    await expect(new ApolloSource('k', undefined, 'http://127.0.0.1:1').enrich(['x'])).rejects.toMatchObject({ code: 'failed', status: null, message: 'Apollo lookup failed. Try again in a minute.' });
+  });
+
+  it('drops empty and blank ids before batching, and asks nothing when none are left', async () => {
+    enrichAll();
+    await apollo().enrich(['', '  ', 'a', ' b ', '\n']);
+    expect(JSON.parse(seen[0]!.body)).toEqual({ details: [{ id: 'a' }, { id: 'b' }] });
+    expect(await apollo().enrich(['', '   '])).toEqual({ people: [], creditsUsed: 0 });
+    expect(seen).toHaveLength(1);
+  });
+
+  it('keeps the search wording for search failures', async () => {
+    respond = () => ({ status: 403, body: {} });
+    await expect(apollo().search(find())).rejects.toMatchObject({ message: "This Apollo key can't search people. Use a master key or allow People Search." });
   });
 });
