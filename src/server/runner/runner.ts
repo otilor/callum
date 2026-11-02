@@ -10,6 +10,8 @@ import { firstSlotAfterStart, isSendingTime, nextSendingTime } from '../engine/w
 import { capKinds, dispatchDue } from './dispatch.js';
 import { handleInbound, heldBackPeople, retryFailedInbound } from './inbound.js';
 import { INCIDENT_COPY, channelSignedOut, openIncident, refreshSignedOutCount, resolveChannelIncidents } from './incidents.js';
+import { isHeldReferral, trackPause } from '../services/quiet.js';
+import { maybeSendWeekly } from '../services/weekly.js';
 
 export const POLL_EVERY_MS: Record<Channel, number> = { email: 120_000, x: 300_000, linkedin: 900_000 };
 export const DEFAULT_TICK_MS = 5_000;
@@ -106,6 +108,8 @@ export async function planDue(ctx: Ctx, opts: PlanOptions = {}): Promise<number>
         if (!channel || accounts.find((a) => a.channel === channel)?.status === 'disconnected') continue;
         const kind = nextKind(person);
         if (kind === null || held.has(person.id) || holdsUp(person, itemsOf.get(person.id) ?? [])) continue;
+        // The user gets the first chance to write to someone a referral named.
+        if (isHeldReferral(person, now)) continue;
 
         const tz = personTz(person, settings.timezone);
         let due: Date | null = person.nextTouchAt === null ? null : new Date(person.nextTouchAt);
@@ -261,6 +265,12 @@ export class Runner {
       await dispatchDue(this.ctx, { onError: this.onError });
     });
     await this.step(() => refreshSignedOutCount(this.ctx));
+    await this.step(() => {
+      trackPause(this.ctx);
+    });
+    await this.step(async () => {
+      await maybeSendWeekly(this.ctx);
+    });
   }
 
   private async step(fn: () => void | Promise<void>): Promise<void> {

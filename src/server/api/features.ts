@@ -4,6 +4,7 @@ import { channelsRoutes } from './routes/channels.js';
 import { keysRoutes } from './routes/keys.js';
 import { peopleRoutes } from './routes/people.js';
 import { personRoutes } from './routes/person.js';
+import { weeklyRoutes } from './routes/weekly.js';
 
 /**
  * Route modules of the other parts of Callum. Each builds its routes for a ctx; paths are relative to /api.
@@ -14,4 +15,5 @@ export const FEATURE_ROUTES: ((ctx: Ctx) => Hono)[] = [
   (ctx) => peopleRoutes(ctx),
   (ctx) => channelsRoutes(ctx),
   (ctx) => keysRoutes(ctx),
+  (ctx) => weeklyRoutes(ctx),
 ];

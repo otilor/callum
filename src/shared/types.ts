@@ -156,3 +156,90 @@ export interface AddCommit {
   remaining?: number;
 }
 export interface Described { batchId: string | null; total: number; people: PreviewPerson[]; narrow: string[] | null; line: string }
+
+// Task 19: the weekly note and the quiet moments
+/** Settings keys the weekly note and the quiet moments keep. `morningBrief` is Task 16's switch; it counts as on until it is set to false. */
+export interface NoteSettings {
+  morningBrief?: boolean;
+  /** When the last weekly email went out (or was skipped because the week was empty). */
+  lastWeeklyAt?: string | null;
+  /** The local date (YYYY-MM-DD) of the Monday the last weekly email was for, so a change of time zone cannot send a week twice. */
+  lastWeeklyFor?: string | null;
+  /** Who said Okay to an out-of-office card, by person id, with the time of the auto-reply they said it about. */
+  awaySeen?: Record<string, string>;
+  /** When the last weekly email send was tried and failed, so a failure is not retried every few seconds. */
+  weeklyTriedAt?: string | null;
+  /** The note the person last opened. */
+  weeklySeenAt?: string | null;
+  /** When the current pause began, as far as Callum has seen. */
+  pausedSince?: string | null;
+}
+export interface WeeklyReply {
+  id: number; first: string; booked: boolean;
+  name: string; company: string | null; projectId: number;
+  /** One plain sentence about where this stands, shown when the face is picked. */
+  text: string;
+  /** The same, as a line in the email. */
+  mail: string;
+}
+export interface WeeklyWarm { id: number; first: string; projectId: number; text: string }
+export interface WeeklyRest { count: number; backOn: string | null }
+export interface WeeklyGroup {
+  projectId: number; name: string; line: string;
+  replied: WeeklyReply[]; warming: WeeklyWarm[]; resting: WeeklyRest;
+}
+export interface WeeklySuggestion { text: string; action: AskAction; projectId: number }
+export interface WeeklyNote {
+  title: string;
+  /** When the note is dated: the Monday at 8:30 it covers the week before. */
+  at: string;
+  /** The user's first name, for the greeting. */
+  senderFirst: string | null;
+  hellos: number;
+  replied: WeeklyReply[];
+  line: string;
+  warming: WeeklyWarm[];
+  resting: WeeklyRest;
+  suggestion: WeeklySuggestion | null;
+  nextAt: string;
+  /** One group per project, only when there is more than one project. */
+  groups: WeeklyGroup[];
+}
+export interface WeeklyEmail { subject: string; text: string }
+export interface WeeklyAnswer { note: WeeklyNote; email: WeeklyEmail; shouldOpen: boolean }
+
+export interface AwayPerson {
+  personId: number; projectId: number;
+  /** The project's name, only when there is more than one project. */
+  projectName: string | null; first: string; name: string; company: string | null; role: string | null;
+  /** The day they said they are back (YYYY-MM-DD), when the message gave one. */
+  until: string | null;
+  /** When Callum follows up. */
+  followUpAt: string | null;
+  /** What their auto-reply said, and when it came. */
+  text: string; at: string;
+}
+export interface ReferralCard {
+  personId: number; projectId: number;
+  /** The project's name, only when there is more than one project. */
+  projectName: string | null; first: string; name: string; company: string | null;
+  referrer: { id: number; first: string; name: string; company: string | null } | null;
+  /** What the referrer said about them, starting after the name: `runs finance at Oko Pay`. */
+  context: string | null;
+  channel: Channel | null;
+  subject: string | null; draft: string;
+}
+export interface SentHello { personId: number; name: string; channel: Channel; at: string; text: string }
+export interface QuietSnapshot {
+  projectId: number | null;
+  /** Nobody is in the river yet. */
+  empty: boolean;
+  /** Hellos went out and nobody has answered yet. */
+  day2: null | { sentYesterday: number; nextCount: number; nextAt: string | null; sent: SentHello[] };
+  /** Every stranger has had a first hello. */
+  used: null | { replied: { id: number; first: string }[]; repliedCount: number; finishing: number; finishBy: string | null };
+  away: AwayPerson[];
+  referrals: ReferralCard[];
+  /** Callum has been paused for three days or more. */
+  paused: null | { since: string; days: number; hellos: number; followUps: number };
+}
