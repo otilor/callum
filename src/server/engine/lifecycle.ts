@@ -35,6 +35,9 @@ export function stageFor(touches: number): Stage {
   return touches === 1 ? 'hello' : 'following';
 }
 
+const STAGE_ORDER: Stage[] = ['stranger', 'hello', 'following', 'talking'];
+const laterStage = (a: Stage, b: Stage): Stage => (STAGE_ORDER.indexOf(a) >= STAGE_ORDER.indexOf(b) ? a : b);
+
 /** What Callum would send next on its own, or null when it has to wait or is finished. */
 export function nextKind(p: Person): OutKind | null {
   if (p.stage === 'talking' || p.touches >= MAX_TOUCHES) return null;
@@ -47,13 +50,32 @@ export function nextKind(p: Person): OutKind | null {
   return null;
 }
 
+/**
+ * When the next automatic touch may go out: after the gap that follows the last touch (4 local days after touch 1,
+ * 6 after touch 2, 5 after a LinkedIn thank-you), the next 11:00 weekday for a thank-you, and always inside sending
+ * hours. Null when there is nothing to send automatically.
+ */
+export function nextTouchTime(p: Person, now: Date, tz: string): Date | null {
+  const kind = nextKind(p);
+  if (kind === null) return null;
+  if (kind === 'thanks') return nextLocalHour(now, tz, LINKEDIN_THANKS_HOUR);
+  const last = ms(p.lastTouchAt);
+  let gapDays = 0;
+  if (kind === 'follow_up') {
+    if (p.channel === 'linkedin') gapDays = LINKEDIN_FOLLOWUP_DAYS;
+    else gapDays = p.touches === 1 ? GAP_AFTER_TOUCH_1_DAYS : GAP_AFTER_TOUCH_2_DAYS;
+  }
+  const earliest = last === null || gapDays === 0 ? now : new Date(Math.max(now.getTime(), addLocalDays(new Date(last), gapDays, tz).getTime()));
+  return nextSendingTime(earliest, tz);
+}
+
 /** Patch after an outbound message went out. */
 export function afterSent(p: Person, kind: OutKind, sentAt: Date, tz: string): Partial<Person> {
   if (kind === 'reply' || kind === 'booking' || kind === 'close') return afterUserSent(p, kind, sentAt);
   const touches = p.touches + 1;
   const patch: Partial<Person> = {
     touches,
-    stage: stageFor(touches),
+    stage: laterStage(p.stage, stageFor(touches)),
     lastTouchAt: iso(sentAt),
     nextTouchAt: null,
   };
@@ -125,11 +147,11 @@ export function onInbound(
 ): { patch: Partial<Person>; cancelPending: boolean; toDock: boolean } {
   if (c.kind === 'out_of_office') {
     const back = validReturnDate(c.returnDate);
-    if (!back) return { patch: {}, cancelPending: false, toDock: false };
+    if (!back || p.nextTouchAt === null || nextKind(p) === null) return { patch: {}, cancelPending: false, toDock: false };
     const day9 = zonedTime(tz, back.y, back.m, back.d + 1, 9);
     const earliest = nextSendingTime(day9, tz);
-    const current = ms(p.nextTouchAt);
-    const next = current !== null && current > earliest.getTime() ? new Date(current) : earliest;
+    const current = new Date(p.nextTouchAt).getTime();
+    const next = current > earliest.getTime() ? new Date(current) : earliest;
     return { patch: { nextTouchAt: iso(next) }, cancelPending: false, toDock: false };
   }
   const base: Partial<Person> = { replyKind: c.kind, lastInbound: text, repliedAt: iso(at), nextTouchAt: null };
@@ -153,7 +175,10 @@ export function hold(_p: Person): Partial<Person> {
 /** Back to work after a hold or pause; a touch that fell due in the meantime moves to the next sending time. */
 export function resume(p: Person, now: Date, tz: string): Partial<Person> {
   const due = ms(p.nextTouchAt);
-  if (due !== null && due < now.getTime()) return { status: 'active', nextTouchAt: iso(nextSendingTime(now, tz)) };
+  if (due !== null && due < now.getTime()) {
+    const next = nextTouchTime(p, now, tz);
+    return { status: 'active', nextTouchAt: next === null ? null : iso(next) };
+  }
   return { status: 'active' };
 }
 
@@ -166,11 +191,14 @@ export function nudge(_p: Person, now: Date): Partial<Person> {
 export function correct(p: Person, kind: Correction, now: Date, tz: string): Partial<Person> {
   if (kind === 'wrong_person') return { status: 'removed', nextTouchAt: null };
   if (kind === 'never_contact') return { status: 'stopped', nextTouchAt: null };
-  const cleared: Partial<Person> = { status: 'active', replyKind: null, draft: null };
-  if (nextKind(p) !== null) return { ...cleared, nextTouchAt: iso(nextSendingTime(now, tz)) };
-  // An open LinkedIn invite is still waiting on the other person; the invite timeout will rest them.
-  if (p.channel === 'linkedin' && p.linkedinState === 'invited') return { ...cleared, nextTouchAt: null };
-  return { ...cleared, ...rest(p, now) };
+  const cleared: Partial<Person> = {
+    status: 'active', replyKind: null, suggested: null, draft: null, lastInbound: null, repliedAt: null,
+  };
+  // Someone already talking is never put back on the automatic path.
+  if (p.stage === 'talking') return { ...cleared, nextTouchAt: null };
+  // Nothing left to send (all touches used, or a LinkedIn invite still open): restDue decides when they rest.
+  const next = nextTouchTime(p, now, tz);
+  return { ...cleared, nextTouchAt: next === null ? null : iso(next) };
 }
 
 /** Move to another channel and restart the sequence there, at least a week after the last touch. The stage stays as it is. */

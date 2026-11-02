@@ -8,6 +8,7 @@ import {
   correct,
   hold,
   nextKind,
+  nextTouchTime,
   nudge,
   onAccepted,
   onInbound,
@@ -116,6 +117,11 @@ describe('afterSent', () => {
     expect(patch.restUntil).toBeUndefined();
     expect(patch.lastTouchAt).toBe(sentAt.toISOString());
   });
+  it('keeps a higher stage the person already has', () => {
+    expect(afterSent(person({ stage: 'following' }), 'hello', sentAt, tz).stage).toBe('following');
+    expect(afterSent(person({ stage: 'hello', touches: 1 }), 'follow_up', sentAt, tz).stage).toBe('following');
+    expect(afterSent(person({ stage: 'talking', touches: 1 }), 'follow_up', sentAt, tz).stage).toBe('talking');
+  });
   it('invite: marks the invite as sent and waits for acceptance', () => {
     const patch = afterSent(person({ channel: 'linkedin' }), 'invite', sentAt, tz);
     expect(patch.touches).toBe(1);
@@ -199,7 +205,7 @@ describe('restDue and rest', () => {
   });
   it('wake: starts over', () => {
     const p = person({ status: 'resting', stage: 'following', touches: 3, linkedinState: 'invited', invitedAt: third.toISOString(), restUntil: third.toISOString(), badge: 'sent' });
-    expect(wake(p)).toMatchObject({ status: 'active', stage: 'stranger', touches: 0, linkedinState: 'none', restUntil: null, nextTouchAt: null, badge: null });
+    expect(wake(p)).toMatchObject({ status: 'active', stage: 'stranger', touches: 0, linkedinState: 'none', invitedAt: null, restUntil: null, nextTouchAt: null, badge: null });
   });
 });
 
@@ -253,6 +259,13 @@ describe('onInbound', () => {
     const r = onInbound(person({ nextTouchAt: later.toISOString() }), { kind: 'out_of_office', suggested: 'snooze', returnDate: '2026-11-09' }, 'Away', at, tz);
     expect(r.patch.nextTouchAt).toBe(later.toISOString());
   });
+  it('out of office changes nothing when there is no scheduled touch or nothing left to send', () => {
+    const oo = { kind: 'out_of_office', suggested: 'snooze', returnDate: '2026-11-20' } as const;
+    expect(onInbound(person({ touches: 1, nextTouchAt: null }), oo, 'Away', at, tz).patch).toEqual({});
+    const invited = person({ channel: 'linkedin', touches: 1, linkedinState: 'invited', nextTouchAt: lagos(7, 10).toISOString() });
+    expect(onInbound(invited, oo, 'Away', at, tz).patch).toEqual({});
+    expect(onInbound(person({ touches: 3, nextTouchAt: lagos(7, 10).toISOString() }), oo, 'Away', at, tz).patch).toEqual({});
+  });
   it('out of office without a return date changes nothing', () => {
     const r = onInbound(person({ nextTouchAt: lagos(7, 10).toISOString() }), { kind: 'out_of_office', suggested: 'snooze', returnDate: null }, 'Away', at, tz);
     expect(r.patch).toEqual({});
@@ -283,6 +296,13 @@ describe('snooze, hold, resume, nudge, unsnooze', () => {
     expect(patch.status).toBe('active');
     expect(patch.nextTouchAt).toBe(lagos(9, 9).toISOString());
   });
+  it('resume respects the gap after the last touch', () => {
+    const last = lagos(6, 10); // Friday
+    const overdue = lagos(7, 10).toISOString();
+    const p = person({ status: 'held', touches: 1, lastTouchAt: last.toISOString(), nextTouchAt: overdue });
+    // The 4-day gap ends Tuesday 10:00, after the overdue time but before the next Wednesday we resume on.
+    expect(resume(p, lagos(9, 12), tz).nextTouchAt).toBe(lagos(10, 10).toISOString());
+  });
   it('resume keeps a touch that is still in the future', () => {
     const future = lagos(9, 10).toISOString();
     const patch = resume(person({ status: 'held', touches: 1, nextTouchAt: future }), now, tz);
@@ -295,23 +315,29 @@ describe('snooze, hold, resume, nudge, unsnooze', () => {
 
 describe('correct', () => {
   const now = lagos(4, 10);
-  it('auto_reply with touches left: active again and scheduled', () => {
-    const p = person({ status: 'waiting', touches: 1, stage: 'hello', replyKind: 'interested', draft: 'Hi', lastTouchAt: lagos(3, 10).toISOString() });
+  it('auto_reply with touches left: active again, scheduled after the gap, reply fields cleared', () => {
+    const p = person({
+      status: 'waiting', touches: 1, stage: 'hello', replyKind: 'interested', suggested: 'reply', draft: 'Hi',
+      lastInbound: 'Out of office', repliedAt: now.toISOString(), lastTouchAt: lagos(3, 10).toISOString(),
+    });
     const patch = correct(p, 'auto_reply', now, tz);
-    expect(patch.status).toBe('active');
-    expect(patch.replyKind).toBeNull();
-    expect(patch.draft).toBeNull();
+    expect(patch).toMatchObject({ status: 'active', replyKind: null, suggested: null, draft: null, lastInbound: null, repliedAt: null });
+    // Hello went out Tuesday 10:00; 4 days later is Saturday, so the follow-up waits for Monday 9:00.
+    expect(patch.nextTouchAt).toBe(lagos(9, 9).toISOString());
+  });
+  it('auto_reply schedules now when the gap has already passed', () => {
+    const patch = correct(person({ status: 'waiting', touches: 1, lastTouchAt: zonedTime(tz, 2026, 10, 28, 10).toISOString() }), 'auto_reply', now, tz);
     expect(patch.nextTouchAt).toBe(now.toISOString());
   });
   it('auto_reply outside sending hours waits for the next one', () => {
     const patch = correct(person({ status: 'waiting', touches: 1 }), 'auto_reply', lagos(7, 12), tz);
     expect(patch.nextTouchAt).toBe(lagos(9, 9).toISOString());
   });
-  it('auto_reply with no touches left: rests', () => {
-    const patch = correct(person({ status: 'waiting', touches: 3, stage: 'following' }), 'auto_reply', now, tz);
-    expect(patch.status).toBe('resting');
-    expect(patch.restUntil).toBe(addDays(now, 90).toISOString());
+  it('auto_reply with no touches left: active with nothing scheduled, not rested', () => {
+    const patch = correct(person({ status: 'waiting', touches: 3, stage: 'following', replyKind: 'interested' }), 'auto_reply', now, tz);
+    expect(patch.status).toBe('active');
     expect(patch.nextTouchAt).toBeNull();
+    expect(patch.restUntil).toBeUndefined();
     expect(patch.replyKind).toBeNull();
     expect(patch.draft).toBeNull();
   });
@@ -319,6 +345,14 @@ describe('correct', () => {
     const patch = correct(person({ status: 'waiting', channel: 'linkedin', touches: 1, linkedinState: 'invited' }), 'auto_reply', now, tz);
     expect(patch.status).toBe('active');
     expect(patch.nextTouchAt).toBeNull();
+  });
+  it('auto_reply for someone already talking never puts them back on the automatic path', () => {
+    const p = person({ status: 'waiting', touches: 3, stage: 'talking', badge: 'sent', replyKind: 'interested', suggested: 'reply', draft: 'x', lastInbound: 'hi', repliedAt: now.toISOString() });
+    expect(correct(p, 'auto_reply', now, tz)).toEqual({
+      status: 'active', replyKind: null, suggested: null, draft: null, lastInbound: null, repliedAt: null, nextTouchAt: null,
+    });
+    const early = { ...p, touches: 1 };
+    expect(correct(early, 'auto_reply', now, tz).nextTouchAt).toBeNull();
   });
   it('wrong_person removes, never_contact stops', () => {
     expect(correct(person({ status: 'waiting' }), 'wrong_person', now, tz).status).toBe('removed');
@@ -389,5 +423,32 @@ describe('touchPath', () => {
     const path = touchPath(person({ channel: 'linkedin', touches: 1, linkedinState: 'connected', invitedAt: lagos(2, 10).toISOString(), lastTouchAt: lagos(2, 10).toISOString(), nextTouchAt: next.toISOString() }), tz);
     expect(path.map((s) => s.done)).toEqual([true, true, false, false]);
     expect(path[2]).toEqual({ label: 'Thank-you', at: next.toISOString(), done: false });
+  });
+});
+
+describe('nextTouchTime', () => {
+  const now = lagos(10, 10); // Tuesday 10:00
+  it('is null when there is nothing to send automatically', () => {
+    expect(nextTouchTime(person({ touches: 3 }), now, tz)).toBeNull();
+    expect(nextTouchTime(person({ channel: 'linkedin', touches: 1, linkedinState: 'invited' }), now, tz)).toBeNull();
+    expect(nextTouchTime(person({ touches: 1, stage: 'talking' }), now, tz)).toBeNull();
+  });
+  it('first hello and invite go at the next sending time', () => {
+    expect(nextTouchTime(person(), now, tz)?.toISOString()).toBe(now.toISOString());
+    expect(nextTouchTime(person({ channel: 'linkedin' }), lagos(7, 12), tz)?.toISOString()).toBe(lagos(9, 9).toISOString());
+  });
+  it('waits 4 local days after touch 1 and 6 after touch 2', () => {
+    const last = lagos(3, 10);
+    expect(nextTouchTime(person({ touches: 1, lastTouchAt: last.toISOString() }), lagos(4, 10), tz)?.toISOString()).toBe(lagos(9, 9).toISOString());
+    expect(nextTouchTime(person({ touches: 2, lastTouchAt: last.toISOString() }), lagos(4, 10), tz)?.toISOString()).toBe(lagos(9, 10).toISOString());
+    expect(nextTouchTime(person({ touches: 2, lastTouchAt: lagos(2, 10).toISOString() }), lagos(3, 10), tz)?.toISOString()).toBe(lagos(9, 9).toISOString());
+    expect(nextTouchTime(person({ touches: 2, lastTouchAt: lagos(10, 10).toISOString() }), lagos(11, 10), tz)?.toISOString()).toBe(lagos(16, 10).toISOString());
+  });
+  it('linkedin: thank-you at the next 11:00 weekday, follow-up 5 days after it', () => {
+    const connected = person({ channel: 'linkedin', touches: 1, linkedinState: 'connected' });
+    expect(nextTouchTime(connected, lagos(6, 15), tz)?.toISOString()).toBe(lagos(9, 11).toISOString());
+    const thanked = { ...connected, touches: 2, lastTouchAt: lagos(4, 11).toISOString() };
+    expect(nextTouchTime(thanked, lagos(5, 10), tz)?.toISOString()).toBe(lagos(9, 11).toISOString());
+    expect(nextTouchTime({ ...thanked, lastTouchAt: lagos(10, 11).toISOString() }, lagos(11, 10), tz)?.toISOString()).toBe(lagos(16, 9).toISOString()); // day 5 is a Sunday
   });
 });
