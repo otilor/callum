@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, ApiError } from './api.js';
+import { api, ApiError, onUnreachable } from './api.js';
 
 const fetchMock = vi.fn();
 
@@ -101,5 +101,29 @@ describe('api', () => {
     expect(await api.state().catch((e: unknown) => e)).toMatchObject({ status: 502, message: 'Something went wrong. Callum kept everything as it was.' });
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     expect(await api.state().catch((e: unknown) => e)).toMatchObject({ status: 0, message: "Callum can't be reached. Check that it is still running." });
+  });
+});
+
+describe('onUnreachable', () => {
+  it('tells listeners when a request gets no answer, except the state request that finds out', async () => {
+    const seen = vi.fn();
+    const off = onUnreachable(seen);
+    fetchMock.mockImplementation(() => Promise.reject(new TypeError('Failed to fetch')));
+    await expect(api.state()).rejects.toMatchObject({ status: 0 });
+    expect(seen).not.toHaveBeenCalled();
+    await expect(api.nudge(4)).rejects.toMatchObject({ status: 0 });
+    expect(seen).toHaveBeenCalledTimes(1);
+    off();
+    await expect(api.nudge(4)).rejects.toMatchObject({ status: 0 });
+    expect(seen).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nothing about an answer that refused the request', async () => {
+    const seen = vi.fn();
+    const off = onUnreachable(seen);
+    fetchMock.mockImplementation(() => Promise.resolve(reply(422, { error: 'No.' })));
+    await expect(api.nudge(4)).rejects.toMatchObject({ status: 422 });
+    expect(seen).not.toHaveBeenCalled();
+    off();
   });
 });

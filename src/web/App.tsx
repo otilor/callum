@@ -19,6 +19,7 @@ import { Wrapped } from './screens/leave/Wrapped.js';
 import { NewProject } from './screens/newproject/NewProject.js';
 import { PersonView } from './screens/person/PersonView.js';
 import { PhoneShell } from './screens/phone/PhoneShell.js';
+import type { PhoneTab } from './screens/phone/phoneCopy.js';
 import { YourCallum } from './screens/settings/YourCallum.js';
 import { SignIn } from './screens/signin/SignIn.js';
 import type { AccountSlots } from './ui/AccountMenu.js';
@@ -70,6 +71,8 @@ export function App() {
   const { state, loading, locked, offline, currentProject, refresh } = useAppState();
   // Day one stays up through its last card, so the person sees "That's all 10" before the river.
   const [dayOneFor, setDayOneFor] = useState<number | null>(null);
+  // The phone's tab lives here, so Back from Your Callum (opened from You) lands on You.
+  const [phoneTab, setPhoneTab] = useState<PhoneTab>('river');
   const [view, setView] = useState<View>(MAIN);
   const [connect, setConnect] = useState<{ channel: Channel; reconnect: boolean } | null>(null);
   const [weeklySignal, setWeeklySignal] = useState(0);
@@ -180,7 +183,10 @@ export function App() {
         onNewProject={newProject}
         onOpenSettings={() => setView({ kind: 'settings' })}
         onLeave={() => setView({ kind: 'leave' })}
+        tab={phoneTab}
+        onTab={setPhoneTab}
         {...(reactions ? { reactions } : {})}
+        {...(banner ? { dayOne: { left: Math.min(currentProject.approvalsLeft, awaitingHellos(state, currentProject).length), onOpen: () => setDayOneFor(currentProject.id) } } : {})}
       />
     );
   } else if (currentProject) {
@@ -195,7 +201,7 @@ export function App() {
         onNewProject={newProject}
         onOpenPerson={openPerson}
         {...(reactions ? { reactions } : {})}
-        {...(banner ? { dayOne: { left: currentProject.approvalsLeft, onOpen: () => setDayOneFor(currentProject.id) } } : {})}
+        {...(banner ? { dayOne: { left: Math.min(currentProject.approvalsLeft, awaitingHellos(state, currentProject).length), onOpen: () => setDayOneFor(currentProject.id) } } : {})}
         incident={
           <>
             <VariantStack state={state} onReconnect={reconnect} onOpenPerson={openPerson} onChanged={() => void refresh()} collapse />
@@ -212,6 +218,7 @@ export function App() {
         }
         quiet={({ ask }) => (
           <Quiet
+            key={currentProject.id}
             quiet={quiet}
             project={currentProject}
             tz={state.settings.timezone}

@@ -41,6 +41,8 @@ export function personRoutes(ctx: Ctx): Hono {
 
   app.onError((err, c) => {
     if (err instanceof UserError) return c.json({ error: err.message, ...(err.detail !== undefined ? { detail: err.detail } : {}) }, err.status as 400 | 404 | 409 | 422);
+    // Nobody expected this one: the person is told plainly, and the app's own error reporter keeps the details.
+    ctx.onError(err);
     return c.json({ error: BROKEN }, 500);
   });
 

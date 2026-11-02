@@ -3,6 +3,7 @@ import type { AddCommit, AppState, Project, Tone } from '../../../shared/types.j
 import { api, ApiError, peopleApi, type HelloSample } from '../../api.js';
 import { formatSlot, joinNames, suggestProjectName } from '../../ui/format.js';
 import { Marble } from '../../ui/Marble.js';
+import { useHeadingFocus } from '../../ui/useHeadingFocus.js';
 import { useToast } from '../../ui/Toast.js';
 import { Wordmark } from '../../ui/Wordmark.js';
 import { River } from '../add/River.js';
@@ -43,6 +44,8 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
   const finder = useWhoFinder(null, { initialWay: 'describe' });
   const [step, setStep] = useState<Step>(0);
   const [phase, setPhase] = useState<Phase>('flow');
+  // Each question (and the two screens after them) announces itself: the cursor goes to its heading.
+  const headingRef = useHeadingFocus(`${phase}-${step}`);
   const [offer, setOffer] = useState('');
   const [nameOverride, setNameOverride] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -189,6 +192,15 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
     }
   };
 
+  // Closing with a project made and nobody in it (a failed try of any kind) must not leave an empty project behind.
+  const close = async () => {
+    if (project && !imported && phase !== 'starting') {
+      const verdict = await peopleApi.discardProject(project.id).catch(() => null);
+      if (verdict?.discarded) await refresh();
+    }
+    onClose();
+  };
+
   const lostList = () => {
     setPhase('flow');
     setStep(1);
@@ -247,7 +259,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
             </div>
           ) : null}
           {current ? <span className="np-keeps"><i aria-hidden="true" />{`${current.name} keeps going`}</span> : null}
-          <button type="button" className="np-close" aria-label={current ? `Back to ${current.name}` : 'Close'} onClick={onClose}>
+          <button type="button" className="np-close" aria-label={current ? `Back to ${current.name}` : 'Close'} onClick={() => void close()}>
             <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="#1D2140" strokeWidth="2" strokeLinecap="round" /></svg>
           </button>
         </div>
@@ -256,7 +268,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
       <div className="np-main">
         {phase === 'flow' && step === 0 ? (
           <section className="np-step step-in" aria-labelledby="np-q0">
-            <h1 id="np-q0" className="np-title">What do you offer?</h1>
+            <h1 ref={headingRef} tabIndex={-1} id="np-q0" className="np-title">What do you offer?</h1>
             <div className="np-col">
               <label htmlFor="np-offer" className="sr-only">What you offer, in one line</label>
               <textarea
@@ -317,7 +329,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
 
         {phase === 'flow' && step === 1 ? (
           <section className="np-step np-wide step-in" aria-labelledby="np-q1">
-            <h1 id="np-q1" className="np-title np-title-s">Who should Callum meet?</h1>
+            <h1 ref={headingRef} tabIndex={-1} id="np-q1" className="np-title np-title-s">Who should Callum meet?</h1>
             <WhoPanel
               finder={finder}
               compact
@@ -343,7 +355,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
 
         {phase === 'flow' && step === 2 ? (
           <section className="np-step np-voice step-in" aria-labelledby="np-q2">
-            <h1 id="np-q2" className="np-title">How should you sound?</h1>
+            <h1 ref={headingRef} tabIndex={-1} id="np-q2" className="np-title">How should you sound?</h1>
             <div className="np-tone-wrap">
               <div className="np-seg" role="group" aria-label="Tone">
                 {TONES.map((t) => (
@@ -400,7 +412,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
               </svg>
               <b />
             </span>
-            <h1 id="np-qs" className="np-title np-title-s" role="status">{`Setting up ${name}`}</h1>
+            <h1 ref={headingRef} tabIndex={-1} id="np-qs" className="np-title np-title-s" role="status">{`Setting up ${name}`}</h1>
             <p className="np-lede">{connected.length > 0 ? `${joinNames(connected.map((c) => c.charAt(0).toUpperCase() + c.slice(1)))} ${connected.length === 1 ? 'is' : 'are'} already connected.` : 'Callum is getting everything ready.'}</p>
           </section>
         ) : null}
@@ -411,7 +423,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
               <svg className="pop-in" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
             </span>
             <div className="np-ready-text">
-              <h1 id="np-qr" className="np-title np-title-m">{`${project?.name ?? name} is ready`}</h1>
+              <h1 ref={headingRef} tabIndex={-1} id="np-qr" className="np-title np-title-m">{`${project?.name ?? name} is ready`}</h1>
               <p className="np-lede">{`You'll OK the first 10 hellos ${fromWords(firstSendAt, tz, now())}.`}</p>
               {imported?.creditsUsed !== undefined ? <p className="np-quiet">{`${imported.added.length} ${imported.added.length === 1 ? 'person joined' : 'people joined'}. That used ${imported.creditsUsed.toLocaleString('en-US')} Apollo ${imported.creditsUsed === 1 ? 'credit' : 'credits'}.`}</p> : null}
               {imported?.warning ? <AlertLine>{imported.warning}</AlertLine> : null}

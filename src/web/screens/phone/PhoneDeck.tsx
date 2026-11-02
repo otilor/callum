@@ -109,7 +109,7 @@ export function PhoneDeck({ state, refresh, notify, now }: PhoneDeckProps) {
   const tz = state.settings.timezone;
   const suggested = person.suggested;
 
-  function done(kind: Kind, text: string, item: OutboxItem | null, t0: number) {
+  function done(kind: Kind, text: string, item: OutboxItem | null, t0: number, during?: string) {
     // The undo window the server gave, less the time the call itself took, so the ring runs out when Undo really stops working.
     const opened = item?.undoUntil ? new Date(item.undoUntil).getTime() - new Date(item.updatedAt || item.createdAt).getTime() : 0;
     const undoMs = Math.min(UNDO_MS, Math.max(0, opened - (performance.now() - t0)));
@@ -126,7 +126,8 @@ export function PhoneDeck({ state, refresh, notify, now }: PhoneDeckProps) {
       ),
     );
     notify({
-      text,
+      text: item && undoMs > 0 && during ? during : text,
+      ...(item && undoMs > 0 && during ? { then: text } : {}),
       ...(item && undoMs > 0
         ? {
             undo: {
@@ -169,7 +170,7 @@ export function PhoneDeck({ state, refresh, notify, now }: PhoneDeckProps) {
     if (!canSend) return;
     void act(async () => {
       const t0 = performance.now();
-      done('reply', `Sent to ${person.firstName}`, await api.reply(person.id, draft.trim()), t0);
+      done('reply', `Sent to ${person.firstName}`, await api.reply(person.id, draft.trim()), t0, `Sending your reply to ${person.firstName}`);
     });
   };
   const book = () => {
@@ -179,7 +180,7 @@ export function PhoneDeck({ state, refresh, notify, now }: PhoneDeckProps) {
     }
     void act(async () => {
       const t0 = performance.now();
-      done('book', `Calendar link sent to ${person.firstName}`, await api.book(person.id), t0);
+      done('book', `Calendar link sent to ${person.firstName}`, await api.book(person.id), t0, `Sending ${person.firstName} your calendar link`);
     });
   };
   const saveCalendar = () => {
@@ -189,18 +190,18 @@ export function PhoneDeck({ state, refresh, notify, now }: PhoneDeckProps) {
       await api.updateProject(person.projectId, { calendarUrl: url });
       setNeedCalendar(null);
       const t0 = performance.now();
-      done('book', `Calendar link sent to ${person.firstName}`, await api.book(person.id), t0);
+      done('book', `Calendar link sent to ${person.firstName}`, await api.book(person.id), t0, `Sending ${person.firstName} your calendar link`);
     });
   };
   const close = () =>
     void act(async () => {
       const t0 = performance.now();
-      done('close', `Sent. No more follow-ups for ${person.firstName}`, await api.close(person.id), t0);
+      done('close', `Sent. No more follow-ups for ${person.firstName}`, await api.close(person.id), t0, `Thanking ${person.firstName}. No more follow-ups.`);
     });
   const snooze = () =>
     void act(async () => {
       const resting = await api.snooze(person.id);
-      done('snooze', resting.snoozedUntil ? `${person.firstName} rests until ${formatSlot(resting.snoozedUntil, tz, now)}` : `${person.firstName} rests for now`, null, performance.now());
+      done('snooze', resting.snoozedUntil ? `${person.firstName} comes back ${formatSlot(resting.snoozedUntil, tz, now)}` : `${person.firstName} is snoozed`, null, performance.now());
     });
 
   const pending = waiting.length;

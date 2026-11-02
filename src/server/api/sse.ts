@@ -1,10 +1,12 @@
 import type { Bus } from '../bus.js';
 
-export const PING_EVERY_MS = 25_000;
+import { PING_EVERY_MS } from '../../shared/stream.js';
+
+export { PING_EVERY_MS };
 
 /**
- * A live event stream. Every bus scope becomes `event: changed` with `{"scope":"people"}`; a comment goes out
- * every 25 seconds so proxies keep the connection open. Ends when the caller aborts or stops reading.
+ * A live event stream. Every bus scope becomes `event: changed` with `{"scope":"people"}`; a `ping` event goes out
+ * every 25 seconds so proxies keep the connection open and the page can tell the stream is alive. Ends when the caller aborts or stops reading.
  */
 export function eventStream(bus: Bus, signal?: AbortSignal, pingEveryMs: number = PING_EVERY_MS): Response {
   const encoder = new TextEncoder();
@@ -39,7 +41,7 @@ export function eventStream(bus: Bus, signal?: AbortSignal, pingEveryMs: number 
         // The opening comment makes the browser see the stream as open straight away.
         push(': connected\n\n');
         off = bus.on((scope) => push(`event: changed\ndata: ${JSON.stringify({ scope })}\n\n`));
-        timer = setInterval(() => push(': ping\n\n'), pingEveryMs);
+        timer = setInterval(() => push('event: ping\ndata: {}\n\n'), pingEveryMs);
         timer.unref();
         if (signal?.aborted) finish(controller);
         else signal?.addEventListener('abort', () => finish(controller), { once: true });

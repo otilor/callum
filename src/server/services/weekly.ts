@@ -35,6 +35,7 @@ const inWindow = (iso: string | null, from: Date, to: Date): boolean =>
 function summaryLine(hellos: number, replied: number, booked: number): string {
   const head = `Callum said hello to ${hellos} ${plural(hellos, 'person', 'people')}.`;
   if (replied === 0) return `${head} Nobody has replied yet.`;
+  if (booked === 0) return `${head} ${replied} replied. No calls are booked yet.`;
   return `${head} ${replied} replied and ${booked} ${plural(booked, 'call is', 'calls are')} booked.`;
 }
 

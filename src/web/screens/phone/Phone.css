@@ -687,3 +687,55 @@
     animation: none;
   }
 }
+
+/* Hellos still to OK while more than one project runs: V4Phone's compact banner. */
+.ph-dayone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 0 8px 0 16px;
+  border-radius: 30px;
+  background: var(--mist);
+}
+.ph-dayone-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ph-dayone-line {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.ph-dayone-segs {
+  display: flex;
+  gap: 3px;
+}
+.ph-dayone-segs span {
+  width: 14px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--track, #e1e4ee);
+}
+.ph-dayone-segs span.is-ok {
+  background: var(--ink);
+}
+.ph-dayone-btn {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 20px;
+  background: var(--ink);
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ph-stages {
+  display: flex;
+  flex-direction: column;
+}

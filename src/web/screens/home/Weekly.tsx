@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { WeeklyAnswer, WeeklyGroup, WeeklyReply, WeeklyRest, WeeklyWarm } from '../../../shared/types.js';
 import { api, ApiError, noteApi } from '../../api.js';
 import { trapTab } from '../../ui/focusTrap.js';
+import { useHeadingFocus } from '../../ui/useHeadingFocus.js';
 import { Marble } from '../../ui/Marble.js';
 import { dayAndTime, dayLong, timeOf } from './quietCopy.js';
 import './Weekly.css';
@@ -140,6 +141,7 @@ export function Weekly({ tz, onChanged, onOpenPerson, openSignal = 0 }: WeeklyPr
   const stage = useRef<HTMLDivElement>(null);
   const marked = useRef(false);
   const titleId = useId();
+  const headingRef = useHeadingFocus(open, open);
 
   const markSeen = useCallback(() => {
     if (marked.current) return;
@@ -184,7 +186,8 @@ export function Weekly({ tz, onChanged, onOpenPerson, openSignal = 0 }: WeeklyPr
 
   useEffect(() => {
     if (!open) return;
-    closeButton.current?.focus();
+    // A note with nothing in it has no heading to land on: the cursor goes to its one button.
+    if (!headingRef.current) closeButton.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
       else trapTab(e, stage.current);
@@ -254,7 +257,7 @@ export function Weekly({ tz, onChanged, onOpenPerson, openSignal = 0 }: WeeklyPr
               <div className="wk-head">
                 <div>
                   <span className="wk-date">{dayAndTime(note.at, tz)}</span>
-                  <h1 id={titleId}>{note.title}</h1>
+                  <h1 ref={headingRef} tabIndex={-1} id={titleId}>{note.title}</h1>
                 </div>
                 <button type="button" ref={closeButton} className="wk-close" onClick={close} aria-label="Close the note">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#1D2140" strokeWidth="2" strokeLinecap="round" aria-hidden="true">

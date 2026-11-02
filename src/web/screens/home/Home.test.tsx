@@ -103,7 +103,8 @@ describe('Home', () => {
       person: person(4, 'Ada Obi'), messages: [],
       path: [{ label: 'Hello', at: '2026-11-01T09:00:00Z', done: true }, { label: 'Follow-up', at: '2026-11-04T09:00:00Z', done: false }],
     });
-    mocks.nudge.mockResolvedValue({});
+    // The server answers a nudge with the person due now (11:00 in UTC today, inside sending hours).
+    mocks.nudge.mockResolvedValue(person(4, 'Ada Obi', { nextTouchAt: '2026-11-02T10:00:00Z' }));
     const user = userEvent.setup();
     view(appState({ people: [person(4, 'Ada Obi')] }));
     await user.click(await screen.findByRole('button', { name: 'Ada Obi, Said hello' }));
@@ -112,6 +113,8 @@ describe('Home', () => {
     await user.click(within(card).getByRole('button', { name: 'Nudge now' }));
     expect(mocks.nudge).toHaveBeenCalledWith(4);
     expect(refresh).toHaveBeenCalled();
+    // Named with a time from the nudge answer, not with "as soon as".
+    expect(await screen.findByText('Ada is next. It goes out from today at 10:00.')).toBeInTheDocument();
   });
 
   it('shows the list as a table, one row per person, grouped by how close they are', async () => {
@@ -332,6 +335,36 @@ describe('Home', () => {
     first.unmount();
     view(appState({ people, outbox: [out(1, { kind: 'reply', origin: 'user', sendAfter: '2026-11-02T10:01:00Z' }), out(2, {})] }));
     expect(screen.getByText('Next hello goes to Ada')).toBeInTheDocument();
+  });
+
+  it("says their time on the next hello when it is in the person's zone", () => {
+    const out: OutboxItem = {
+      id: 2, personId: 4, channel: 'email', kind: 'hello', subject: null, body: 'x', state: 'scheduled', origin: 'auto', sendAfter: '2026-11-03T09:00:00Z',
+      undoUntil: null, error: null, approvalCounted: false, claimedAt: null, detail: null, createdAt: AT, updatedAt: AT,
+    };
+    view(appState({ people: [person(4, 'Ada Obi', { timezone: 'Europe/London' })], outbox: [out] }));
+    expect(screen.getByText('tomorrow at 9:00 their time')).toBeInTheDocument();
+  });
+
+  it('forgets an answer when the project changes, so it can never act on the wrong one', async () => {
+    mocks.ask.mockResolvedValue({ text: 'LinkedIn is paused until Monday at 9:00.', personIds: [], action: null });
+    const user = userEvent.setup();
+    const two = appState({ projects: [project(), project({ id: 2, name: 'Payroll' })], people: [person(4, 'Ada Obi')] });
+    const one = two.projects[0]!;
+    const second = two.projects[1]!;
+    const { rerender } = render(
+      <ToastProvider>
+        <Home state={two} project={one} refresh={refresh} now={clock} />
+      </ToastProvider>,
+    );
+    await user.type(screen.getByRole('textbox', { name: 'Ask Callum' }), 'pause LinkedIn{Enter}');
+    expect(await screen.findByText('LinkedIn is paused until Monday at 9:00.')).toBeInTheDocument();
+    rerender(
+      <ToastProvider>
+        <Home state={two} project={second} refresh={refresh} now={clock} />
+      </ToastProvider>,
+    );
+    expect(screen.queryByText('LinkedIn is paused until Monday at 9:00.')).not.toBeInTheDocument();
   });
 
   it('lists only the running project when it is the only one', async () => {

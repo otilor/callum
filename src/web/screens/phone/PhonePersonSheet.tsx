@@ -3,7 +3,7 @@ import type { Message, PathStep, Person } from '../../../shared/types.js';
 import { api, ApiError, type PersonDetail } from '../../api.js';
 import { trapTab } from '../../ui/focusTrap.js';
 import { Marble, lookForStage } from '../../ui/Marble.js';
-import { formatSlot } from '../../ui/format.js';
+import { formatSlot, nudgeSlot } from '../../ui/format.js';
 import { channelName, messageMeta, nextStepLabel } from './phoneCopy.js';
 import type { Notify } from './PhoneNotice.js';
 
@@ -154,8 +154,8 @@ export function PhonePersonSheet({ person, tag, tz, now, paused, notify, refresh
 
   const nudge = () =>
     run(async () => {
-      await api.nudge(person.id);
-      notify(`Nudged. ${first}'s next message goes out as soon as sending hours allow.`);
+      const nudgedPerson = await api.nudge(person.id);
+      notify(nudgedPerson.nextTouchAt ? `Nudged. ${first}'s next message goes out from ${nudgeSlot(nudgedPerson.nextTouchAt, person.timezone, tz, now)}.` : `Nudged. ${first} is next.`);
       await refresh();
     });
 
@@ -185,7 +185,7 @@ export function PhonePersonSheet({ person, tag, tz, now, paused, notify, refresh
     : paused
       ? `Callum is paused. Resume to nudge ${first}.`
       : nudged
-        ? `${first}'s next message goes out as soon as sending hours allow.`
+        ? `${first}'s next message goes out from ${nudgeSlot(person.nextTouchAt ?? now.toISOString(), person.timezone, tz, now)}.`
         : nextStepLabel(person) === null
           ? `Callum has nothing more to send ${first}.`
           : null;

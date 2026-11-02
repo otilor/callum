@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { AddCommit, Person, Project } from '../../../shared/types.js';
 import { peopleApi } from '../../api.js';
 import { useToast } from '../../ui/Toast.js';
+import { useHeadingFocus } from '../../ui/useHeadingFocus.js';
 import { Wordmark } from '../../ui/Wordmark.js';
 import { messageOf, useWhoFinder, type Way } from './useWhoFinder.js';
 import { River } from './River.js';
@@ -32,6 +33,7 @@ function sentences(line: string): { title: string; rest: string } {
 /** Add people to a project that is already running: four ways in, a preview of who joins and who is skipped, then Add. */
 export function AddPeople({ project, people, timezone, onClose, now = () => new Date() }: AddPeopleProps) {
   const toast = useToast();
+  const headingRef = useHeadingFocus();
   const finder = useWhoFinder(project.id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -119,7 +121,7 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
       </header>
 
       <div className="ap-intro">
-        <h1>Who else should Callum meet?</h1>
+        <h1 ref={headingRef} tabIndex={-1}>Who else should Callum meet?</h1>
         <p>{`New people join the river as strangers. Nobody hears from Callum before ${slot}.`}</p>
       </div>
 

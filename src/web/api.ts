@@ -23,6 +23,16 @@ export class ApiError extends Error {
 const UNREACHABLE = "Callum can't be reached. Check that it is still running.";
 const BROKEN = 'Something went wrong. Callum kept everything as it was.';
 
+const unreachableListeners = new Set<() => void>();
+/**
+ * Called whenever a request got no answer at all (status 0), so the page can look again at whether Callum is there. The state
+ * request itself does not call it: it is the one that finds out.
+ */
+export function onUnreachable(listener: () => void): () => void {
+  unreachableListeners.add(listener);
+  return () => unreachableListeners.delete(listener);
+}
+
 type Query = Record<string, string | number | undefined>;
 
 function withQuery(path: string, query?: Query): string {
@@ -42,6 +52,7 @@ async function request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?
       ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
     });
   } catch {
+    if (path !== '/state') for (const listener of [...unreachableListeners]) listener();
     throw new ApiError(0, UNREACHABLE);
   }
   const text = await res.text();
@@ -100,10 +111,9 @@ export const api = {
 
   settings: (patch: SettingsPatch) => post<Settings>('/settings', patch),
   suggestOffer: () => get<{ offer: string | null }>('/offer/suggest'),
-  sample: (tone: Tone, projectId?: number) => get<{ body: string }>('/sample', { tone, projectId }),
+  sample: (tone: Tone, projectId?: number) => get<HelloSample>('/sample', { tone, projectId }),
   plan: (projectId?: number) => get<PlanPreview>('/plan', { projectId }),
 
-  projects: () => get<Project[]>('/projects'),
   createProject: (body: { offer: string; name?: string; audience?: string; tone?: Tone }) => post<Project>('/projects', body),
   updateProject: (id: number, patch: ProjectPatch) => post<Project>(`/projects/${id}`, patch),
   pauseProject: (id: number, until: string | null) => post<Project>(`/projects/${id}/pause`, { until }),

@@ -1,4 +1,5 @@
 import type { Skipped } from '../../shared/types.js';
+import { nextSendingTime } from '../../server/engine/windows.js';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -24,6 +25,17 @@ export function formatSlot(iso: string, tz: string, now: Date): string {
   if (ahead === 1) return `tomorrow at ${time}`;
   if (ahead > 1 && ahead < 7) return `${WEEKDAYS[new Date(Date.UTC(at.year, at.month - 1, at.day)).getUTCDay()]} at ${time}`;
   return `${at.day} ${MONTHS[at.month - 1]} at ${time}`;
+}
+
+/** A time in the zone of the person it is for: `Thursday at 9:00 their time`. With no zone known it is the viewer's own, with nothing added. */
+export function theirSlot(iso: string, personTz: string | null | undefined, tz: string, now: Date): string {
+  return `${formatSlot(iso, personTz ?? tz, now)}${personTz ? ' their time' : ''}`;
+}
+
+/** When a nudged message goes: the first sending hour of the person at or after the moment the nudge asked for. */
+export function nudgeSlot(nextTouchAt: string, personTz: string | null | undefined, tz: string, now: Date): string {
+  const at = nextSendingTime(new Date(nextTouchAt), personTz ?? tz);
+  return theirSlot(at.toISOString(), personTz, tz, now);
 }
 
 /** `Nneka`, `Nneka and Temi`, `Ada, Nneka and Temi`. */

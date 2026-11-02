@@ -162,7 +162,7 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
   api.get('/offer/suggest', async (c) => c.json({ offer: await onboarding.suggestOffer(ctx) }));
   api.get('/sample', async (c) => {
     const tone = toneOf(c.req.query('tone'));
-    return c.json({ body: await onboarding.sample(ctx, projectIdOf(ctx, c.req.query('projectId')), tone) });
+    return c.json(await onboarding.sample(ctx, projectIdOf(ctx, c.req.query('projectId')), tone));
   });
   api.get('/plan', (c) => c.json(onboarding.planPreview(ctx, projectIdOf(ctx, c.req.query('projectId')))));
 

@@ -308,7 +308,8 @@ describe('person sheet', () => {
 
   it('nudges someone in the river, then explains when it goes out', async () => {
     const user = userEvent.setup();
-    mocks.nudge.mockResolvedValue({ ...chidi });
+    // The server answers a nudge with the person due now; it is 21:00 in Lagos on Tuesday, so the first sending hour is tomorrow at 9:00.
+    mocks.nudge.mockResolvedValue({ ...chidi, nextTouchAt: iso('2026-11-03T20:00:00Z') });
     mocks.person.mockResolvedValue({ person: chidi, messages: [], path: [{ label: 'Hello', at: null, done: true }, { label: 'Follow-up', at: iso('2026-11-05T08:00:00Z'), done: false }] });
     view();
     await user.click(screen.getByRole('button', { name: /Chidi Okeke/ }));
@@ -316,7 +317,7 @@ describe('person sheet', () => {
     expect(await within(sheet).findByText('Next: follow-up Thursday at 9:00.')).toBeInTheDocument();
     await user.click(within(sheet).getByRole('button', { name: 'Nudge now' }));
     expect(mocks.nudge).toHaveBeenCalledWith(5);
-    expect(await screen.findByText("Nudged. Chidi's next message goes out as soon as sending hours allow.")).toBeInTheDocument();
+    expect(await screen.findByText("Nudged. Chidi's next message goes out from tomorrow at 9:00.")).toBeInTheDocument();
   });
 
   it('holds and resumes', async () => {

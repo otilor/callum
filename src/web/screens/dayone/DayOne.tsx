@@ -5,9 +5,9 @@ import { River, type FaceMark } from '../../river/River.js';
 import { isStill, stillChannels } from '../../river/state.js';
 import { AccountMenu, type AccountSlots } from '../../ui/AccountMenu.js';
 import { marbleBackground } from '../../ui/Marble.js';
-import { formatSlot } from '../../ui/format.js';
+import { formatSlot, theirSlot } from '../../ui/format.js';
 import { Wordmark } from '../../ui/Wordmark.js';
-import { useUndoToasts, UNDO_MS } from '../home/UndoToast.js';
+import { useUndoToasts, undoMsLeft } from '../home/UndoToast.js';
 import { prefersReducedMotion } from '../firstrun/motion.js';
 import './DayOne.css';
 
@@ -84,6 +84,8 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
   // An OK counts the moment it is sent, before the next state arrives.
   const okStillListed = awaiting.filter((o) => decided[o.id] === 'ok').length;
   const left = Math.max(0, project.approvalsLeft - okStillListed);
+  // Fewer than ten people can be waiting: the counter never promises hellos that have no one to go to.
+  const shownLeft = Math.min(left, visible.length);
   const reviewing = card !== null;
   const lonely = state.projects.filter((p) => p.state !== 'wrapped').length <= 1;
 
@@ -127,6 +129,7 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
     const target: Leaving = { kind, item: card.item, person: card.person };
     setError('');
     setLeaving(target);
+    const startedAt = performance.now();
     try {
       const body = kind === 'ok' && edited ? text : undefined;
       const [result] = await Promise.all([kind === 'ok' ? api.approve(target.item.id, body) : api.skip(target.item.id), wait(prefersReducedMotion() ? 0 : LEAVE_MS)]);
@@ -134,10 +137,12 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
       refocus.current = true;
       const first = target.person.firstName;
       if (kind === 'ok') {
-        const when = formatSlot(target.item.sendAfter, target.person.timezone ?? tz, clock());
-        const ms = result.undoUntil ? Math.min(UNDO_MS, Math.max(1000, Date.parse(result.undoUntil) - clock().getTime())) : UNDO_MS;
-        toastPending({
-          text: `${first}'s hello goes out ${when}${target.person.timezone ? ' their time' : ''}`,
+        const when = theirSlot(target.item.sendAfter, target.person.timezone, tz, clock());
+        const ms = undoMsLeft(result, startedAt);
+        const goes = `${first}'s hello goes out ${when}`;
+        if (ms <= 0) toastInfo(goes);
+        else toastPending({
+          text: goes,
           failText: `Too late. ${first}'s hello already went out.`,
           ms,
           onUndo: async () => {
@@ -184,9 +189,9 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
   const askNotif = !reviewing && state.settings.notifications === null && notif === null;
   const doneIn = TOTAL - left;
   const segs = Array.from({ length: TOTAL }, (_, i) => (i < doneIn ? 'ok' : i === doneIn && reviewing ? 'now' : 'todo'));
-  const counter = lonely ? `${left} left` : `${left} of ${TOTAL} hellos left to OK in ${project.name}`;
+  const counter = lonely ? `${shownLeft} left` : `${shownLeft} of ${TOTAL} hellos left to OK in ${project.name}`;
   const channelLabel = card ? CHANNEL_LABEL[card.item.channel] : '';
-  const when = card ? formatSlot(card.item.sendAfter, card.person.timezone ?? tz, clock()) : '';
+  const when = card ? theirSlot(card.item.sendAfter, card.person.timezone, tz, clock()) : '';
 
   return (
     <main className="d1" data-screen="day-one">

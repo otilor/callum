@@ -91,7 +91,14 @@ describe('DayOne', () => {
     expect(screen.getByText('Email')).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /Message to Kemi/ })).toHaveValue('Hi Kemi, would a quick chat be useful?');
     expect(screen.getByText('Click the message to change any words.')).toBeInTheDocument();
-    expect(screen.getByText('7 left')).toBeInTheDocument();
+    // Seven hellos are left to OK, but only four people are waiting: the counter never counts past the people there are.
+    expect(screen.getByText('4 left')).toBeInTheDocument();
+  });
+
+  it('counts the hellos left when there are more people than OKs', () => {
+    const people = NAMES.map((n, i) => person(i + 1, n));
+    setup(appState({ people, outbox: people.map((p, i) => item(100 + i, p.id, `Hi ${p.firstName}`)), projects: [project({ approvalsLeft: 2 })] }));
+    expect(screen.getByText('2 left')).toBeInTheDocument();
   });
 
   it('says where replies land and that it is normal to wait', () => {
@@ -123,7 +130,7 @@ describe('DayOne', () => {
     await user.click(screen.getByRole('button', { name: 'OK' }));
     expect(await screen.findByText('Tunde Bello')).toBeInTheDocument();
     expect(screen.queryByText('Kemi Eze')).not.toBeInTheDocument();
-    expect(screen.getByText('6 left')).toBeInTheDocument();
+    expect(screen.getByText('3 left')).toBeInTheDocument();
   });
 
   it('undoes an OK from the toast', async () => {
@@ -166,9 +173,30 @@ describe('DayOne', () => {
     expect(await screen.findByText(/Kemi's hello goes out .* their time/)).toBeInTheDocument();
   });
 
+  it("says their time on the card as well as in the toast", () => {
+    const people = [person(1, 'Kemi Eze', { timezone: 'Europe/London' })];
+    setup(appState({ people, outbox: [item(100, 1, 'Hi Kemi')], projects: [project({ approvalsLeft: 5 })] }));
+    expect(screen.getByText(/tomorrow at \d+:\d\d their time/)).toBeInTheDocument();
+  });
+
+  it("runs the Undo ring for the window the server gave, by the server's own clock", async () => {
+    // The server opened a 6 second window (undoUntil less updatedAt); the browser clock is not consulted for it.
+    mocks.approve.mockResolvedValue(item(100, 1, 'x', { state: 'scheduled', updatedAt: '2026-11-02T10:00:00.000Z', undoUntil: '2026-11-02T10:00:06.000Z' }));
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: 'OK' }));
+    const ring = await waitFor(() => {
+      const el = document.querySelector<SVGCircleElement>('.undo-ring');
+      if (!el) throw new Error('no ring yet');
+      return el;
+    });
+    const ms = parseFloat(ring.style.animationDuration);
+    expect(ms).toBeLessThanOrEqual(6000);
+    expect(ms).toBeGreaterThan(4000);
+  });
+
   it('does not count a wrapped project as company', () => {
     setup(appState({ projects: [project({ approvalsLeft: 7 }), project({ id: 2, name: 'Old', state: 'wrapped' })] }));
-    expect(screen.getByText('7 left')).toBeInTheDocument();
+    expect(screen.getByText('4 left')).toBeInTheDocument();
   });
 
   it('can go back to Home while hellos are still waiting', async () => {
@@ -245,7 +273,7 @@ describe('DayOne', () => {
       outbox: [item(100, 1, 'Hi Kemi'), item(105, 5, 'Hi Yaw')],
     });
     render(<DayOne state={state} project={payroll} refresh={refresh} now={() => NOW} onLeave={onLeave} />);
-    expect(screen.getByText('7 of 10 hellos left to OK in Payroll')).toBeInTheDocument();
+    expect(screen.getByText('1 of 10 hellos left to OK in Payroll')).toBeInTheDocument();
     expect(screen.getByText('Yaw Mensah')).toBeInTheDocument();
     expect(screen.queryByText('Kemi Eze')).not.toBeInTheDocument();
     const river = screen.getByRole('group', { name: 'Your river' });

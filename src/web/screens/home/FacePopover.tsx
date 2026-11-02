@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PathStep, Person, Project, Stage } from '../../../shared/types.js';
 import { api } from '../../api.js';
 import { marbleBackground } from '../../ui/Marble.js';
+import { nudgeSlot } from '../../ui/format.js';
 import { dayLabel, formatWhen } from '../../ui/when.js';
 import { channelPhrase } from './dock.js';
 import './FacePopover.css';
@@ -71,8 +72,8 @@ export function FacePopover({ person, project, tz, now, notify, refresh, inline 
     setBusy(true);
     try {
       if (label === 'nudge') {
-        await api.nudge(person.id);
-        notify(`${person.firstName} is next. It goes out as soon as sending hours and pace allow.`);
+        const nudged = await api.nudge(person.id);
+        notify(nudged.nextTouchAt ? `${person.firstName} is next. It goes out from ${nudgeSlot(nudged.nextTouchAt, person.timezone, tz, now())}.` : `${person.firstName} is next.`);
       } else if (label === 'hold') {
         await api.hold(person.id);
         notify(`Callum will leave ${person.firstName} alone for now`);

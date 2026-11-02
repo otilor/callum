@@ -117,7 +117,8 @@
   position: relative;
 }
 .home-stage.is-river {
-  height: 643px;
+  /* The dock above the water, the water, and the counts under it. */
+  height: calc(285px + var(--river-h, 280px) + 78px);
 }
 .home-river {
   position: absolute;

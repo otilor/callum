@@ -140,7 +140,7 @@ function DayTwo({ day2, tz, now }: { day2: NonNullable<QuietSnapshot['day2']>; t
 }
 
 function Used({ used, project, tz, onChanged }: { used: NonNullable<QuietSnapshot['used']>; project: Project | null; tz: string; onChanged(): void }) {
-  const [answer, setAnswer] = useState<AskAnswer | null>(null);
+  const [answer, setAnswer] = useState<{ answer: AskAnswer; projectId: number | undefined } | null>(null);
   const [added, setAdded] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -154,20 +154,23 @@ function Used({ used, project, tz, onChanged }: { used: NonNullable<QuietSnapsho
     if (!first || busy) return;
     setBusy(true);
     setError(null);
+    const projectId = project?.id;
     try {
-      setAnswer(await api.ask(`Find more like ${first.first}`, project?.id));
+      setAnswer({ answer: await api.ask(`Find more like ${first.first}`, projectId), projectId });
     } catch (e) {
       setError(messageOf(e));
     } finally {
       setBusy(false);
     }
   }
-  async function add(answered: AskAnswer) {
-    if (!answered.action || busy) return;
+  async function add(answered: { answer: AskAnswer; projectId: number | undefined }) {
+    const action = answered.answer.action;
+    if (!action || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const done = await api.act(answered.action, project?.id);
+      // The answer was written for the project it was asked in, so the people go there.
+      const done = await api.act(action, answered.projectId);
       setAdded(done.text);
       onChanged();
     } catch (e) {
@@ -186,9 +189,9 @@ function Used({ used, project, tz, onChanged }: { used: NonNullable<QuietSnapsho
       <p className="qm-lede">{heard}{rest}</p>
       {answer ? (
         <div className="qm-answer fade-in">
-          <p>{answer.text}</p>
+          <p>{answer.answer.text}</p>
           <div className="qm-actions">
-            {answer.action ? <button type="button" className="qm-dark" disabled={busy} onClick={() => void add(answer)}>{answer.action.label}</button> : null}
+            {answer.answer.action ? <button type="button" className="qm-dark" disabled={busy} onClick={() => void add(answer)}>{answer.answer.action.label}</button> : null}
             <button type="button" className="qm-light" onClick={() => setAnswer(null)}>Not now</button>
           </div>
         </div>

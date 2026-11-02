@@ -261,6 +261,21 @@
 .cx-primary[aria-busy='true'] {
   opacity: 0.75;
 }
+.cx-save {
+  flex: 0 0 auto;
+  min-height: 52px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 26px;
+  background: var(--ink);
+  color: var(--white);
+  font-size: 16px;
+  font-weight: 600;
+  transition: opacity 0.3s ease;
+}
+.cx-save:disabled {
+  opacity: 0.4;
+}
 .cx-pill {
   min-height: 44px;
   padding: 0 20px;

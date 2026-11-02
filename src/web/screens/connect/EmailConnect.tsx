@@ -15,6 +15,15 @@ export function messageOf(e: unknown): string {
   return e instanceof ApiError ? e.message : 'Something went wrong. Callum kept everything as it was.';
 }
 
+/**
+ * A refused connection reads `Couldn't reach smtp.gmail.com. Check the server name and port.` Someone using Google or Microsoft
+ * never typed a server, so for them it is the connection that needs a look.
+ */
+export function connectFailure(provider: EmailProvider, message: string): string {
+  if (provider === 'other' || !/Check the server name and port/i.test(message)) return message;
+  return `Couldn't reach ${provider === 'google' ? 'Google' : 'Microsoft'}. Check your internet connection and try again.`;
+}
+
 interface Step { text: string; link?: { label: string; href: string } }
 
 const GOOGLE_STEPS: Step[] = [
@@ -74,6 +83,9 @@ export function EmailConnect({ account, again, provider: initial, onConnected, o
   const [setup, setSetup] = useState<MicrosoftSetup | null>(null);
   const [pace, setPace] = useState<string | null>(null);
   const [shake, setShake] = useState(0);
+  const [clientId, setClientId] = useState('');
+  const [clientIdError, setClientIdError] = useState('');
+  const [savingId, setSavingId] = useState(false);
   const finished = useRef(onConnected);
   finished.current = onConnected;
   const report = useRef(onBusy);
@@ -175,9 +187,23 @@ export function EmailConnect({ account, again, provider: initial, onConnected, o
       setPassword('');
       finished.current(done);
     } catch (err) {
-      fail(messageOf(err));
+      fail(connectFailure(provider, messageOf(err)));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const saveClientId = async () => {
+    if (savingId || !clientId.trim()) return;
+    setClientIdError('');
+    setSavingId(true);
+    try {
+      setSetup(await channelSetup.saveMicrosoftClientId(clientId.trim()));
+      setClientId('');
+    } catch (err) {
+      setClientIdError(messageOf(err));
+    } finally {
+      setSavingId(false);
     }
   };
 
@@ -189,7 +215,7 @@ export function EmailConnect({ account, again, provider: initial, onConnected, o
     try {
       setDevice(await api.microsoftStart(address.trim()));
     } catch (err) {
-      fail(messageOf(err));
+      fail(connectFailure('microsoft', messageOf(err)));
     } finally {
       setBusy(false);
     }
@@ -230,10 +256,36 @@ export function EmailConnect({ account, again, provider: initial, onConnected, o
         ))}
       </div>
       {microsoftBlocked ? (
-        <p className="cx-quiet">
-          Microsoft needs a one-time app setup on this computer first.{' '}
-          <a className="cx-link" href={MICROSOFT_SETUP_DOC} target="_blank" rel="noopener noreferrer">How to set it up<External /></a>
-        </p>
+        <>
+          <p className="cx-quiet">
+            Microsoft needs a one-time app setup on this computer first. Paste the application (client) ID of the app you registered.{' '}
+            <a className="cx-link" href={MICROSOFT_SETUP_DOC} target="_blank" rel="noopener noreferrer">How to set it up<External /></a>
+          </p>
+          <div className="cx-inline">
+            <input
+              className="cx-input"
+              type="text"
+              aria-label="Application (client) ID"
+              value={clientId}
+              placeholder="00000000-0000-0000-0000-000000000000"
+              spellCheck={false}
+              autoComplete="off"
+              aria-invalid={clientIdError ? true : undefined}
+              onChange={(e) => {
+                setClientId(e.target.value);
+                setClientIdError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void saveClientId();
+                }
+              }}
+            />
+            <button type="button" className="cx-save" disabled={savingId || !clientId.trim()} aria-busy={savingId} onClick={() => void saveClientId()}>Save</button>
+          </div>
+          {clientIdError ? <ErrorLine>{clientIdError}</ErrorLine> : null}
+        </>
       ) : null}
 
       {provider === 'google' ? <Steps steps={GOOGLE_STEPS} last={password.trim().length > 0} /> : null}

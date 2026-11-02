@@ -75,7 +75,7 @@ describe('Day one beside other projects', () => {
     mocks.state.mockResolvedValue(state);
     const user = userEvent.setup();
     const { container } = render(<App />);
-    expect(await screen.findByText('10 of 10 hellos left to OK in Reconciliation')).toBeInTheDocument();
+    expect(await screen.findByText('1 of 10 hellos left to OK in Reconciliation')).toBeInTheDocument();
     expect(container.querySelector('main')).toHaveAttribute('data-screen', 'home');
     expect(screen.getByRole('button', { name: 'Femi Ade, replied and waiting on you' })).toBeInTheDocument();
 
@@ -196,5 +196,26 @@ describe('App', () => {
     mocks.state.mockRejectedValue(new ApiError(0, "Callum can't be reached. Check that it is still running."));
     render(<App />);
     expect(await screen.findByText("Callum can't be reached. Check that it is still running.")).toBeInTheDocument();
+  });
+
+  it('on a phone, Back from Your Callum lands on the tab it was opened from', async () => {
+    const real = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('max-width') || query.includes('prefers-reduced-motion'),
+      media: query, onchange: null, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      mocks.state.mockResolvedValue(appState());
+      const user = userEvent.setup();
+      render(<App />);
+      await user.click(await screen.findByRole('button', { name: 'You' }));
+      await user.click(await screen.findByRole('button', { name: 'Everything else in Your Callum' }));
+      expect(await screen.findByRole('heading', { level: 1, name: 'Your Callum' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /back/i }));
+      expect(await screen.findByRole('button', { name: 'Everything else in Your Callum' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'You' })).toHaveAttribute('aria-current', 'page');
+    } finally {
+      window.matchMedia = real;
+    }
   });
 });

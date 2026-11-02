@@ -411,6 +411,41 @@ describe('NewProject, the voice and Start', () => {
     expect(mocks.createProject).toHaveBeenCalledTimes(2);
   });
 
+  it('removes the project it made when the person closes after a failed try of any kind', async () => {
+    const user = userEvent.setup();
+    const { refresh, onClose } = show();
+    mocks.createProject.mockResolvedValue(project({ id: 2, name: 'Payroll', startedAt: null }));
+    mocks.discardProject.mockResolvedValue({ discarded: true });
+    // Not a 410: the server fell over while the people were being added.
+    mocks.commit.mockRejectedValue(new ApiError(500, 'Something went wrong. Callum kept everything as it was.'));
+    await toPeople(user);
+    await pasteThree(user);
+    await user.click(screen.getByRole('button', { name: 'These 3 look right' }));
+    await user.click(screen.getByRole('button', { name: 'Start Payroll' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong.');
+    expect(mocks.discardProject).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /^(Close|Back to)/ }));
+    expect(mocks.discardProject).toHaveBeenCalledWith(2);
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('closes without touching anything when no project was made', async () => {
+    const user = userEvent.setup();
+    const { onClose } = show();
+    await user.click(screen.getByRole('button', { name: /^(Close|Back to)/ }));
+    expect(mocks.discardProject).not.toHaveBeenCalled();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('puts the cursor on the heading of each question as it opens', async () => {
+    const user = userEvent.setup();
+    show();
+    expect(screen.getByRole('heading', { name: 'What do you offer?' })).toHaveFocus();
+    await toPeople(user);
+    expect(screen.getByRole('heading', { name: 'Who should Callum meet?' })).toHaveFocus();
+  });
+
   it('goes on to start when the project already has people from an earlier try', async () => {
     const user = userEvent.setup();
     show();

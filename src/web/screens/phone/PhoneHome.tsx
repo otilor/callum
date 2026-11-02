@@ -1,14 +1,19 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import type { AppState, Channel, Project } from '../../../shared/types.js';
+import type { AppState, Channel, Person, Project } from '../../../shared/types.js';
 import { api } from '../../api.js';
 import { ErrorNote } from '../../ui/ErrorNote.js';
 import { formatSlot, joinNames } from '../../ui/format.js';
 import { IncidentCards } from '../home/IncidentCard.js';
 import { PhoneDeck, WaitingLine, dockPeople } from './PhoneDeck.js';
+import type { Notify } from './PhoneNotice.js';
 import { PhoneToast, type PhoneToastData } from './PhoneToast.js';
 import { PhoneSheet } from './PhoneSheet.js';
+import { PhoneStages } from './PhoneRiver.js';
 import { ProjectSheet } from './ProjectSheet.js';
 import './Phone.css';
+import './PhoneApp.css';
+
+const UNDO_MS = 10_000;
 
 function greeting(now: Date, tz: string): string {
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' }).format(now));
@@ -21,7 +26,7 @@ export interface PhoneHomeProps {
   project: Project | null;
   refresh(): Promise<void>;
   /** The river, already drawn for a narrow screen. PhoneHome gives it a strip as wide as the screen. */
-  river: ReactNode;
+  river: ReactNode | ((tools: { onFace(person: Person): void }) => ReactNode);
   /** The dock: the faces of the people who want to talk. */
   dock?: ReactNode;
   /** The Ask bar. On the phone it hides behind an icon and opens in a sheet. */
@@ -34,19 +39,28 @@ export interface PhoneHomeProps {
   onReconnect(channel: Channel): void;
   /** Opens a person's conversation, for an incident about a reply that was not kept. */
   onOpenPerson?(personId: number): void;
+  /** Hellos still to OK while more than one project runs: a compact banner under the brief, after the V4Phone board. */
+  dayOne?: { left: number; onOpen(): void };
   now?: () => Date;
 }
 
 /** Home for a narrow screen: the project switcher, the brief, the river, and the people who want to talk as cards. */
-export function PhoneHome({ state, project, refresh, river, dock, ask, onOpenAccount, onNewProject, onReconnect, onOpenPerson, now = () => new Date() }: PhoneHomeProps) {
+export function PhoneHome({ state, project, refresh, river, dock, ask, onOpenAccount, onNewProject, onReconnect, onOpenPerson, dayOne, now = () => new Date() }: PhoneHomeProps) {
   const at = now();
   const tz = state.settings.timezone;
   const [sheet, setSheet] = useState<'projects' | 'ask' | null>(null);
   const [toast, setToast] = useState<PhoneToastData | null>(null);
   const nextId = useRef(1);
   const [error, setError] = useState<string | null>(null);
+  /** The person whose sheet is open: a face in the river and a row under it both open it. */
+  const [sheetId, setSheetId] = useState<number | null>(null);
 
   const notify = useCallback((t: Omit<PhoneToastData, 'id'>) => setToast({ ...t, id: nextId.current++ }), []);
+  /** The person sheet speaks through `Notify`; this screen's toast takes the same words, and an Undo with its window. */
+  const sheetNotify = useCallback<Notify>(
+    (text, options) => notify({ text, ...(options?.undo ? { undo: { ms: options.ms ?? UNDO_MS, run: () => void options.undo?.() } } : {}) }),
+    [notify],
+  );
   const gone = useCallback((id: number) => setToast((cur) => (cur?.id === id ? null : cur)), []);
 
   const trigger = useRef<HTMLElement | null>(null);
@@ -121,8 +135,22 @@ export function PhoneHome({ state, project, refresh, river, dock, ask, onOpenAcc
         ) : null}
         {error ? <ErrorNote>{error}</ErrorNote> : null}
 
+        {dayOne ? (
+          <div className="ph-dayone">
+            <span className="ph-dayone-text">
+              <span className="ph-dayone-line">{`${dayOne.left} of 10 hellos left to OK in ${project?.name ?? 'this project'}`}</span>
+              <span className="ph-dayone-segs" aria-hidden="true">
+                {Array.from({ length: 10 }, (_, i) => (
+                  <span key={i} className={i < 10 - dayOne.left ? 'is-ok' : ''} />
+                ))}
+              </span>
+            </span>
+            <button type="button" className="ph-dayone-btn" onClick={dayOne.onOpen}>OK the hellos</button>
+          </div>
+        ) : null}
+
         <section className="ph-river" aria-label="Your river" data-still={projectPaused || !running}>
-          {river}
+          {typeof river === 'function' ? river({ onFace: (p) => setSheetId(p.id) }) : river}
         </section>
         {dock ? <div className="ph-dock">{dock}</div> : null}
 
@@ -130,6 +158,7 @@ export function PhoneHome({ state, project, refresh, river, dock, ask, onOpenAcc
           <WaitingLine count={waiting} />
         </div>
         <PhoneDeck state={state} refresh={refresh} notify={notify} now={at} />
+        <PhoneStages state={state} project={project} tz={tz} now={at} notify={sheetNotify} refresh={refresh} openId={sheetId} onOpen={setSheetId} hideWant />
       </main>
 
       {ask ? (

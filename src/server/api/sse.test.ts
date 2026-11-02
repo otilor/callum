@@ -42,7 +42,7 @@ describe('eventStream', () => {
       await reader.read(); // the opening comment
       const next = reader.read();
       await vi.advanceTimersByTimeAsync(1000);
-      expect(new TextDecoder().decode((await next).value)).toBe(': ping\n\n');
+      expect(new TextDecoder().decode((await next).value)).toBe('event: ping\ndata: {}\n\n');
       await reader.cancel();
     } finally {
       vi.useRealTimers();

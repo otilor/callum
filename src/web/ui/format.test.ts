@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCount, formatSlot, joinNames, skippedLine, suggestProjectName } from './format.js';
+import { formatCount, formatSlot, joinNames, nudgeSlot, skippedLine, suggestProjectName, theirSlot } from './format.js';
 
 const NOW = new Date('2026-11-02T10:00:00Z'); // Monday 11:00 in Lagos
 const TZ = 'Africa/Lagos';
@@ -65,5 +65,34 @@ describe('skippedLine', () => {
         { name: 'E', reason: 'no_channel' },
       ]),
     ).toBe('Skipped 5: 1 is already on your list, 1 asked not to be contacted, 2 are already in Payroll, 1 has no email or profile to write to.');
+  });
+});
+
+describe('theirSlot', () => {
+  it("says the time in the person's zone and that it is theirs", () => {
+    expect(theirSlot('2026-11-03T09:00:00Z', 'Europe/London', TZ, NOW)).toBe('tomorrow at 9:00 their time');
+  });
+
+  it('says nothing about whose time it is when the zone is not known', () => {
+    expect(theirSlot('2026-11-03T08:00:00Z', null, TZ, NOW)).toBe('tomorrow at 9:00');
+    expect(theirSlot('2026-11-03T08:00:00Z', undefined, TZ, NOW)).toBe('tomorrow at 9:00');
+  });
+});
+
+describe('nudgeSlot', () => {
+  it('is the moment itself when it falls inside sending hours', () => {
+    expect(nudgeSlot('2026-11-02T10:00:00Z', null, TZ, NOW)).toBe('today at 11:00');
+  });
+
+  it('moves a nudge made after hours to the next sending hour, never "soon"', () => {
+    // 21:00 in Lagos on Monday: the next sending time is Tuesday at 9:00.
+    expect(nudgeSlot('2026-11-02T20:00:00Z', null, TZ, NOW)).toBe('tomorrow at 9:00');
+    // Saturday: the Monday after, at 9:00.
+    expect(nudgeSlot('2026-11-07T10:00:00Z', null, TZ, NOW)).toBe('9 Nov at 9:00');
+  });
+
+  it("counts sending hours in the person's zone, and says so", () => {
+    // 5:00 in New York is before sending hours: their first sending hour is 9:00 their time.
+    expect(nudgeSlot('2026-11-02T10:00:00Z', 'America/New_York', TZ, NOW)).toBe('today at 9:00 their time');
   });
 });

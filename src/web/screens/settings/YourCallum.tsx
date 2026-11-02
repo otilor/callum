@@ -4,6 +4,7 @@ import { CHANNELS } from '../../../shared/types.js';
 import { api, channelSetup, claudeKeyApi, type ChannelSummary, type MicrosoftSetup } from '../../api.js';
 import { joinNames } from '../../ui/format.js';
 import { marbleBackground } from '../../ui/Marble.js';
+import { useHeadingFocus } from '../../ui/useHeadingFocus.js';
 import { useToast } from '../../ui/Toast.js';
 import { Wordmark } from '../../ui/Wordmark.js';
 import { pickCurrentProject } from '../../useAppState.js';
@@ -83,6 +84,7 @@ function statusOf(a: ChannelAccount | undefined): 'off' | 'on' | 'paused' | 'err
 
 export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, download = browserDownload, now = () => new Date(), pollMs }: YourCallumProps) {
   const toast = useToast();
+  const headingRef = useHeadingFocus();
   const { settings } = state;
   const current = pickCurrentProject(state);
   const [open, setOpen] = useState<Record<string, boolean>>({ projects: true });
@@ -284,7 +286,7 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
         <div className="yc-head">
           <span className="yc-avatar" aria-hidden="true" style={{ background: marbleBackground(7) }} />
           <div>
-            <h1 className="yc-title">Your Callum</h1>
+            <h1 ref={headingRef} tabIndex={-1} className="yc-title">Your Callum</h1>
             <p className="yc-subline">{subline}</p>
           </div>
         </div>

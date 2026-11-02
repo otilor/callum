@@ -422,8 +422,9 @@ describe('starting and approving', () => {
     const project = await ready(h, 12);
     const plan = (await (await h.get(`/api/plan?projectId=${project.id}`)).json()) as { line: string; total: number };
     expect(plan.line).toBe('Tomorrow from 9:00 their time: 12 hellos, 12 by email. Nothing goes out today.');
-    const sample = (await (await h.get(`/api/sample?tone=direct&projectId=${project.id}`)).json()) as { body: string };
+    const sample = (await (await h.get(`/api/sample?tone=direct&projectId=${project.id}`)).json()) as { body: string; to: { name: string; company: string | null } };
     expect(sample.body).toContain('Person1');
+    expect(sample.to.name).toContain('Person1');
     expect((await h.get('/api/sample?tone=shouty')).status).toBe(422);
   });
 
