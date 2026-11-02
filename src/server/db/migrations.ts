@@ -104,14 +104,81 @@ const V2 = `
 ALTER TABLE outbox ADD COLUMN approval_counted INTEGER NOT NULL DEFAULT 0;
 `;
 
-const STEPS: string[] = [V1, V2];
+const V3_SCHEMA = `
+CREATE TABLE projects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  offer TEXT,
+  audience TEXT,
+  tone TEXT NOT NULL DEFAULT 'warm',
+  sample TEXT,
+  calendar_url TEXT,
+  approvals_left INTEGER NOT NULL DEFAULT 10,
+  started_at TEXT,
+  state TEXT NOT NULL DEFAULT 'running',
+  paused_until TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX idx_projects_name ON projects(name COLLATE NOCASE);
+ALTER TABLE people ADD COLUMN project_id INTEGER REFERENCES projects(id);
+CREATE INDEX idx_people_project_id ON people(project_id);
+`;
 
-export function migrate(db: Db): void {
+/** Settings keys that moved onto the project. */
+const MOVED_SETTINGS = ['offer', 'audience', 'tone', 'sample', 'calendarUrl', 'startedAt', 'approvalsLeft'] as const;
+const TONES = ['warm', 'direct', 'playful'];
+
+const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v : null);
+
+/**
+ * Projects arrive. An install with an offer or with people gets one project built from its settings that holds
+ * everyone; a fresh install gets none (the first run creates it). The moved keys leave the settings either way.
+ */
+function v3(db: Db): void {
+  db.exec(V3_SCHEMA);
+  const row = db.prepare('SELECT data FROM settings WHERE id = 1').get() as { data: string } | undefined;
+  const stored = row ? (JSON.parse(row.data) as Record<string, unknown>) : {};
+  const earliest = (db.prepare('SELECT MIN(created_at) AS at FROM people').get() as { at: string | null }).at;
+  const hasPeople = earliest !== null;
+  let currentProjectId: number | undefined;
+  if (text(stored.offer) !== null || hasPeople) {
+    const approvals = typeof stored.approvalsLeft === 'number' ? stored.approvalsLeft : 10;
+    const startedAt = text(stored.startedAt);
+    // The project is as old as the install's first record; the clock is read only when there is none.
+    const created = startedAt ?? earliest ?? new Date().toISOString();
+    db.prepare(
+      `INSERT INTO projects (id, name, offer, audience, tone, sample, calendar_url, approvals_left, started_at, created_at, updated_at)
+       VALUES (1, 'My first project', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      text(stored.offer), text(stored.audience),
+      typeof stored.tone === 'string' && TONES.includes(stored.tone) ? stored.tone : 'warm',
+      text(stored.sample), text(stored.calendarUrl), approvals, startedAt, created, created,
+    );
+    db.exec('UPDATE people SET project_id = 1');
+    currentProjectId = 1;
+  }
+  if (row || currentProjectId !== undefined) {
+    const next = { ...stored };
+    for (const k of MOVED_SETTINGS) delete next[k];
+    if (currentProjectId !== undefined) next.currentProjectId = currentProjectId;
+    db.prepare('INSERT INTO settings (id, data) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data')
+      .run(JSON.stringify(next));
+  }
+}
+
+type Step = string | ((db: Db) => void);
+const STEPS: Step[] = [V1, V2, v3];
+
+/** Bring the database up to date, or up to version `upTo` (tests build older databases this way). */
+export function migrate(db: Db, upTo: number = STEPS.length): void {
   const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
-  for (let v = row.user_version; v < STEPS.length; v++) {
+  for (let v = row.user_version; v < Math.min(upTo, STEPS.length); v++) {
     db.exec('BEGIN');
     try {
-      db.exec(STEPS[v] as string);
+      const step = STEPS[v] as Step;
+      if (typeof step === 'string') db.exec(step);
+      else step(db);
       db.exec(`PRAGMA user_version = ${v + 1}`);
       db.exec('COMMIT');
     } catch (e) {

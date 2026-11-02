@@ -4,9 +4,11 @@ import { addDays, addLocalDays, zonedTime } from './time.js';
 import {
   afterSent,
   afterUserSent,
+  canMoveProject,
   chooseChannel,
   correct,
   hold,
+  moveProject,
   nextKind,
   nextTouchTime,
   nudge,
@@ -30,7 +32,7 @@ const lagos = (day: number, hour: number, minute = 0) => zonedTime(tz, 2026, 11,
 
 function person(overrides: Partial<Person> = {}): Person {
   return {
-    id: 1, name: 'Kemi Eze', firstName: 'Kemi', company: 'Oko Pay', role: 'CFO',
+    id: 1, projectId: 1, name: 'Kemi Eze', firstName: 'Kemi', company: 'Oko Pay', role: 'CFO',
     email: 'kemi@okopay.com', linkedinUrl: 'https://www.linkedin.com/in/kemi-eze', xHandle: 'kemieze',
     timezone: null, channel: 'email', stage: 'stranger', status: 'active', touches: 0,
     lastTouchAt: null, nextTouchAt: null, linkedinState: 'none', invitedAt: null,
@@ -450,5 +452,52 @@ describe('nextTouchTime', () => {
     const thanked = { ...connected, touches: 2, lastTouchAt: lagos(4, 11).toISOString() };
     expect(nextTouchTime(thanked, lagos(5, 10), tz)?.toISOString()).toBe(lagos(9, 11).toISOString());
     expect(nextTouchTime({ ...thanked, lastTouchAt: lagos(10, 11).toISOString() }, lagos(11, 10), tz)?.toISOString()).toBe(lagos(16, 9).toISOString()); // day 5 is a Sunday
+  });
+});
+
+describe('canMoveProject', () => {
+  it('lets strangers who have not heard from us move, active or held', () => {
+    expect(canMoveProject(person())).toEqual({ ok: true });
+    expect(canMoveProject(person({ status: 'held' }))).toEqual({ ok: true });
+  });
+  it('lets resting people move', () => {
+    const resting = person({ status: 'resting', stage: 'following', touches: 3, restUntil: '2027-02-01T09:00:00.000Z' });
+    expect(canMoveProject(resting)).toEqual({ ok: true });
+  });
+  it('says why people in a conversation cannot move', () => {
+    expect(canMoveProject(person({ stage: 'talking', status: 'active', touches: 2 }))).toEqual({ ok: false, reason: 'talking' });
+    expect(canMoveProject(person({ stage: 'talking', status: 'waiting', touches: 2 }))).toEqual({ ok: false, reason: 'talking' });
+    expect(canMoveProject(person({ stage: 'hello', status: 'waiting', touches: 1 }))).toEqual({ ok: false, reason: 'waiting' });
+    expect(canMoveProject(person({ stage: 'hello', status: 'snoozed', touches: 1 }))).toEqual({ ok: false, reason: 'waiting' });
+  });
+  it('says people mid-sequence are in progress, including a held one', () => {
+    expect(canMoveProject(person({ stage: 'hello', touches: 1 }))).toEqual({ ok: false, reason: 'in_progress' });
+    expect(canMoveProject(person({ stage: 'following', touches: 2 }))).toEqual({ ok: false, reason: 'in_progress' });
+    expect(canMoveProject(person({ stage: 'hello', touches: 1, status: 'held' }))).toEqual({ ok: false, reason: 'in_progress' });
+    expect(canMoveProject(person({ channel: 'linkedin', linkedinState: 'invited', touches: 1, stage: 'hello' }))).toEqual({ ok: false, reason: 'in_progress' });
+  });
+  it('never moves people who stopped or were closed or removed', () => {
+    expect(canMoveProject(person({ status: 'stopped' }))).toEqual({ ok: false, reason: 'stopped' });
+    expect(canMoveProject(person({ status: 'closed', stage: 'talking' }))).toEqual({ ok: false, reason: 'closed' });
+    expect(canMoveProject(person({ status: 'removed' }))).toEqual({ ok: false, reason: 'closed' });
+  });
+});
+
+describe('moveProject', () => {
+  it('sets the project and clears the next touch of a stranger', () => {
+    const p = person({ nextTouchAt: lagos(4, 9).toISOString() });
+    expect(moveProject(p, 2)).toEqual({ projectId: 2, nextTouchAt: null });
+  });
+  it('keeps the wake-up date of a resting person', () => {
+    const p = person({ status: 'resting', stage: 'following', touches: 3, restUntil: '2027-02-01T09:00:00.000Z' });
+    const patch = moveProject(p, 3);
+    expect(patch).toEqual({ projectId: 3 });
+    expect(patch).not.toHaveProperty('restUntil');
+  });
+  it('does not change its input', () => {
+    const p = person({ nextTouchAt: lagos(4, 9).toISOString() });
+    const before = { ...p };
+    moveProject(p, 2);
+    expect(p).toEqual(before);
   });
 });

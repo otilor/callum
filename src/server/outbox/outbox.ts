@@ -2,7 +2,7 @@ import type { Bus } from '../bus.js';
 import type { Repo } from '../db/repo.js';
 import type { Clock } from '../engine/clock.js';
 import { findPlaceholders } from '../engine/guard.js';
-import type { Channel, OutboxItem, OutKind } from '../../shared/types.js';
+import type { Channel, OutboxItem, OutKind, Project } from '../../shared/types.js';
 
 export const UNDO_MS = 10_000;
 
@@ -84,9 +84,9 @@ export class Outbox {
     const undoUntil = this.afterUndoWindow();
     const sendAfter = new Date(Math.max(new Date(item.sendAfter).getTime(), undoUntil.getTime()));
     const next = this.repo.transaction(() => {
-      const left = this.repo.getSettings().approvalsLeft;
-      const counted = left > 0;
-      if (counted) this.repo.updateSettings({ approvalsLeft: left - 1 });
+      const project = this.projectOf(item);
+      const counted = project.approvalsLeft > 0;
+      if (counted) this.repo.updateProject(project.id, { approvalsLeft: project.approvalsLeft - 1 });
       return this.repo.updateOutbox(id, {
         body, state: 'scheduled', sendAfter: sendAfter.toISOString(), undoUntil: undoUntil.toISOString(),
         approvalCounted: counted,
@@ -105,7 +105,8 @@ export class Outbox {
     const next = this.repo.transaction(() => {
       if (item.origin === 'user') return this.repo.updateOutbox(id, { state: 'cancelled' });
       if (item.approvalCounted) {
-        this.repo.updateSettings({ approvalsLeft: this.repo.getSettings().approvalsLeft + 1 });
+        const project = this.projectOf(item);
+        this.repo.updateProject(project.id, { approvalsLeft: project.approvalsLeft + 1 });
       }
       return this.repo.updateOutbox(id, { state: 'awaiting_ok', undoUntil: null, approvalCounted: false });
     });
@@ -142,6 +143,15 @@ export class Outbox {
     if (!person) throw new Error(`Person ${personId} not found`);
     if (!person.channel) throw new Error(`${person.firstName} has no channel to send on yet`);
     return { channel: person.channel };
+  }
+
+  /** Approvals are counted per project: the one the item's person belongs to. */
+  private projectOf(item: OutboxItem): Project {
+    const person = this.repo.getPerson(item.personId);
+    if (!person) throw new Error(`Person ${item.personId} not found`);
+    const project = this.repo.getProject(person.projectId);
+    if (!project) throw new Error(`Project ${person.projectId} not found`);
+    return project;
   }
 
   private require(id: number): OutboxItem {

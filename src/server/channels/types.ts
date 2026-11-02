@@ -1,4 +1,4 @@
-import type { Channel, OutKind, NewPerson } from '../../shared/types.js';
+import type { Channel, OutKind, PersonLead } from '../../shared/types.js';
 export interface Recipient { name: string; email: string | null; linkedinUrl: string | null; xHandle: string | null }
 export interface OutboundMessage { to: Recipient; kind: OutKind; subject: string | null; body: string; inReplyTo: string | null }
 export type ChannelErrorCode = 'auth' | 'checkpoint' | 'weekly_limit' | 'rate_limit' | 'bounce' | 'invalid_recipient' | 'temporary' | 'unknown';
@@ -25,7 +25,7 @@ export interface ChannelAdapter {
   send(msg: OutboundMessage): Promise<SendResult>;
   poll(since: Date | null): Promise<InboundEvent[]>;
   knownAddresses?(): Promise<string[]>;
-  searchPeople?(url: string, limit: number): Promise<NewPerson[]>;
+  searchPeople?(url: string, limit: number): Promise<PersonLead[]>;
   /** Drops anything the adapter keeps on this machine for the account (a signed-in browser profile). */
   forget?(): Promise<void>;
   close(): Promise<void>;

@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium, type BrowserContext, type Locator, type Page } from 'playwright';
-import type { NewPerson } from '../../shared/types.js';
+import type { PersonLead } from '../../shared/types.js';
 import { systemClock, type Clock } from '../engine/clock.js';
 import {
   SELECTORS, clampNote, cleanName, hasWeeklyLimitText, headerNameCandidates, humanDelayMs, isBlockedStatus, isCheckpointUrl,
@@ -727,7 +727,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
         const target = new URL(searchTarget(input), baseUrl);
         const ctx = await workingContext();
         return withPage(ctx, async (page) => {
-          const people: NewPerson[] = [];
+          const people: PersonLead[] = [];
           const known = new Set<string>();
           for (let pageNo = 1; pageNo <= MAX_SEARCH_PAGES && people.length < limit; pageNo++) {
             target.searchParams.set('page', String(pageNo));

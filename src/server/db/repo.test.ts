@@ -1,27 +1,30 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from './db.js';
 import { Repo } from './repo.js';
+import { makeProject } from './testing.js';
 
 let repo: Repo;
 let tick: number;
+let projectId: number;
 beforeEach(() => {
   tick = 0;
   repo = new Repo(openDb(':memory:'), () => new Date(Date.UTC(2026, 0, 1, 0, 0, tick++)).toISOString());
+  projectId = makeProject(repo).id;
 });
 
 describe('settings', () => {
   it('has defaults', () => {
     expect(repo.getSettings()).toEqual({
-      senderName: null, senderEmail: null, offer: null, audience: null, tone: 'warm', sample: null,
-      calendarUrl: null, timezone: 'UTC', onboarded: false, startedAt: null, approvalsLeft: 10,
+      senderName: null, senderEmail: null, timezone: 'UTC', onboarded: false, currentProjectId: null,
       pauseState: 'running', pausedUntil: null, notifications: null,
     });
   });
   it('round-trips updates', () => {
-    const next = repo.updateSettings({ senderName: 'Ada', tone: 'direct', onboarded: true, approvalsLeft: 7 });
+    const next = repo.updateSettings({ senderName: 'Ada', pauseState: 'paused', onboarded: true, currentProjectId: projectId });
     expect(next.senderName).toBe('Ada');
     expect(repo.getSettings()).toEqual(next);
-    expect(repo.getSettings().tone).toBe('direct');
+    expect(repo.getSettings().pauseState).toBe('paused');
+    expect(repo.getSettings().currentProjectId).toBe(projectId);
     expect(repo.getSettings().timezone).toBe('UTC');
   });
 });
@@ -54,12 +57,13 @@ describe('channels', () => {
 
 describe('people', () => {
   it('inserts with defaults and normalized handles', () => {
-    const p = repo.insertPerson({ name: 'Kemi Eze', source: 'csv', email: 'Kemi@OkoPay.com' });
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv', email: 'Kemi@OkoPay.com' });
     expect(p.firstName).toBe('Kemi');
     expect(p.stage).toBe('stranger');
     expect(p.status).toBe('active');
     expect(p.email).toBe('kemi@okopay.com');
     expect(p.touches).toBe(0);
+    expect(p.projectId).toBe(projectId);
     expect(p.linkedinState).toBe('none');
     expect(p.channel).toBeNull();
     expect(p.createdAt).toBe(p.updatedAt);
@@ -68,11 +72,11 @@ describe('people', () => {
   });
 
   it('keeps an explicit firstName', () => {
-    expect(repo.insertPerson({ name: 'Kemi Eze', firstName: 'Kem', source: 'paste' }).firstName).toBe('Kem');
+    expect(repo.insertPerson({ projectId, name: 'Kemi Eze', firstName: 'Kem', source: 'paste' }).firstName).toBe('Kem');
   });
 
   it('updates, normalizes and bumps updatedAt', () => {
-    const p = repo.insertPerson({ name: 'Kemi Eze', source: 'csv' });
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });
     const u = repo.updatePerson(p.id, { xHandle: '@KemiEze', stage: 'hello', touches: 1, nextTouchAt: '2026-02-01T09:00:00.000Z' });
     expect(u.xHandle).toBe('kemieze');
     expect(u.stage).toBe('hello');
@@ -83,7 +87,7 @@ describe('people', () => {
 
   it('keeps stored handles when a patch value is undefined', () => {
     const p = repo.insertPerson({
-      name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', linkedinUrl: 'https://linkedin.com/in/kemi-eze', xHandle: '@kemieze',
+      projectId, name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', linkedinUrl: 'https://linkedin.com/in/kemi-eze', xHandle: '@kemieze',
     });
     const u = repo.updatePerson(p.id, { email: undefined, linkedinUrl: undefined, xHandle: undefined, stage: 'hello' });
     expect(u.stage).toBe('hello');
@@ -95,9 +99,9 @@ describe('people', () => {
 
   it('matches handles regardless of formatting (Review Focus 3)', () => {
     const kemi = repo.insertPerson({
-      name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', linkedinUrl: 'https://linkedin.com/in/Kemi-Eze', xHandle: '@kemieze',
+      projectId, name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', linkedinUrl: 'https://linkedin.com/in/Kemi-Eze', xHandle: '@kemieze',
     });
-    repo.insertPerson({ name: 'Other One', source: 'csv', email: 'other@x.com' });
+    repo.insertPerson({ projectId, name: 'Other One', source: 'csv', email: 'other@x.com' });
     expect(repo.findPersonByHandle({ email: 'KEMI@okopay.com' })?.id).toBe(kemi.id);
     expect(repo.findPersonByHandle({ linkedinUrl: 'www.linkedin.com/in/kemi-eze/?x=1' })?.id).toBe(kemi.id);
     expect(repo.findPersonByHandle({ xHandle: 'https://x.com/KemiEze' })?.id).toBe(kemi.id);
@@ -107,9 +111,9 @@ describe('people', () => {
   });
 
   it('filters by status and stage, ordered by id', () => {
-    const a = repo.insertPerson({ name: 'A One', source: 'csv' });
-    const b = repo.insertPerson({ name: 'B Two', source: 'csv', status: 'stopped' });
-    const c = repo.insertPerson({ name: 'C Three', source: 'csv', stage: 'hello' });
+    const a = repo.insertPerson({ projectId, name: 'A One', source: 'csv' });
+    const b = repo.insertPerson({ projectId, name: 'B Two', source: 'csv', status: 'stopped' });
+    const c = repo.insertPerson({ projectId, name: 'C Three', source: 'csv', stage: 'hello' });
     expect(repo.listPeople().map((p) => p.id)).toEqual([a.id, b.id, c.id]);
     expect(repo.listPeople({ status: ['stopped'] }).map((p) => p.id)).toEqual([b.id]);
     expect(repo.listPeople({ stage: ['hello'], status: ['active'] }).map((p) => p.id)).toEqual([c.id]);
@@ -119,7 +123,7 @@ describe('people', () => {
 
 describe('messages', () => {
   it('lists by at then id', () => {
-    const p = repo.insertPerson({ name: 'Kemi Eze', source: 'csv' });
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });
     const base = { personId: p.id, channel: 'email' as const, subject: null, externalId: null };
     const m2 = repo.insertMessage({ ...base, direction: 'in', kind: 'inbound', body: 'later', at: '2026-01-03T00:00:00.000Z' });
     const m1 = repo.insertMessage({ ...base, direction: 'out', kind: 'hello', body: 'first', at: '2026-01-02T00:00:00.000Z' });
@@ -129,7 +133,7 @@ describe('messages', () => {
   });
 
   it('counts only outbound rows of the kinds and channel since the instant', () => {
-    const p = repo.insertPerson({ name: 'Kemi Eze', source: 'csv' });
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });
     const add = (channel: 'email' | 'linkedin', direction: 'in' | 'out', kind: 'hello' | 'follow_up' | 'inbound', at: string) =>
       repo.insertMessage({ personId: p.id, channel, direction, kind, subject: null, body: 'x', at, externalId: null });
     const since = '2026-01-02T00:00:00.000Z';
@@ -153,7 +157,7 @@ describe('outbox', () => {
     ({ personId, channel: 'email' as const, kind: 'hello' as const, body: 'Hi', state, origin: 'auto' as const, sendAfter });
 
   it('inserts with defaults and updates', () => {
-    const p = repo.insertPerson({ name: 'Kemi Eze', source: 'csv' });
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });
     const o = repo.insertOutbox(mk(p.id, '2026-01-05T09:00:00.000Z'));
     expect(o.subject).toBeNull();
     expect(o.undoUntil).toBeNull();
@@ -171,8 +175,8 @@ describe('outbox', () => {
   });
 
   it('filters by state, person and due time, ordered by send_after then id', () => {
-    const p = repo.insertPerson({ name: 'Kemi Eze', source: 'csv' });
-    const q = repo.insertPerson({ name: 'Ola Bode', source: 'csv' });
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });
+    const q = repo.insertPerson({ projectId, name: 'Ola Bode', source: 'csv' });
     const late = repo.insertOutbox(mk(p.id, '2026-01-07T09:00:00.000Z'));
     const early = repo.insertOutbox(mk(p.id, '2026-01-05T09:00:00.000Z'));
     const awaiting = repo.insertOutbox(mk(q.id, '2026-01-04T09:00:00.000Z', 'awaiting_ok'));
@@ -202,7 +206,7 @@ describe('incidents', () => {
 
 describe('deleteAll', () => {
   it('empties people and resets settings and channels', () => {
-    const p = repo.insertPerson({ name: 'Kemi Eze', source: 'csv' });
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });
     repo.insertMessage({ personId: p.id, channel: 'email', direction: 'out', kind: 'hello', subject: null, body: 'x', at: '2026-01-02T00:00:00.000Z', externalId: null });
     repo.insertOutbox({ personId: p.id, channel: 'email', kind: 'hello', body: 'x', state: 'scheduled', origin: 'auto', sendAfter: '2026-01-02T00:00:00.000Z' });
     repo.insertIncident({ channel: 'email', kind: 'bounces', message: 'm' });
@@ -211,6 +215,7 @@ describe('deleteAll', () => {
     repo.setChannelSecret('email', { a: 'b' });
     repo.deleteAll();
     expect(repo.listPeople()).toEqual([]);
+    expect(repo.listProjects()).toEqual([]);
     expect(repo.listOutbox()).toEqual([]);
     expect(repo.listIncidents()).toEqual([]);
     expect(repo.listMessages(p.id)).toEqual([]);
@@ -224,8 +229,8 @@ describe('deleteAll', () => {
 describe('transaction', () => {
   it('commits all writes, returns the result', () => {
     const n = repo.transaction(() => {
-      repo.insertPerson({ name: 'Kemi Eze', source: 'csv' });
-      repo.insertPerson({ name: 'Ada Obi', source: 'csv' });
+      repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });
+      repo.insertPerson({ projectId, name: 'Ada Obi', source: 'csv' });
       return 2;
     });
     expect(n).toBe(2);
@@ -233,16 +238,16 @@ describe('transaction', () => {
   });
   it('rolls everything back on a throw and rethrows', () => {
     expect(() => repo.transaction(() => {
-      repo.insertPerson({ name: 'Kemi Eze', source: 'csv' });
+      repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });
       throw new Error('nope');
     })).toThrow('nope');
     expect(repo.listPeople()).toEqual([]);
   });
   it('nests: an inner failure that is caught keeps the outer writes', () => {
     repo.transaction(() => {
-      repo.insertPerson({ name: 'Kemi Eze', source: 'csv' });
+      repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });
       try {
-        repo.transaction(() => { repo.insertPerson({ name: 'Ada Obi', source: 'csv' }); throw new Error('inner'); });
+        repo.transaction(() => { repo.insertPerson({ projectId, name: 'Ada Obi', source: 'csv' }); throw new Error('inner'); });
       } catch { /* expected */ }
     });
     expect(repo.listPeople().map((p) => p.name)).toEqual(['Kemi Eze']);

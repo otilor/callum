@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Bus } from '../bus.js';
 import { openDb } from '../db/db.js';
 import { Repo } from '../db/repo.js';
+import { makeProject } from '../db/testing.js';
 import { fixedClock } from '../engine/clock.js';
 import { Outbox, PlaceholderError, UNDO_MS, UndoError } from './outbox.js';
 import type { Scope } from '../../shared/types.js';
@@ -12,6 +13,7 @@ let repo: Repo;
 let bus: Bus;
 let outbox: Outbox;
 let events: Scope[];
+let projectId: number;
 let personId: number;
 
 beforeEach(() => {
@@ -21,7 +23,8 @@ beforeEach(() => {
   events = [];
   bus.on((s) => events.push(s));
   outbox = new Outbox(repo, clock, bus);
-  personId = repo.insertPerson({ name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', channel: 'email' }).id;
+  projectId = makeProject(repo).id;
+  personId = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', channel: 'email' }).id;
 });
 
 const iso = (ms: number) => new Date(new Date(T0).getTime() + ms).toISOString();
@@ -51,7 +54,7 @@ describe('queueUserSend', () => {
     expect(() => outbox.queueUserSend(personId, 'reply', 'Fine.', 'Hi {first_name}')).toThrow(PlaceholderError);
   });
   it('cancels the earlier scheduled user item for that person only', () => {
-    const other = repo.insertPerson({ name: 'Ada Obi', source: 'csv', email: 'a@b.com', channel: 'email' }).id;
+    const other = repo.insertPerson({ projectId, name: 'Ada Obi', source: 'csv', email: 'a@b.com', channel: 'email' }).id;
     const first = outbox.queueUserSend(personId, 'reply', 'one');
     const theirs = outbox.queueUserSend(other, 'reply', 'other');
     const auto = outbox.queueAuto(personId, 'follow_up', 'auto', null, new Date(iso(60_000)), false);
@@ -90,7 +93,7 @@ describe('queueUserSend', () => {
     expect((err as PlaceholderError).placeholders).toEqual(['{first_name}', '[TOPIC]', '[YOUR PRICE]']);
   });
   it('rejects a person with no channel', () => {
-    const bare = repo.insertPerson({ name: 'No Channel', source: 'paste' }).id;
+    const bare = repo.insertPerson({ projectId, name: 'No Channel', source: 'paste' }).id;
     expect(() => outbox.queueUserSend(bare, 'reply', 'hi')).toThrow(/channel/);
   });
 });
@@ -129,11 +132,11 @@ describe('undo', () => {
   it('returns an approved auto item to awaiting_ok and restores the approval', () => {
     const auto = outbox.queueAuto(personId, 'hello', 'Hi Kemi', null, new Date(iso(1000)), true);
     outbox.approve(auto.id);
-    expect(repo.getSettings().approvalsLeft).toBe(9);
+    expect(repo.getProject(projectId)?.approvalsLeft).toBe(9);
     clock.advance(5_000);
     const back = outbox.undo(auto.id);
     expect(back).toMatchObject({ state: 'awaiting_ok', undoUntil: null });
-    expect(repo.getSettings().approvalsLeft).toBe(10);
+    expect(repo.getProject(projectId)?.approvalsLeft).toBe(10);
   });
 });
 
@@ -142,17 +145,43 @@ describe('undo and approvals', () => {
     const auto = outbox.queueAuto(personId, 'hello', 'Hi', null, new Date(iso(1000)), true);
     expect(outbox.approve(auto.id).approvalCounted).toBe(true);
     expect(outbox.undo(auto.id)).toMatchObject({ state: 'awaiting_ok', approvalCounted: false });
-    expect(repo.getSettings().approvalsLeft).toBe(10);
+    expect(repo.getProject(projectId)?.approvalsLeft).toBe(10);
     outbox.approve(auto.id);
     outbox.undo(auto.id);
-    expect(repo.getSettings().approvalsLeft).toBe(10);
+    expect(repo.getProject(projectId)?.approvalsLeft).toBe(10);
   });
   it('gives nothing back when approve was made with none left', () => {
-    repo.updateSettings({ approvalsLeft: 0 });
+    repo.updateProject(projectId, { approvalsLeft: 0 });
     const auto = outbox.queueAuto(personId, 'hello', 'Hi', null, new Date(iso(1000)), true);
     expect(outbox.approve(auto.id).approvalCounted).toBe(false);
     outbox.undo(auto.id);
-    expect(repo.getSettings().approvalsLeft).toBe(0);
+    expect(repo.getProject(projectId)?.approvalsLeft).toBe(0);
+  });
+});
+
+describe('approvals are per project', () => {
+  it('spends and restores the approval of the project the person belongs to', () => {
+    const second = makeProject(repo);
+    const ada = repo.insertPerson({ projectId: second.id, name: 'Ada Obi', source: 'csv', email: 'ada@x.com', channel: 'email' }).id;
+    const mine = outbox.queueAuto(personId, 'hello', 'Hi Kemi', null, new Date(iso(1000)), true);
+    const theirs = outbox.queueAuto(ada, 'hello', 'Hi Ada', null, new Date(iso(1000)), true);
+    outbox.approve(theirs.id);
+    expect(repo.getProject(second.id)?.approvalsLeft).toBe(9);
+    expect(repo.getProject(projectId)?.approvalsLeft).toBe(10);
+    outbox.approve(mine.id);
+    expect(repo.getProject(projectId)?.approvalsLeft).toBe(9);
+    outbox.undo(theirs.id);
+    expect(repo.getProject(second.id)?.approvalsLeft).toBe(10);
+    expect(repo.getProject(projectId)?.approvalsLeft).toBe(9);
+  });
+  it('an empty project does not use up another project\'s approvals', () => {
+    const second = makeProject(repo);
+    repo.updateProject(second.id, { approvalsLeft: 0 });
+    const ada = repo.insertPerson({ projectId: second.id, name: 'Ada Obi', source: 'csv', channel: 'email' }).id;
+    const item = outbox.queueAuto(ada, 'hello', 'Hi Ada', null, new Date(iso(1000)), true);
+    expect(outbox.approve(item.id).approvalCounted).toBe(false);
+    expect(repo.getProject(second.id)?.approvalsLeft).toBe(0);
+    expect(repo.getProject(projectId)?.approvalsLeft).toBe(10);
   });
 });
 
@@ -161,7 +190,7 @@ describe('approve', () => {
     const auto = outbox.queueAuto(personId, 'hello', 'Hi Kemi', null, new Date(iso(1000)), true);
     const item = outbox.approve(auto.id);
     expect(item).toMatchObject({ state: 'scheduled', sendAfter: iso(10_000), undoUntil: iso(10_000) });
-    expect(repo.getSettings().approvalsLeft).toBe(9);
+    expect(repo.getProject(projectId)?.approvalsLeft).toBe(9);
   });
   it('keeps a later sendAfter', () => {
     const auto = outbox.queueAuto(personId, 'hello', 'Hi Kemi', null, new Date(iso(3_600_000)), true);
@@ -178,7 +207,7 @@ describe('approve', () => {
     expect(err).toBeInstanceOf(PlaceholderError);
     expect((err as PlaceholderError).placeholders).toEqual(['{first_name}']);
     expect(repo.getOutbox(auto.id)).toMatchObject({ state: 'awaiting_ok', body: 'Hi Kemi' });
-    expect(repo.getSettings().approvalsLeft).toBe(10);
+    expect(repo.getProject(projectId)?.approvalsLeft).toBe(10);
   });
   it('throws when the stored body has a placeholder', () => {
     const auto = outbox.queueAuto(personId, 'hello', 'Price [YOUR PRICE]', null, new Date(iso(1000)), true);
@@ -189,10 +218,10 @@ describe('approve', () => {
     expect(() => outbox.approve(auto.id)).toThrow(UndoError);
   });
   it('never takes approvalsLeft below 0', () => {
-    repo.updateSettings({ approvalsLeft: 0 });
+    repo.updateProject(projectId, { approvalsLeft: 0 });
     const auto = outbox.queueAuto(personId, 'hello', 'Hi', null, new Date(iso(1000)), true);
     outbox.approve(auto.id);
-    expect(repo.getSettings().approvalsLeft).toBe(0);
+    expect(repo.getProject(projectId)?.approvalsLeft).toBe(0);
   });
 });
 
@@ -213,7 +242,7 @@ describe('cancelPending', () => {
   });
   it('leaves sent items and other people alone, and is quiet when nothing changed', () => {
     const sent = repo.insertOutbox({ personId, channel: 'email', kind: 'hello', body: 'x', state: 'sent', origin: 'auto', sendAfter: T0 });
-    const other = repo.insertPerson({ name: 'Ada Obi', source: 'csv', channel: 'email' }).id;
+    const other = repo.insertPerson({ projectId, name: 'Ada Obi', source: 'csv', channel: 'email' }).id;
     outbox.queueAuto(other, 'hello', 'Hi', null, new Date(iso(1000)), true);
     events.length = 0;
     expect(outbox.cancelPending(personId)).toBe(0);
@@ -240,7 +269,7 @@ describe('due and pendingFor', () => {
     outbox.cancelPending(personId, ['auto']);
     expect(outbox.pendingFor(personId)).toEqual([]);
     const d = outbox.queueAuto(personId, 'follow_up', 'd', null, new Date(iso(4000)), false);
-    const other = repo.insertPerson({ name: 'Ada Obi', source: 'csv', channel: 'email' }).id;
+    const other = repo.insertPerson({ projectId, name: 'Ada Obi', source: 'csv', channel: 'email' }).id;
     outbox.queueAuto(other, 'hello', 'x', null, new Date(iso(1000)), true);
     expect(outbox.pendingFor(personId).map((i) => i.id)).toEqual([d.id]);
   });

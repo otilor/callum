@@ -1,6 +1,6 @@
 import type {
   Channel, ChannelAccount, Incident, Message, NewIncident, NewMessage, NewOutboxItem, NewPerson,
-  OutboxItem, OutboxState, OutKind, Person, PersonStatus, Settings, Stage,
+  NewProject, OutboxItem, OutboxState, OutKind, Person, PersonStatus, Project, ProjectState, Settings, Stage,
 } from '../../shared/types.js';
 import { CHANNELS } from '../../shared/types.js';
 import type { Db } from './db.js';
@@ -28,10 +28,13 @@ function fromRow<T>(row: Row): T {
 }
 
 const PERSON_KEYS = [
-  'name', 'firstName', 'company', 'role', 'email', 'linkedinUrl', 'xHandle', 'timezone', 'channel',
+  'projectId', 'name', 'firstName', 'company', 'role', 'email', 'linkedinUrl', 'xHandle', 'timezone', 'channel',
   'stage', 'status', 'touches', 'lastTouchAt', 'nextTouchAt', 'linkedinState', 'invitedAt',
   'snoozedUntil', 'restUntil', 'badge', 'replyKind', 'suggested', 'draft', 'lastInbound', 'repliedAt',
   'source', 'note',
+] as const;
+const PROJECT_KEYS = [
+  'name', 'offer', 'audience', 'tone', 'sample', 'calendarUrl', 'approvalsLeft', 'startedAt', 'state', 'pausedUntil',
 ] as const;
 const MESSAGE_KEYS = ['personId', 'channel', 'direction', 'kind', 'subject', 'body', 'at', 'externalId'] as const;
 const OUTBOX_KEYS = [
@@ -43,8 +46,7 @@ const CHANNEL_KEYS = [
 ] as const;
 
 const DEFAULT_SETTINGS: Settings = {
-  senderName: null, senderEmail: null, offer: null, audience: null, tone: 'warm', sample: null,
-  calendarUrl: null, timezone: 'UTC', onboarded: false, startedAt: null, approvalsLeft: 10,
+  senderName: null, senderEmail: null, timezone: 'UTC', onboarded: false, currentProjectId: null,
   pauseState: 'running', pausedUntil: null, notifications: null,
 };
 
@@ -62,6 +64,16 @@ function normalizeHandles<T extends { email?: string | null; linkedinUrl?: strin
   if (out.xHandle !== undefined) out.xHandle = normalizeXHandle(out.xHandle);
   return out;
 }
+
+export class DuplicateProjectName extends Error {
+  constructor(name: string) {
+    super(`You already have a project called ${name}. Pick another name.`);
+    this.name = 'DuplicateProjectName';
+  }
+}
+
+const isDuplicateName = (e: unknown): boolean =>
+  e instanceof Error && /UNIQUE constraint failed/i.test(e.message) && /projects/i.test(e.message);
 
 export class Repo {
   constructor(
@@ -116,6 +128,50 @@ export class Repo {
     return next;
   }
 
+  // ---- projects ----------------------------------------------------------
+
+  insertProject(p: NewProject): Project {
+    const t = this.now();
+    let id: number;
+    try {
+      id = this.insertRow('projects', [...PROJECT_KEYS, 'createdAt', 'updatedAt'], { ...p, createdAt: t, updatedAt: t });
+    } catch (e) {
+      if (isDuplicateName(e)) throw new DuplicateProjectName(p.name);
+      throw e;
+    }
+    return this.require(this.getProject(id), 'project', id);
+  }
+
+  getProject(id: number): Project | null {
+    return this.selectOne<Project>('SELECT * FROM projects WHERE id = ?', [id]);
+  }
+
+  updateProject(id: number, patch: Partial<Project>): Project {
+    this.require(this.getProject(id), 'project', id);
+    try {
+      this.updateRow('projects', [...PROJECT_KEYS, 'updatedAt'], id, { ...patch, updatedAt: this.now() });
+    } catch (e) {
+      if (isDuplicateName(e) && patch.name !== undefined) throw new DuplicateProjectName(patch.name);
+      throw e;
+    }
+    return this.require(this.getProject(id), 'project', id);
+  }
+
+  listProjects(filter: { state?: ProjectState[] } = {}): Project[] {
+    const { state } = filter;
+    if (!state) return this.select<Project>('SELECT * FROM projects ORDER BY id');
+    if (state.length === 0) return [];
+    return this.select<Project>(`SELECT * FROM projects WHERE state IN (${state.map(() => '?').join(', ')}) ORDER BY id`, state);
+  }
+
+  /** Names are unique ignoring case; `exceptId` lets a project keep its own name. */
+  projectNameTaken(name: string, exceptId?: number): boolean {
+    const row = this.db
+      .prepare('SELECT 1 AS taken FROM projects WHERE name = ? COLLATE NOCASE AND (? IS NULL OR id != ?) LIMIT 1')
+      .get(name, exceptId ?? null, exceptId ?? null);
+    return row !== undefined;
+  }
+
   // ---- channels ----------------------------------------------------------
 
   getChannel(ch: Channel): ChannelAccount {
@@ -156,6 +212,7 @@ export class Repo {
   // ---- people ------------------------------------------------------------
 
   insertPerson(p: NewPerson): Person {
+    if (!this.getProject(p.projectId)) throw new Error('No such project');
     const t = this.now();
     const n = normalizeHandles(p);
     const values: Row = {
@@ -182,7 +239,17 @@ export class Repo {
     return this.require(this.getPerson(id), 'person', id);
   }
 
-  listPeople(filter: { status?: PersonStatus[]; stage?: Stage[] } = {}): Person[] {
+  listPeople(filter: { status?: PersonStatus[]; stage?: Stage[]; projectId?: number } = {}): Person[] {
+    const { sql, params } = this.peopleWhere(filter);
+    return this.select<Person>(`SELECT * FROM people${sql} ORDER BY id`, params);
+  }
+
+  countPeople(projectId: number, filter: { status?: PersonStatus[]; stage?: Stage[] } = {}): number {
+    const { sql, params } = this.peopleWhere({ ...filter, projectId });
+    return Number((this.db.prepare(`SELECT COUNT(*) AS n FROM people${sql}`).get(...params) as { n: number }).n);
+  }
+
+  private peopleWhere(filter: { status?: PersonStatus[]; stage?: Stage[]; projectId?: number }): { sql: string; params: Param[] } {
     const where: string[] = [];
     const params: Param[] = [];
     const inList = (col: string, vals: readonly string[] | undefined) => {
@@ -190,9 +257,10 @@ export class Repo {
       where.push(vals.length === 0 ? '0' : `${col} IN (${vals.map(() => '?').join(', ')})`);
       params.push(...vals);
     };
+    if (filter.projectId !== undefined) { where.push('project_id = ?'); params.push(filter.projectId); }
     inList('status', filter.status);
     inList('stage', filter.stage);
-    return this.select<Person>(`SELECT * FROM people${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY id`, params);
+    return { sql: where.length ? ` WHERE ${where.join(' AND ')}` : '', params };
   }
 
   findPersonByHandle(h: { email?: string | null; linkedinUrl?: string | null; xHandle?: string | null }): Person | null {
@@ -308,10 +376,10 @@ export class Repo {
   deleteAll(): void {
     this.db.exec('BEGIN');
     try {
-      for (const t of ['messages', 'outbox', 'incidents', 'people', 'channels', 'channel_secrets', 'settings']) {
+      for (const t of ['messages', 'outbox', 'incidents', 'people', 'projects', 'channels', 'channel_secrets', 'settings']) {
         this.db.exec(`DELETE FROM ${t}`);
       }
-      this.db.exec("DELETE FROM sqlite_sequence WHERE name IN ('messages','outbox','incidents','people')");
+      this.db.exec("DELETE FROM sqlite_sequence WHERE name IN ('messages','outbox','incidents','people','projects')");
       this.db.exec('COMMIT');
     } catch (e) {
       this.db.exec('ROLLBACK');

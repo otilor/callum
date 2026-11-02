@@ -231,3 +231,21 @@ export function touchPath(p: Person, _tz: string): PathStep[] {
     { label: 'Last follow-up', at: at(2), done: p.touches >= 3 },
   ];
 }
+
+export type MoveBlock = 'talking' | 'waiting' | 'in_progress' | 'stopped' | 'closed';
+
+/** Only strangers (no hello sent yet) and resting people can move to another project. */
+export function canMoveProject(p: Person): { ok: true } | { ok: false; reason: MoveBlock } {
+  if (p.status === 'stopped') return { ok: false, reason: 'stopped' };
+  if (p.status === 'closed' || p.status === 'removed') return { ok: false, reason: 'closed' };
+  if (p.status === 'resting') return { ok: true };
+  if (p.stage === 'talking') return { ok: false, reason: 'talking' };
+  if (p.status === 'waiting' || p.status === 'snoozed') return { ok: false, reason: 'waiting' };
+  if (p.stage === 'stranger' && p.touches === 0) return { ok: true };
+  return { ok: false, reason: 'in_progress' };
+}
+
+/** A resting person keeps their wake-up date and wakes into the new project; a stranger starts over there. */
+export function moveProject(p: Person, projectId: number): Partial<Person> {
+  return p.status === 'resting' ? { projectId } : { projectId, nextTouchAt: null };
+}

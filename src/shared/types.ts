@@ -11,9 +11,20 @@ export type SuggestedAction = 'reply' | 'book' | 'snooze' | 'close';
 export type Tone = 'warm' | 'direct' | 'playful';
 export type IncidentKind = 'linkedin_check' | 'linkedin_weekly_limit' | 'mailbox_signed_out' | 'bounces' | 'x_limit' | 'send_failed';
 export type Correction = 'auto_reply' | 'wrong_person' | 'never_contact';
+export type ProjectState = 'running' | 'paused' | 'wrapped';
+
+export interface Project {
+  id: number; name: string;
+  offer: string | null; audience: string | null; tone: Tone; sample: string | null; calendarUrl: string | null;
+  approvalsLeft: number;              // first 10 hellos need an OK, per project
+  startedAt: string | null;           // when Start was pressed for this project
+  state: ProjectState; pausedUntil: string | null;
+  createdAt: string; updatedAt: string;
+}
+export type NewProject = Pick<Project, 'name'> & Partial<Pick<Project, 'offer' | 'audience' | 'tone' | 'sample' | 'calendarUrl'>>;
 
 export interface Person {
-  id: number; name: string; firstName: string;
+  id: number; projectId: number; name: string; firstName: string;
   company: string | null; role: string | null;
   email: string | null; linkedinUrl: string | null; xHandle: string | null;
   timezone: string | null;            // IANA; null means the user's time zone
@@ -30,7 +41,9 @@ export interface Person {
   source: LeadSource; note: string | null;
   createdAt: string; updatedAt: string;
 }
-export type NewPerson = Pick<Person, 'name' | 'source'> & Partial<Omit<Person, 'id' | 'name' | 'source' | 'createdAt' | 'updatedAt'>>;
+export type NewPerson = Pick<Person, 'name' | 'source' | 'projectId'> & Partial<Omit<Person, 'id' | 'name' | 'source' | 'projectId' | 'createdAt' | 'updatedAt'>>;
+/** A person found by a lead source, before it is imported into a project. */
+export type PersonLead = Omit<NewPerson, 'projectId'>;
 
 export interface Message {
   id: number; personId: number; channel: Channel; direction: 'out' | 'in'; kind: MessageKind;
@@ -63,9 +76,8 @@ export interface ChannelAccount {
 
 export interface Settings {
   senderName: string | null; senderEmail: string | null;
-  offer: string | null; audience: string | null; tone: Tone; sample: string | null;
-  calendarUrl: string | null; timezone: string;
-  onboarded: boolean; startedAt: string | null; approvalsLeft: number;
+  timezone: string; onboarded: boolean;
+  currentProjectId: number | null;    // the project last viewed
   pauseState: 'running' | 'paused' | 'wrapped'; pausedUntil: string | null;
   notifications: boolean | null;
 }
@@ -73,7 +85,7 @@ export interface Settings {
 export interface PathStep { label: string; at: string | null; done: boolean }
 export interface Brief { wantToTalk: number; sentYesterday: number; acceptedRecently: string[]; nextSendAt: string | null; line: string }
 export interface AppState {
-  settings: Settings; channels: ChannelAccount[]; people: Person[];
+  settings: Settings; projects: Project[]; channels: ChannelAccount[]; people: Person[];
   outbox: OutboxItem[]; incidents: Incident[]; brief: Brief; demo: boolean;
 }
 export type AskAction =
@@ -82,4 +94,4 @@ export type AskAction =
   | { kind: 'set_tone'; label: string; args: { tone: Tone } }
   | { kind: 'switch_channel'; label: string; args: { personIds: number[]; channel: Channel } };
 export interface AskAnswer { text: string; personIds: number[]; action: AskAction | null }
-export type Scope = 'people' | 'outbox' | 'incidents' | 'settings' | 'channels';
+export type Scope = 'people' | 'outbox' | 'incidents' | 'settings' | 'channels' | 'projects';
