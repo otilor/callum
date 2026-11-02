@@ -4,7 +4,7 @@ Date: 2026-11-02. Source of truth for product behavior: `docs/design/v2-journey.
 
 ## What we're building
 
-Callum is a self-hosted, single-user, open-source outreach app. It reaches people by email, LinkedIn and X on its own, within safe limits, and hands the user only the people who reply. The user runs it on their own computer (`npm start`, opens `http://localhost:4600`) or on a small server.
+Callum is a single-user, open-source outreach **desktop app (Electron)**. It reaches people by email, LinkedIn and X on its own, within safe limits, and hands the user only the people who reply. The user installs it on their own computer; it keeps working from the tray with its window closed. A second way to run it is server mode (`npm start` on a small server with a password, opened from a browser or phone).
 
 The unit of Callum is a **person**, not a message or campaign.
 
@@ -72,6 +72,20 @@ Errors stop the affected channel first, then explain. Each incident has a messag
 - **Take a break**: pause until a date (Until Monday, Two weeks, Until January 6, or a picked date). Nothing automatic goes out; user replies still go. Resumes on its own at that date, or by Resume.
 - **Wrap up**: cancels every scheduled message, optionally downloads an export (people + messages as JSON and a people CSV), optionally deletes all data. Talking people are handed back in the export with their channel and last message. Then "Start again any time".
 
+### Projects
+Added 2026-11-02 after Gabriel chose "Build projects into v1". Screens: `docs/design/boards/V4*.dc.html` (canvas page "projects").
+
+- A **project** is one thing the user offers to one kind of person. It owns a name, an offer line, who to meet (`audience`), a voice (`tone` + `sample`), a calendar link, its people, its first-10-hellos approvals, and its own run state (`running`, `paused` until a date, or `wrapped`). Callum suggests a short name from the offer; the user can rename it. Names are unique (case-insensitive): "You already have a project called Payroll. Pick another name."
+- **Shared by all projects:** the sender identity, the mailbox, LinkedIn and X accounts, and their daily limits ("20 emails a day across both projects"). When more is due than the limits allow, the earliest due goes first, whatever its project. A new project never asks to connect channels again.
+- **One project per person.** Import skips anyone already in another project (reason `other_project`, "3 are already in Reconciliation"). Only strangers (no hello sent yet) and resting people can move to another project; anyone else gets the reason beside the action ("Kemi is talking with you about Reconciliation. Finish that conversation first.").
+- **Stop applies everywhere.** A person who said stop in any project is never written to by any project, and is skipped on every import.
+- **Across projects:** the dock, the morning brief, taps (notifications) and the weekly note cover every project; reply cards and list rows carry the project's name as a quiet text tag. Projects never get their own colors.
+- **One project at a time:** the river, Day one, the Ask bar ("Ask Callum about Reconciliation") and Add people act on the project being viewed. The last viewed project is remembered.
+- **Approvals:** the first 10 hellos need an OK in every project, counted per project.
+- **Pausing:** "Take a break" (global) pauses everything. Each project can also pause on its own (until a date or until Resume): its automatic sends stay put; user replies still go. "Payroll is paused. Reconciliation keeps going."
+- **Wrapping up one project:** cancels that project's scheduled messages, keeps people who are waiting or talking on the dock, offers that project's export, and marks it `wrapped` (hidden from the switcher, kept in Your Callum under "Wrapped"). "Wrap up everything" stays as before.
+- **Upgrading:** an install with data from before projects gets one project built from its settings (named by Callum from the offer, else "My first project") holding every existing person.
+
 ## Architecture
 
 - **One Node 22 process** (TypeScript, ESM) runs the HTTP API, the scheduler loop and the channel adapters. Data lives in one SQLite file (`node:sqlite`, no native build) under `CALLUM_DATA_DIR` (default `./data`).
@@ -89,7 +103,7 @@ Errors stop the affected channel first, then explain. Each incident has a messag
 |---|---|---|
 | Stack | TypeScript, Node 22, Hono, `node:sqlite`, React + Vite, Vitest, Playwright | Re-platforming later; low, the engine is pure TS |
 | Where LinkedIn runs | On the machine running Callum, in a real browser profile. The status line says "LinkedIn runs on this computer while Callum is open." | Cloud users must paste an `li_at` cookie instead |
-| Email provider | SMTP + IMAP with an app password, with presets for Google and Microsoft. "Continue with Google/Microsoft" opens the preset. OAuth sign-in is a later step (needs app verification). | Slightly more setup than the design's one-tap Google sign-in |
+| Email provider | SMTP + IMAP with an app password for Google and other providers; Microsoft via OAuth2 device code (see below). "Continue with Google/Microsoft" opens the preset. OAuth sign-in is a later step (needs app verification). | Slightly more setup than the design's one-tap Google sign-in |
 | Lead source | CSV/paste + LinkedIn search link always; Apollo search when keyed | Without Apollo, "describe who to meet" can only point to Bring a list |
 | AI model | `claude-opus-5-5` by default (`CALLUM_MODEL` overrides), effort `low`, structured outputs; on any API error or refusal fall back to templates | API cost per message; set `CALLUM_MODEL` to change |
 | Notifications | In-app brief plus browser notifications while a tab is open; no push server | No tap on a closed phone in v1 |
@@ -97,6 +111,13 @@ Errors stop the affected channel first, then explain. Each incident has a messag
 | Hostile replies | Closed silently (see Replies) | Design wanted a polite close |
 | Spam complaints | Not detected | No automatic slow-down on complaints |
 | Multiple users | Single user per install | Teams are out of scope per the design |
+| Desktop or web | Electron desktop app first (Gabriel, 2026-11-02: "i thought you were making an electron app" / "let's do that"); server mode second | Unsigned installers show a one-time OS warning until code signing is set up |
+| Microsoft mail | OAuth2 device-code sign-in (XOAUTH2); Microsoft refuses app passwords | A one-time Azure app registration per install until Callum has a published client id |
+| What a project owns | Offer, audience, voice, calendar link, people, approvals, run state; channels and pace are shared | Users wanting a second mailbox per project must wait for multi-mailbox |
+| Pace across projects | Shared per account, earliest due first, no per-project quota | A big project can delay a small one's sends by a day |
+| Person in two projects | Not allowed; move only strangers and resting people | A person relevant to two offers hears about one at a time |
+| Stop scope | Global across projects | None; it's the safe reading of "stop" |
+| Dock scope | All projects, tagged | A busy dock mixes offers |
 
 ## Out of scope (from the design's "not doing" list)
 Dashboards, charts, open rates; sequence builder; unified inbox; CRM; lead marketplace; teams; A/B testing; dark mode; running inside other AI tools.
