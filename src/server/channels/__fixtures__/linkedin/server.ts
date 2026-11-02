@@ -22,7 +22,9 @@ interface Profile {
   /** A chat window restored from earlier, for someone else. A sticky one ignores its close button. */
   bubble?: 'closable' | 'sticky';
   /** What the server answers when the page posts the invitation or message. */
-  send?: 'error';
+  send?: 'error' | 'silent';
+  /** Messages already in the chat window when it opens. */
+  history?: string[];
 }
 
 export const PROFILES: Record<string, Profile> = {
@@ -33,6 +35,9 @@ export const PROFILES: Record<string, Profile> = {
   flaky: { name: 'Flo Flaky', headline: 'Writer', variant: 'message', send: 'error' },
   freebie: { name: 'Free Bie', headline: 'Analyst at Okopay', variant: 'connect', notes: 'upsell' },
   toast: { name: 'Toa St', headline: 'Analyst at Okopay', variant: 'connect', send: 'error' },
+  echo: { name: 'Eko Echo', headline: 'Editor', variant: 'message', history: ['Hello Echo.'] },
+  echofail: { name: 'Eko Fail', headline: 'Editor', variant: 'message', send: 'error', history: ['Hello Echo.'] },
+  mute: { name: 'Mu Te', headline: 'Editor', variant: 'message', send: 'silent', history: ['Hello Mute.'] },
   odd: { name: 'Odd Page', headline: 'Writer', variant: 'nothing' },
   pia: { name: 'Pia Pending', headline: 'Designer', variant: 'pending' },
   celeb: { name: 'Cleo Famous', headline: 'Author and speaker', variant: 'follow' },
@@ -42,9 +47,10 @@ export const PROFILES: Record<string, Profile> = {
 
 interface Thread { id: string; slug: string; name: string; time: string; snippet: string; messages: string[]; link: boolean }
 const THREADS: Thread[] = [
+  { id: '2-zoe', slug: 'zoe', name: 'Zoe Zed', time: '11:15 AM', snippet: 'Can we talk Thursday at 9:00?', messages: ['Hi Zoe, quick hello.', 'Can we talk Thursday at 9:00?'], link: false },
   { id: '2-ada', slug: 'ada', name: 'Ada Obi', time: '10:32 AM', snippet: 'Yes, Thursday at 9:00 works for me.', messages: ['Hi Ada, thanks for connecting.', 'Yes, Thursday at 9:00 works for me.'], link: true },
   { id: '2-kemi', slug: 'kemi', name: 'Kemi Okoye', time: '10:05 AM', snippet: 'You: Thanks for connecting, Kemi.', messages: ['Thanks for connecting, Kemi.'], link: false },
-  { id: '2-ben', slug: 'ben-ward', name: 'Ben Ward', time: 'Sun', snippet: 'Sounds good, send me the details.', messages: ['Hi Ben, quick hello.', 'Sounds good, send me the details.'], link: false },
+  { id: '2-ben', slug: 'ben-ward', name: 'Ben Ward', time: 'Sun', snippet: 'Ben Ward: Sounds good, send me the details.', messages: ['Hi Ben, quick hello.', 'Sounds good, send me the details.'], link: false },
   { id: '2-tunde', slug: 'tunde', name: 'Tunde Bello', time: 'Oct 28', snippet: 'Not right now, thanks.', messages: ['Hi Tunde, quick hello.', 'Not right now, thanks.'], link: false },
 ];
 
@@ -109,6 +115,8 @@ function profilePage(slug: string, p: Profile): string {
     notes: p.notes ?? '',
     bubble: p.bubble ?? '',
     send: p.send ?? '',
+    variant: p.variant,
+    history: esc(JSON.stringify(p.history ?? [])),
   });
 }
 
@@ -141,7 +149,7 @@ function threadPanel(t: Thread | null): string {
 }
 
 /** The messaging page. Most rows are divs that open their thread on click; one is a link (the fast path). */
-function messagingPage(open: Thread | null): string {
+function messagingPage(open: Thread | null, landing = false): string {
   const threads = THREADS.map((t) => {
     const inner = `<h3 class="msg-conversation-listitem__participant-names msg-conversation-card__participant-names"><span class="truncate">${esc(t.name)}</span></h3>
           <time class="msg-conversation-listitem__time-stamp">${esc(t.time)}</time>
@@ -151,7 +159,7 @@ function messagingPage(open: Thread | null): string {
       : `<div class="msg-conversation-listitem__link" role="button" tabindex="0" data-thread="${t.id}">${inner}</div>`;
     return `      <li class="msg-conversation-listitem">${link}</li>`;
   }).join('\n');
-  return fill(read('messaging.html'), { threads, panel: threadPanel(open) });
+  return fill(read('messaging.html'), { threads, panel: threadPanel(open), open: landing && open ? open.id : '' });
 }
 
 export async function startLinkedinFixture(): Promise<LinkedinFixture> {
@@ -216,7 +224,8 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
 
     if (path === '/mynetwork/invite-connect/connections/' || path === '/messaging/') {
       if (fixture.challengeLists) return redirect(res, '/checkpoint/challenge/AQlists');
-      if (path === '/messaging/') return html(res, 200, messagingPage(null));
+      // Like the real site, the newest conversation is already open when the messaging page loads.
+      if (path === '/messaging/') return html(res, 200, messagingPage(THREADS[0] ?? null, true));
       const people = [
         { slug: 'ada', name: 'Ada Obi', when: 'Connected 2 days ago' },
         { slug: 'ben-ward', name: 'Ben Ward', when: 'Connected 3 weeks ago' },

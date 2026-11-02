@@ -6,8 +6,8 @@ import type { PersonLead } from '../../shared/types.js';
 import { systemClock, type Clock } from '../engine/clock.js';
 import {
   SELECTORS, clampNote, cleanName, hasWeeklyLimitText, headerNameCandidates, humanDelayMs, isBlockedStatus, isCheckpointUrl,
-  isOwnSnippet, isSignInUrl, isUnavailableProfileText, normalizeText, parseListTimestamp, profileUrlFromHref, snippetMatches,
-  splitHeadline,
+  hasSendFailureText, isOwnSnippet, isSignInUrl, isUnavailableProfileText, normalizeText, parseListTimestamp, profileUrlFromHref,
+  sameParticipant, snippetMatches, splitHeadline,
 } from './linkedin-detect.js';
 import { ConnectError, type ChannelAdapter, type ChannelError, type InboundEvent, type OutboundMessage, type SendResult } from './types.js';
 
@@ -35,6 +35,8 @@ export interface LinkedinDeps {
   actionTimeoutMs?: number;
   /** How long to wait for a page to show what an action should have produced (a Pending button, a sent message). */
   settleMs?: number;
+  /** How long a sent message is watched for a "failed to send" mark before it counts as sent. */
+  watchMs?: number;
 }
 
 const DEFAULT_BASE = 'https://www.linkedin.com';
@@ -48,6 +50,8 @@ const CHECKPOINT_MESSAGE = 'LinkedIn is asking you to confirm it is you. Open Li
 const SIGNED_OUT_MESSAGE = 'LinkedIn signed Callum out. Sign in again from Your Callum.';
 const WEEKLY_LIMIT_MESSAGE = "LinkedIn says you've reached the weekly invitation limit. Callum will wait before sending more invitations.";
 const NO_BROWSER_MESSAGE = "Couldn't open the browser Callum uses for LinkedIn.";
+const OFFLINE_MESSAGE = "Couldn't open LinkedIn. Check your internet connection and try again.";
+const WINDOW_CLOSED_MESSAGE = 'The LinkedIn window was closed before you finished signing in.';
 
 // ---- choosing and launching the browser ----------------------------------------------------------
 
@@ -94,7 +98,8 @@ export function launchOptions(opts: { headless: boolean; channel?: BrowserChanne
     headless: opts.headless,
     viewport: { width: 1280, height: 900 },
     locale: 'en-US',
-    args: ['--disable-blink-features=AutomationControlled'],
+    // --test-type hides Chrome's "unsupported command-line flag" bar, which the other flag would otherwise show.
+    args: ['--disable-blink-features=AutomationControlled', '--test-type'],
     ignoreDefaultArgs: ['--enable-automation'],
     ...(opts.userAgent ? { userAgent: opts.userAgent } : {}),
   };
@@ -167,6 +172,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
   const loginTimeoutMs = deps.loginTimeoutMs ?? 5 * 60_000;
   const actionTimeoutMs = deps.actionTimeoutMs ?? 20_000;
   const settleMs = deps.settleMs ?? 10_000;
+  const watchMs = deps.watchMs ?? 2000;
   const profileDir = join(deps.dataDir, PROFILE_DIR);
 
   let session: Record<string, string> | null = secret;
@@ -359,11 +365,20 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
   async function sendInvite(page: Page, msg: OutboundMessage, step: { name: string }): Promise<SendResult> {
     step.name = 'open the profile';
     const top = await openProfile(page, msg);
-    // An invitation that is already waiting is as good as one just sent.
     if (await locate(top, SELECTORS.pendingMarker)) return { ok: true, externalId: null };
 
-    /** Clicks Connect, in the top card or under More, and waits for the invitation dialog. */
-    async function openConnect(): Promise<void> {
+    /** Whether the invitation is already waiting: a Pending button in the top card or, once opened, in the More menu. */
+    const pendingInMoreMenu = async (): Promise<boolean> => {
+      const more = await locate(top, SELECTORS.moreButton);
+      if (!more) return false;
+      await more.click().catch(() => undefined);
+      const found = await locate(page, SELECTORS.moreMenuPending, Math.min(800, settleMs));
+      await page.keyboard.press('Escape').catch(() => undefined);
+      return found !== null;
+    };
+
+    /** Clicks Connect, in the top card or under More, and waits for the invitation dialog. 'pending' means there was nothing to do. */
+    async function openConnect(): Promise<'opened' | 'pending'> {
       step.name = 'find Connect';
       let connect = await locate(top, SELECTORS.connectButton);
       if (!connect) {
@@ -371,6 +386,10 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
         if (more) {
           await more.click();
           await pause();
+          if (await locate(page, SELECTORS.moreMenuPending)) {
+            await page.keyboard.press('Escape').catch(() => undefined);
+            return 'pending';
+          }
           connect = await locate(page, SELECTORS.moreMenuConnect, Math.min(3000, settleMs));
           if (!connect) await page.keyboard.press('Escape').catch(() => undefined);
         }
@@ -384,9 +403,11 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
       await connect.click();
       await pause();
       await stopIfBlocked(page);
+      return 'opened';
     }
 
-    await openConnect();
+    // An invitation that is already waiting is as good as one just sent.
+    if ((await openConnect()) === 'pending') return { ok: true, externalId: null };
     step.name = 'write the note';
     const note = clampNote(msg.body);
     let withNote = false;
@@ -410,7 +431,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
           step.name = 'send without the note';
           await dismissDialog(page);
           await pause();
-          await openConnect();
+          if ((await openConnect()) === 'pending') return { ok: true, externalId: null };
         }
       }
       noteDropped = !withNote;
@@ -420,16 +441,22 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     const send = await locate(page, withNote ? SELECTORS.sendInviteButton : SELECTORS.sendWithoutNoteButton, 5000);
     if (!send) throw unexpectedPage('find the Send button');
     await send.click();
-    const closed = await pollUntil(page, async () => {
+    // Success is a Pending button on the profile, whatever dialogs are still open: an error toast closes the dialog too.
+    const started = Date.now();
+    let lastMenuCheck = started;
+    let confirmed = await pollUntil(page, async () => {
       await stopIfBlocked(page);
-      return (await locate(page, SELECTORS.dialog)) === null;
+      if (await locate(top, SELECTORS.pendingMarker)) return true;
+      if (Date.now() - lastMenuCheck >= 1500 && Date.now() - started >= 600) {
+        lastMenuCheck = Date.now();
+        return pendingInMoreMenu();
+      }
+      return false;
     });
+    if (!confirmed) confirmed = (await locate(top, SELECTORS.pendingMarker)) !== null || (await pendingInMoreMenu());
     await stopIfBlocked(page);
-    // Success is the Pending button on the profile, not the dialog going away: an error toast also closes the dialog.
-    if (!closed || !(await locate(top, SELECTORS.pendingMarker, settleMs))) {
-      await stopIfBlocked(page);
-      throw new Stop(fail('unknown', "LinkedIn didn't confirm the invitation. Callum will check before trying again."));
-    }
+    if (!confirmed) throw new Stop(fail('unknown', "LinkedIn didn't confirm the invitation. Callum will check before trying again."));
+    if (await locate(page, SELECTORS.dialog)) await dismissDialog(page);
     return { ok: true, externalId: null, ...(noteDropped ? { noteDropped: true as const } : {}) };
   }
 
@@ -468,6 +495,29 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     return '';
   }
 
+  async function countMessagesIn(scope: Locator): Promise<number> {
+    for (const selector of SELECTORS.threadMessage) {
+      const count = await scope.locator(selector).count().catch(() => 0);
+      if (count > 0) return count;
+    }
+    return 0;
+  }
+
+  /** The text of the newest message together with whatever LinkedIn shows beside it ("Failed to send", "Retry"). */
+  async function newestMessageWithMarks(scope: Locator): Promise<string> {
+    for (const selector of SELECTORS.threadMessage) {
+      const items = scope.locator(selector);
+      const count = await items.count().catch(() => 0);
+      if (count > 0) {
+        return items
+          .nth(count - 1)
+          .evaluate((node, container) => ((node.closest(container) ?? node.parentElement ?? node) as HTMLElement).innerText, SELECTORS.messageItem.join(', '))
+          .catch(() => '');
+      }
+    }
+    return '';
+  }
+
   async function sendDirectMessage(page: Page, msg: OutboundMessage, step: { name: string }): Promise<SendResult> {
     step.name = 'open the profile';
     const top = await openProfile(page, msg);
@@ -499,12 +549,24 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     step.name = 'send the message';
     const send = await locate(bubble, SELECTORS.composerSend, 5000);
     if (!send) throw unexpectedPage('find the Send button');
+    const before = await countMessagesIn(bubble);
     await send.click();
-    // Success is the text showing up as the newest message in that conversation, not the box emptying.
+    // Success is a new message with this text at the end of that conversation. An identical earlier message
+    // does not count, and neither does the box emptying.
     const wanted = normalizeText(msg.body);
-    const delivered = await pollUntil(page, async () => (await lastMessageIn(bubble)) === wanted);
+    const arrived = async () => (await countMessagesIn(bubble)) > before && (await lastMessageIn(bubble)) === wanted;
+    const delivered = await pollUntil(page, arrived);
     await stopIfBlocked(page);
     if (!delivered) throw new Stop(fail('unknown', "LinkedIn didn't confirm the message. Callum will check before trying again."));
+    // LinkedIn shows a message at once and may mark it "failed to send" a moment later, so watch it for a while.
+    const failed = new Stop(fail('unknown', "LinkedIn couldn't send the message. Callum will check before trying again."));
+    const watchEnd = Date.now() + watchMs;
+    for (;;) {
+      if (hasSendFailureText(await newestMessageWithMarks(bubble)) || hasSendFailureText(await noticeText(page))) throw failed;
+      if (Date.now() >= watchEnd) break;
+      await realSleep(100);
+    }
+    if (!(await arrived())) throw failed;
     await pause();
     const close = await locate(bubble, SELECTORS.bubbleClose);
     await close?.click().catch(() => undefined);
@@ -548,6 +610,17 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     );
 
     const events: InboundEvent[] = [];
+    const checkpoint = (): InboundEvent => ({ type: 'checkpoint', at: now.toISOString() });
+    /** The open conversation's other person and newest message. */
+    const readPanel = async () => {
+      const panel = (await locate(page, SELECTORS.threadPanel)) ?? page.locator('body');
+      const link = await locate(page, SELECTORS.threadProfileLink);
+      return { panel, text: await lastMessageIn(panel), name: link ? await link.innerText().catch(() => '') : '' };
+    };
+    const panelShows = async (row: { name: string; snippet: string }) => {
+      const open = await readPanel();
+      return open.text !== '' && sameParticipant(row.name, open.name) && snippetMatches(row.snippet, open.text);
+    };
     let opened = 0;
     let onList = true;
     for (const [index, row] of rows.entries()) {
@@ -574,22 +647,25 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
         const rowEl = list.nth(index);
         const target = (await locate(rowEl, SELECTORS.conversationLink)) ?? rowEl;
         await target.click();
-        const moved = await page.waitForURL((u) => {
-          const id = threadIdOf(u.toString());
-          return id !== null && id !== before;
-        }, { timeout: settleMs }).then(() => true, () => false);
-        if (!moved) continue;
+        // The address moves to the clicked thread. LinkedIn also opens the newest conversation by itself, so
+        // clicking that row changes nothing: then the panel already showing this person and message is enough.
+        const reached = await pollUntil(page, async () => {
+          const id = threadIdOf(page.url());
+          if (id !== null && id !== before) return true;
+          return id !== null && (await panelShows(row));
+        });
+        if (!reached) continue;
         await pause();
       }
 
-      if (await blocker(page)) return events;
+      if (await blocker(page)) return [...events, checkpoint()];
       const threadId = threadIdOf(page.url());
-      const panel = (await locate(page, SELECTORS.threadPanel)) ?? page.locator('body');
       // Wait for the panel to show this conversation, so a previous one is never read by mistake.
       let text = '';
       const matched = await pollUntil(page, async () => {
-        text = await lastMessageIn(panel);
-        return text !== '' && snippetMatches(row.snippet, text);
+        if (!(await panelShows(row))) return false;
+        text = (await readPanel()).text;
+        return true;
       });
       if (!threadId || !matched) continue;
       const profile = await locate(page, SELECTORS.threadProfileLink, 3000);
@@ -609,13 +685,13 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     try {
       parsed = new URL(input);
     } catch {
-      throw new Error("That isn't a LinkedIn people search address.");
+      throw new ConnectError("That isn't a LinkedIn people search address.");
     }
     const host = parsed.hostname.toLowerCase();
     const ours = new URL(baseUrl).hostname;
     const linkedinHost = host === 'linkedin.com' || host.endsWith('.linkedin.com');
     if ((!linkedinHost && host !== ours) || !parsed.pathname.startsWith('/search/results/people')) {
-      throw new Error("That isn't a LinkedIn people search address.");
+      throw new ConnectError("That isn't a LinkedIn people search address.");
     }
     return `${parsed.pathname}${parsed.search}`;
   }
@@ -633,13 +709,18 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
         } catch {
           throw new ConnectError(NO_BROWSER_MESSAGE);
         }
+        const offline = (err: unknown) => (err instanceof ConnectError ? err : new ConnectError(OFFLINE_MESSAGE, 'temporary'));
         let identity: string | null;
         let stored: Record<string, string>;
         if (liAt) {
           await ctx.clearCookies({ name: 'li_at' });
           await ctx.addCookies([cookieFor(liAt)]);
           identity = await withPage(ctx, async (page) => {
-            await open(page, '/feed/');
+            try {
+              await open(page, '/feed/');
+            } catch (err) {
+              throw offline(err);
+            }
             if (isCheckpointUrl(page.url())) {
               throw new ConnectError("LinkedIn didn't accept that cookie. Copy li_at again from a browser where you're signed in.");
             }
@@ -651,7 +732,11 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
             // The window's own first tab is used, so the person sees one page, not two.
             const page = ctx.pages()[0] ?? (await ctx.newPage());
             page.setDefaultTimeout(actionTimeoutMs);
-            await page.goto(url('/login'), { waitUntil: 'domcontentloaded' });
+            try {
+              await page.goto(url('/login'), { waitUntil: 'domcontentloaded' });
+            } catch (err) {
+              throw page.isClosed() ? new ConnectError(WINDOW_CLOSED_MESSAGE) : offline(err);
+            }
             const closed = new Promise<'closed'>((resolve) => page.once('close', () => resolve('closed')));
             const arrived = page.waitForURL((u) => new URL(u).pathname.startsWith('/feed'), { timeout: loginTimeoutMs }).then(
               () => 'arrived' as const,
@@ -659,7 +744,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
             );
             const outcome = await Promise.race([closed, arrived]);
             if (outcome === 'closed' || page.isClosed()) {
-              throw new ConnectError('The LinkedIn window was closed before you finished signing in.');
+              throw new ConnectError(WINDOW_CLOSED_MESSAGE);
             }
             if (outcome === 'gave up') throw new ConnectError("LinkedIn sign-in didn't finish in 5 minutes. Connect LinkedIn again when you're ready.");
             await page.waitForLoadState('domcontentloaded').catch(() => undefined);
@@ -708,16 +793,20 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
         if (!session) throw new ConnectError(SIGNED_OUT_MESSAGE, 'auth');
         const now = clock.now();
         const from = since ?? new Date(now.getTime() - LOOKBACK_MS);
-        const ctx = await workingContext();
-        return withPage(ctx, async (page) => {
-          const at = now.toISOString();
-          const status = await open(page, '/mynetwork/invite-connect/connections/');
-          if (await blocker(page, status)) return [{ type: 'checkpoint' as const, at }];
-          const events = await collectAccepted(page, at);
-          const messaging = await open(page, '/messaging/');
-          if (await blocker(page, messaging)) return [...events, { type: 'checkpoint' as const, at }];
-          return [...events, ...(await collectReplies(page, from, now))];
-        });
+        try {
+          const ctx = await workingContext();
+          return await withPage(ctx, async (page) => {
+            const at = now.toISOString();
+            const status = await open(page, '/mynetwork/invite-connect/connections/');
+            if (await blocker(page, status)) return [{ type: 'checkpoint' as const, at }];
+            const events = await collectAccepted(page, at);
+            const messaging = await open(page, '/messaging/');
+            if (await blocker(page, messaging)) return [...events, { type: 'checkpoint' as const, at }];
+            return [...events, ...(await collectReplies(page, from, now))];
+          });
+        } catch (err) {
+          throw err instanceof ConnectError ? err : new ConnectError("Couldn't check LinkedIn for replies. Callum will try again.", 'temporary');
+        }
       });
     },
 
@@ -733,7 +822,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
             target.searchParams.set('page', String(pageNo));
             const status = await open(page, `${target.pathname}${target.search}`);
             const blocked = await blocker(page, status);
-            if (blocked) throw new Error(blocked.error.message);
+            if (blocked) throw new ConnectError(blocked.error.message, blocked.error.code);
             // Either results or LinkedIn's "no results" notice ends the wait.
             const results = await locateList(page, SELECTORS.searchResult, SELECTORS.searchEmpty, 8000);
             if (!results) break;
@@ -776,6 +865,9 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
           }
           return people;
         });
+      }).catch((err: unknown) => {
+        // Whatever went wrong while loading pages reaches the person as plain words, never as browser text.
+        throw err instanceof ConnectError ? err : new ConnectError("Couldn't search LinkedIn right now. Callum will try again.", 'temporary');
       });
     },
 

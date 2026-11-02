@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  SELECTORS, clampNote, headerNameCandidates, isUnavailableProfileText, normalizeText, snippetMatches, hasWeeklyLimitText, humanDelayMs, isBlockedStatus, isCheckpointUrl, isOwnSnippet, isSignInUrl,
+  SELECTORS, clampNote, hasSendFailureText, sameParticipant, headerNameCandidates, isUnavailableProfileText, normalizeText, snippetMatches, hasWeeklyLimitText, humanDelayMs, isBlockedStatus, isCheckpointUrl, isOwnSnippet, isSignInUrl,
   cleanName, parseListTimestamp, profileUrlFromHref, splitHeadline,
 } from './linkedin-detect.js';
 
@@ -161,6 +161,34 @@ describe('page text helpers', () => {
     expect(snippetMatches('Yes, Thursday at 9:00 wor...', 'Yes, Thursday at 9:00 works for me.')).toBe(true);
     expect(snippetMatches('Sounds good', 'Not right now, thanks.')).toBe(false);
     expect(snippetMatches('', 'anything')).toBe(true);
+    expect(snippetMatches('   ', 'anything')).toBe(true);
+    expect(snippetMatches('Ada: Yes, Thursday…', 'Yes, Thursday at 9:00 works for me.')).toBe(true);
+    expect(snippetMatches('Ada Obi: Yes, Thursday at 9:00 works for me.', 'Yes, Thursday at 9:00 works for me.')).toBe(true);
+    expect(snippetMatches('You: Thanks for connecting', 'Thanks for connecting, Ada.')).toBe(true);
+    expect(snippetMatches('Yes,\u200b Thursday at 9:00', 'Yes, Thursday at 9:00 works for me.')).toBe(true);
+    expect(snippetMatches('Yes, Thursday at 9:00 works for me and I would like to add more', 'Yes, Thursday')).toBe(true);
+    expect(snippetMatches('Ada: Not right now', 'Yes, Thursday at 9:00 works for me.')).toBe(false);
+    expect(snippetMatches('Yes, Thursday', '')).toBe(false);
+  });
+});
+
+describe('sameParticipant', () => {
+  it('compares the list name with the open thread, tolerating extras and unreadable names', () => {
+    expect(sameParticipant('Ada Obi', 'Ada Obi')).toBe(true);
+    expect(sameParticipant('Ada Obi', 'ada obi, MBA')).toBe(true);
+    expect(sameParticipant('Ada Obi • 1st', 'Ada Obi')).toBe(true);
+    expect(sameParticipant('Ada Obi', 'Ben Ward')).toBe(false);
+    expect(sameParticipant('', 'Ben Ward')).toBe(true);
+    expect(sameParticipant('Ada Obi', '')).toBe(true);
+  });
+});
+
+describe('hasSendFailureText', () => {
+  it('spots LinkedIn failure marks next to a message', () => {
+    expect(hasSendFailureText('Hello\nFailed to send. Retry')).toBe(true);
+    expect(hasSendFailureText("We couldn’t send your message")).toBe(true);
+    expect(hasSendFailureText('Hello there, thanks for the retry on the demo')).toBe(true);
+    expect(hasSendFailureText('Hello there, thanks for connecting')).toBe(false);
   });
 });
 

@@ -27,6 +27,12 @@
 
   function markPending(slug, name) {
     if (slug !== body.dataset.slug) return;
+    // When Connect lived under More, LinkedIn shows Pending in that menu rather than in the top card.
+    const menu = document.getElementById('more-menu');
+    if (body.dataset.variant === 'more' && menu) {
+      menu.innerHTML = '<div role="button" aria-label="Pending, click to withdraw invitation sent to ' + name + '"><span>Pending</span></div>';
+      return;
+    }
     const actions = document.querySelector('.pvs-profile-actions');
     if (actions) {
       actions.innerHTML =
@@ -92,6 +98,17 @@
     const box = bubble.querySelector('.msg-form__contenteditable');
     const send = bubble.querySelector('.msg-form__send-button');
     const list = bubble.querySelector('.msg-s-message-list');
+    const addItem = (text) => {
+      const item = document.createElement('li');
+      item.className = 'msg-s-message-list__event';
+      const el = document.createElement('div');
+      el.className = 'msg-s-event-listitem__body';
+      el.textContent = text;
+      item.appendChild(el);
+      list.appendChild(item);
+      return item;
+    };
+    (opts.history || []).forEach(addItem);
     bubble.querySelector('header button').addEventListener('click', () => { if (!opts.sticky) bubble.remove(); });
     box.addEventListener('input', () => { send.disabled = box.innerText.trim() === ''; });
     bubble.querySelector('form').addEventListener('submit', async (e) => {
@@ -100,15 +117,18 @@
       // The box empties straight away, as LinkedIn does; whether the message was really sent shows in the list.
       box.innerHTML = '';
       send.disabled = true;
+      // A window that swallows the message: the box empties, nothing is added and nothing is sent.
+      if (body.dataset.send === 'silent' && slug === body.dataset.slug) return;
+      // The message shows at once and is marked as failed later if the send did not go through, as on LinkedIn.
+      const item = addItem(text);
       const res = await fetch('/__message', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ slug, text }) });
-      if (res.status !== 200) return toast('Message failed to send. Try again.');
-      const item = document.createElement('li');
-      item.className = 'msg-s-message-list__event';
-      const text_ = document.createElement('div');
-      text_.className = 'msg-s-event-listitem__body';
-      text_.textContent = text;
-      item.appendChild(text_);
-      list.appendChild(item);
+      if (res.status !== 200) {
+        const mark = document.createElement('span');
+        mark.className = 'msg-s-event-listitem--failed';
+        mark.textContent = 'Failed to send. Retry';
+        item.appendChild(mark);
+        return toast('Message failed to send. Try again.');
+      }
       window.__sent = { slug, text };
     });
   }
@@ -150,13 +170,14 @@
       if (body.dataset.limit === 'on-connect' && slug === body.dataset.slug) showLimit();
       else showInvite(slug, name);
     }
-    if (action === 'message') showComposer(slug, name);
+    if (action === 'message') showComposer(slug, name, { history: slug === body.dataset.slug ? JSON.parse(body.dataset.history || '[]') : [] });
   });
   if (dialogRoot) {
     dialogRoot.addEventListener('click', (e) => {
       if (e.target.closest('[data-dialog="close"]')) closeDialog();
     });
   }
+  if (body.dataset.open) history.replaceState({}, '', '/messaging/thread/' + body.dataset.open + '/');
   // LinkedIn restores chat windows opened earlier when a page loads.
   if (msgRoot && body.dataset.bubble) showComposer('decoy-two', 'Yan Decoy', { sticky: body.dataset.bubble === 'sticky' });
 })();

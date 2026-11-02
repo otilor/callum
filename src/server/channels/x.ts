@@ -206,7 +206,7 @@ export function createXAdapter(secret: Record<string, string> | null, deps: XDep
       } catch {
         throw new ConnectError("Couldn't reach X. Check your connection and try again.");
       }
-      if (probe.status === 403) throw new ConnectError(NO_READ_MESSAGE);
+      if (probe.status === 403) throw new ConnectError(isClientForbidden(probe.body) ? NO_DM_ACCESS_MESSAGE : NO_READ_MESSAGE);
       if (probe.status === 401) throw new ConnectError("Couldn't sign in to X. Check the access token.");
       if (probe.status >= 500) throw new ConnectError("Couldn't reach X right now. Try again in a few minutes.");
       account = { ...tokens, userId: id, username };

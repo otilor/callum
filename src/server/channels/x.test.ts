@@ -59,6 +59,15 @@ describe('x connect', () => {
     );
   });
 
+  it('blames the plan, not the scope, when X says the client is not allowed to read messages', async () => {
+    const f = fakeFetch((c) =>
+      c.url.includes('/dm_events')
+        ? json(403, { title: 'Client Forbidden', reason: 'client-not-enrolled', type: 'https://api.twitter.com/2/problems/client-forbidden' })
+        : json(200, { data: { id: '100', username: 'founder' } }),
+    );
+    await expect(createXAdapter(null, { fetch: f.fetch }).connect({ accessToken: 'tok1' })).rejects.toThrow(/plan includes direct messages/);
+  });
+
   it('asks for an access token when none is given', async () => {
     const f = fakeFetch(() => json(200, {}));
     await expect(createXAdapter(null, { fetch: f.fetch }).connect({})).rejects.toBeInstanceOf(ConnectError);

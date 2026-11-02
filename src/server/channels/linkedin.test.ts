@@ -26,6 +26,7 @@ describe('launchOptions', () => {
     for (const options of [work, signIn]) {
       expect(options.channel).toBe('chrome');
       expect(options.args).toContain('--disable-blink-features=AutomationControlled');
+      expect(options.args).toContain('--test-type');
       expect(options.ignoreDefaultArgs).toContain('--enable-automation');
       expect(options.locale).toBe('en-US');
     }

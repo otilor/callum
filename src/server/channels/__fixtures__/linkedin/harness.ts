@@ -53,6 +53,7 @@ export function useLinkedin(): LinkedinHarness {
       sleep: noSleep,
       clock: fixedClock(NOW.toISOString()),
       settleMs: 800,
+      watchMs: 400,
       actionTimeoutMs: 8000,
       ...extra,
     });

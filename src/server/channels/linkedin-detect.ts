@@ -57,15 +57,41 @@ export function headerNameCandidates(profileName: string): string[] {
   return [...new Set([full, short].filter(Boolean))];
 }
 
+/** Collapses whitespace and drops zero-width and other hidden characters LinkedIn puts into message text. */
 export function normalizeText(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
+  return text.replace(/[\u200b-\u200f\u2060\ufeff\u00ad]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-/** A thread preview is shortened with an ellipsis, so it matches when it is the start of the open thread's last message. */
+const COMPARE_CHARS = 40;
+
+/**
+ * Whether a messaging-list preview belongs to the opened thread's last message. The preview may start with
+ * "You:" or "<name>:", and is shortened with an ellipsis, so only the start is compared, in either direction.
+ * A preview that cannot be read is no reason to refuse: the caller still checks the participant.
+ */
 export function snippetMatches(snippet: string, lastMessage: string): boolean {
-  const preview = normalizeText(snippet.replace(/^\s*you\s*:/i, '')).replace(/(?:\u2026|\.{3})$/, '').trim();
+  const preview = normalizeText(snippet).replace(/(?:\u2026|\.{3})$/, '').trim();
   if (!preview) return true;
-  return normalizeText(lastMessage).toLowerCase().startsWith(preview.toLowerCase());
+  const text = normalizeText(lastMessage).toLowerCase().slice(0, COMPARE_CHARS);
+  if (!text) return false;
+  const candidates = [preview, preview.replace(/^[^:\n]{1,60}:\s+/, '')];
+  return candidates.some((candidate) => {
+    const start = candidate.toLowerCase().trim().slice(0, COMPARE_CHARS);
+    return start !== '' && (text.includes(start) || start.includes(text));
+  });
+}
+
+/** Whether the person named in the messaging list is the one in the open thread (either name may carry extras). */
+export function sameParticipant(listName: string, panelName: string): boolean {
+  const a = normalizeText(cleanName(listName) ?? '').toLowerCase();
+  const b = normalizeText(cleanName(panelName) ?? '').toLowerCase();
+  if (!a || !b) return true;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+/** Text LinkedIn shows next to a message, or in a toast, when it could not be delivered. */
+export function hasSendFailureText(text: string): boolean {
+  return /failed to send|couldn['\u2019]t send|could not send|not sent|send failed|message wasn['\u2019]t sent|\bretry\b/i.test(text);
 }
 
 export function humanDelayMs(random: () => number): number {
@@ -172,6 +198,7 @@ export const SELECTORS = {
   moreButton: ['button[aria-label="More actions"]', 'button[aria-label^="More actions" i]', 'button[id$="profile-overflow-action"]'],
   moreMenuConnect: ['[role="menu"] [aria-label^="Invite"][aria-label$="to connect"]', '.artdeco-dropdown__content [aria-label^="Invite"][aria-label$="to connect"]'],
   pendingMarker: ['[aria-label^="Pending"]', 'button:text-is("Pending")'],
+  moreMenuPending: ['[role="menu"] [aria-label^="Pending"]', '.artdeco-dropdown__content [aria-label^="Pending"]'],
   followButton: ['[aria-label^="Follow"]', 'button:text-is("Follow")'],
   messageButton: ['[aria-label^="Message"]', 'a:text-is("Message")', 'button:text-is("Message")'],
 
@@ -190,6 +217,7 @@ export const SELECTORS = {
   messageBubble: ['.msg-overlay-conversation-bubble'],
   bubbleHeader: ['.msg-overlay-bubble-header', 'header'],
   bubbleClose: ['button[aria-label^="Close your conversation"]', '.msg-overlay-bubble-header__control--close-btn'],
+  messageItem: ['li.msg-s-message-list__event', 'li'],
   composer: ['div.msg-form__contenteditable[contenteditable="true"]', '[role="textbox"][aria-label^="Write a message"]'],
   composerSend: ['button.msg-form__send-button', 'button[type="submit"]:text-is("Send")'],
 

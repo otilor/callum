@@ -25,6 +25,8 @@ export function defaultFactory(opts: { demo: boolean; clock: Clock; dataDir: str
 /** Owns one adapter per channel and keeps the channel's stored state in step with it. */
 export class AdapterRegistry {
   private readonly adapters = new Map<Channel, ChannelAdapter>();
+  // Channels with a connect in progress: nothing may use (or rebuild) their adapter until it finishes.
+  private readonly connecting = new Set<Channel>();
 
   constructor(
     private readonly repo: Repo,
@@ -50,6 +52,7 @@ export class AdapterRegistry {
 
   /** The adapter for a connected or paused channel, built from its stored secret on first use. */
   get(ch: Channel): ChannelAdapter | null {
+    if (this.connecting.has(ch)) return null;
     const cached = this.adapters.get(ch);
     if (cached) return cached;
     const status = this.repo.getChannel(ch).status;
@@ -60,21 +63,28 @@ export class AdapterRegistry {
   }
 
   async connect(ch: Channel, input: Record<string, string>, now: Date): Promise<ChannelAccount> {
-    // Close the old adapter first: two browsers must never open one LinkedIn profile folder. If connecting
-    // fails it stays cached; every adapter reopens what it needs on its next use.
+    // Take the old adapter out of use and close it first: two browsers must never open one LinkedIn profile
+    // folder, and while someone signs in nothing may send through the old one. If connecting fails it comes back;
+    // every adapter reopens what it needs on its next use.
     const previous = this.adapters.get(ch);
+    this.adapters.delete(ch);
+    this.connecting.add(ch);
     await previous?.close().catch(() => undefined);
     const next = this.generationOf(ch) + 1;
-    const adapter = this.factory(ch, null, this.hooks(ch, next));
+    let adapter: ChannelAdapter | null = null;
     let connected: { identity: string; secret: Record<string, string> };
     try {
+      adapter = this.factory(ch, null, this.hooks(ch, next));
       connected = await adapter.connect(input);
     } catch (err) {
-      await adapter.close().catch(() => undefined);
+      await adapter?.close().catch(() => undefined);
+      if (previous) this.adapters.set(ch, previous);
+      this.connecting.delete(ch);
       throw err;
     }
     this.generation.set(ch, next);
     this.adapters.set(ch, adapter);
+    this.connecting.delete(ch);
 
     this.repo.setChannelSecret(ch, connected.secret);
     const account = this.repo.updateChannel(ch, {

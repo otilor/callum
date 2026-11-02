@@ -31,8 +31,22 @@ describe('linkedin conversations against a local LinkedIn stand-in', () => {
     it('does not claim success when the box empties but LinkedIn fails to send', async () => {
       const before = li.fixture.messages.length;
       const result = await li.main.send(message('flaky', { kind: 'follow_up', body: 'Hello Flo.' }));
-      expect(result).toMatchObject({ ok: false, error: { code: 'unknown', message: expect.stringContaining("didn't confirm the message") } });
+      // The message shows at once and is then marked "Failed to send. Retry": that is not a sent message.
+      expect(result).toMatchObject({ ok: false, error: { code: 'unknown', message: expect.stringContaining("couldn't send the message") } });
       expect(li.fixture.messages).toHaveLength(before);
+    });
+
+    it('needs a new message, not an identical earlier one, as proof of sending', async () => {
+      const before = li.fixture.messages.length;
+      // The conversation already ends with the very same text.
+      const ok = await li.main.send(message('echo', { kind: 'follow_up', body: 'Hello Echo.' }));
+      expect(ok).toEqual({ ok: true, externalId: null });
+      expect(li.fixture.messages.slice(before)).toEqual([{ slug: 'echo', text: 'Hello Echo.' }]);
+      // A window that swallows the message, with the same text already at the end of the conversation.
+      expect(await li.main.send(message('mute', { kind: 'follow_up', body: 'Hello Mute.' }))).toMatchObject({ ok: false, error: { code: 'unknown' } });
+      const failed = await li.main.send(message('echofail', { kind: 'follow_up', body: 'Hello Echo.' }));
+      expect(failed).toMatchObject({ ok: false, error: { code: 'unknown' } });
+      expect(li.fixture.messages).toHaveLength(before + 1);
     });
 
     it('does not message someone it is not connected to', async () => {
@@ -52,6 +66,13 @@ describe('linkedin conversations against a local LinkedIn stand-in', () => {
       ]);
       const replies = events.filter((e) => e.type === 'reply');
       expect(replies).toEqual([
+        {
+          type: 'reply',
+          from: { linkedinUrl: 'https://www.linkedin.com/in/zoe', name: 'Zoe Zed' },
+          text: 'Can we talk Thursday at 9:00?',
+          at: new Date(2026, 10, 2, 11, 15).toISOString(),
+          externalId: expect.stringContaining('2-zoe:'),
+        },
         {
           type: 'reply',
           from: { linkedinUrl: 'https://www.linkedin.com/in/ada', name: 'Ada Obi' },
@@ -77,9 +98,16 @@ describe('linkedin conversations against a local LinkedIn stand-in', () => {
       const replies = (await fresh.poll(null)).flatMap((e) => (e.type === 'reply' ? [e] : []));
       // Ada's row is a link (fast path); Ben's is a div that opens its thread when clicked.
       expect(replies.map((r) => [r.from.linkedinUrl, r.text])).toEqual([
+        ['https://www.linkedin.com/in/zoe', 'Can we talk Thursday at 9:00?'],
         ['https://www.linkedin.com/in/ada', 'Yes, Thursday at 9:00 works for me.'],
         ['https://www.linkedin.com/in/ben-ward', 'Sounds good, send me the details.'],
       ]);
+    });
+
+    it('reports a single new reply in the top row, the conversation LinkedIn already has open', async () => {
+      const fresh = await li.build({ liAt: VALID_COOKIE });
+      const replies = (await fresh.poll(new Date(2026, 10, 2, 11, 0))).flatMap((e) => (e.type === 'reply' ? [e] : []));
+      expect(replies.map((r) => [r.from.linkedinUrl, r.text])).toEqual([['https://www.linkedin.com/in/zoe', 'Can we talk Thursday at 9:00?']]);
     });
 
     it('reports a checkpoint instead of events when LinkedIn blocks the lists', async () => {

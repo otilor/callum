@@ -177,6 +177,29 @@ describe('AdapterRegistry', () => {
     expect(repo.getChannelSecret('x')).toEqual({ address: 'first', accessToken: 'rotated' });
   });
 
+  it('takes the old adapter out of use while connecting, and puts it back if connecting fails', async () => {
+    let built = 0;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const old = stubAdapter('linkedin');
+    const registry = new AdapterRegistry(repo, (ch) => {
+      built++;
+      return built === 1 ? old : stubAdapter(ch, { connect: async () => { await gate; throw new ConnectError('Sign-in did not finish.'); } });
+    }, bus);
+    await registry.connect('linkedin', {}, clock.now());
+    expect(registry.get('linkedin')).toBe(old);
+
+    const connecting = registry.connect('linkedin', {}, clock.now());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Sends wait: nothing is returned (and nothing rebuilt from the stored secret) while someone signs in.
+    expect(registry.get('linkedin')).toBeNull();
+    expect(built).toBe(2);
+    release();
+    await expect(connecting).rejects.toThrow('Sign-in did not finish.');
+    expect(registry.get('linkedin')).toBe(old);
+    expect(built).toBe(2);
+  });
+
   it('closeAll closes every built adapter once', async () => {
     const adapters = new Map<string, ChannelAdapter>();
     const registry = new AdapterRegistry(repo, (ch) => {

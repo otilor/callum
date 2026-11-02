@@ -1,14 +1,14 @@
 // Drives the real LinkedIn adapter in a real (headless) browser against a local stand-in for linkedin.com.
 // Nothing here touches the live site; the markup and flows the stand-in mimics are described in __fixtures__/linkedin.
-// This file covers signing in, the browser's identity, invitations and people search; messages and polling are in
-// linkedin-conversations.integration.test.ts (two files so they run side by side).
+// This file covers signing in, the browser's identity and people search; invitations are in
+// linkedin-invitations.integration.test.ts and messages and polling in linkedin-conversations.integration.test.ts
+// (separate files so they run side by side).
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium, type BrowserContext } from 'playwright';
 import { describe, expect, it } from 'vitest';
 import { useLinkedin, message } from './__fixtures__/linkedin/harness.js';
 import { FIXTURE_USER, VALID_COOKIE } from './__fixtures__/linkedin/server.js';
-import { clampNote } from './linkedin-detect.js';
 import { ConnectError } from './types.js';
 
 describe('linkedin adapter against a local LinkedIn stand-in', () => {
@@ -25,6 +25,17 @@ describe('linkedin adapter against a local LinkedIn stand-in', () => {
       const cookie = (await (ctx as unknown as BrowserContext).cookies(li.fixture.baseUrl)).find((c) => c.name === 'li_at');
       expect(cookie?.value).toBe(VALID_COOKIE);
       expect(li.fixture.hits).toContain('GET /feed/');
+    });
+
+    it('explains in plain words when LinkedIn cannot be reached', async () => {
+      const unreachable = 'http://127.0.0.1:1';
+      const offline = "Couldn't open LinkedIn. Check your internet connection and try again.";
+      await expect((await li.build(null, { baseUrl: unreachable })).connect({ liAt: 'abc' })).rejects.toThrow(offline);
+      const signedIn = await li.build({ liAt: 'abc' }, { baseUrl: unreachable });
+      await expect(signedIn.poll(null)).rejects.toThrow("Couldn't check LinkedIn for replies. Callum will try again.");
+      await expect(signedIn.searchPeople?.('https://www.linkedin.com/search/results/people/?keywords=a', 3)).rejects.toThrow("Couldn't search LinkedIn right now.");
+      const window = await li.build(null, { baseUrl: unreachable, loginHeaded: false });
+      await expect(window.connect({})).rejects.toThrow(offline);
     });
 
     it('refuses a cookie LinkedIn does not accept', async () => {
@@ -107,75 +118,6 @@ describe('linkedin adapter against a local LinkedIn stand-in', () => {
         expect(seenByPage.userAgent).not.toContain('HeadlessChrome');
         expect(seenByPage.webdriver).toBe(false);
       }
-    });
-  });
-
-  describe('invitations', () => {
-    it('fills the clamped note and sends from the Connect button', async () => {
-      const long = `${'I liked your talk on payments rails and how teams ship them. '.repeat(8)}`;
-      expect(long.length).toBeGreaterThan(280);
-      const before = li.fixture.invites.length;
-      const result = await li.main.send(message('kemi', { body: long }));
-      expect(result).toEqual({ ok: true, externalId: null });
-      expect(li.fixture.invites.slice(before)).toEqual([{ slug: 'kemi', note: clampNote(long) }]);
-      expect(li.fixture.invites.at(-1)?.note.length).toBeLessThanOrEqual(280);
-    });
-
-    it('finds Connect under More and never clicks the People also viewed buttons', async () => {
-      const before = li.fixture.invites.length;
-      const result = await li.main.send(message('tunde', { body: 'Hello Tunde.' }));
-      expect(result.ok).toBe(true);
-      expect(li.fixture.invites.slice(before)).toEqual([{ slug: 'tunde', note: 'Hello Tunde.' }]);
-      expect(li.fixture.invites.some((i) => i.slug.startsWith('decoy'))).toBe(false);
-    });
-
-    it('treats an invitation that is already pending as sent, without sending another', async () => {
-      const before = li.fixture.invites.length;
-      expect(await li.main.send(message('pia'))).toEqual({ ok: true, externalId: null });
-      expect(li.fixture.invites).toHaveLength(before);
-    });
-
-    it('sends without the note and says so when a free account is offered Premium instead of a note box', async () => {
-      const before = li.fixture.invites.length;
-      const result = await li.main.send(message('freebie', { body: 'Hello Free.' }));
-      expect(result).toEqual({ ok: true, externalId: null, noteDropped: true });
-      expect(li.fixture.invites.slice(before)).toEqual([{ slug: 'freebie', note: '' }]);
-    });
-
-    it('does not claim success when the dialog closes with an error and no Pending button appears', async () => {
-      const before = li.fixture.invites.length;
-      const result = await li.main.send(message('toast'));
-      expect(result).toMatchObject({ ok: false, error: { code: 'unknown', message: expect.stringContaining("didn't confirm the invitation") } });
-      expect(li.fixture.invites).toHaveLength(before);
-    });
-
-    it('explains people it cannot invite', async () => {
-      expect(await li.main.send(message('celeb'))).toMatchObject({ ok: false, error: { code: 'invalid_recipient', message: expect.stringContaining("doesn't offer Connect") } });
-      expect(await li.main.send(message('ada'))).toMatchObject({ ok: false, error: { code: 'invalid_recipient', message: expect.stringContaining('already connected') } });
-      expect(await li.main.send(message('nobody'))).toMatchObject({ ok: false, error: { code: 'invalid_recipient', message: expect.stringContaining("wasn't found") } });
-      expect(await li.main.send(message(null))).toMatchObject({ ok: false, error: { code: 'invalid_recipient' } });
-      expect(await li.main.send(message('ghost'))).toMatchObject({ ok: false, error: { code: 'invalid_recipient', message: expect.stringContaining("wasn't found") } });
-    });
-
-    it('treats a page without Connect as a channel problem, not a verdict on the person', async () => {
-      const invite = await li.main.send(message('odd'));
-      expect(invite).toMatchObject({ ok: false, error: { code: 'unknown', message: expect.stringContaining('LinkedIn may have changed its page') } });
-      const dm = await li.main.send(message('odd', { kind: 'follow_up' }));
-      expect(dm).toMatchObject({ ok: false, error: { code: 'unknown' } });
-      // No raw browser wording reaches the person.
-      for (const r of [invite, dm]) expect(JSON.stringify(r)).not.toMatch(/locator|Timeout|waiting for/i);
-    });
-
-    it('stops with checkpoint when LinkedIn asks for a security check', async () => {
-      const result = await li.main.send(message('blocked'));
-      expect(result).toMatchObject({ ok: false, error: { code: 'checkpoint' } });
-    });
-
-    it('stops with weekly_limit when the limit appears on Connect or after Send', async () => {
-      const before = li.fixture.invites.length;
-      expect(await li.main.send(message('capped'))).toMatchObject({ ok: false, error: { code: 'weekly_limit' } });
-      expect(await li.main.send(message('limited'))).toMatchObject({ ok: false, error: { code: 'weekly_limit' } });
-      expect(li.fixture.invites).toHaveLength(before);
     });
   });
 
