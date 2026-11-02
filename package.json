@@ -14,6 +14,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
     "dev:web": "vite",
     "test:mail": "bash scripts/mail-it.sh",
     "start": "node --disable-warning=ExperimentalWarning --import tsx src/server/main.ts",
@@ -23,7 +24,8 @@
     "desktop:prepare": "npm run build && npm run desktop:compile",
     "desktop:dev": "npm run desktop:prepare && electron .",
     "desktop:build": "npm run desktop:prepare && electron-builder --dir",
-    "desktop:dist": "npm run desktop:prepare && electron-builder"
+    "desktop:dist": "npm run desktop:prepare && electron-builder",
+    "start:dist": "node --disable-warning=ExperimentalWarning dist/server/main.js"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
