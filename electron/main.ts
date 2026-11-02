@@ -53,6 +53,17 @@ function writePrefs(patch: Prefs): void {
   }
 }
 
+/** From package.json next to dist/: `electron dist/electron/main.js` has no app folder of its own for Electron to read it from. */
+function appVersion(): string {
+  try {
+    const version = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version?: unknown }).version;
+    if (typeof version === 'string') return version;
+  } catch {
+    // fall through
+  }
+  return app.getVersion();
+}
+
 // ---- the window ----------------------------------------------------------------------------------------------
 
 function showWindow(): void {
@@ -238,7 +249,7 @@ function loginDeps(): LoginDeps {
 function startIpc(running: RunningServer): void {
   const fromOurWindow = (sender: Electron.WebContents) => !!win && !win.isDestroyed() && sender === win.webContents;
   ipcMain.on('callum:version', (event) => {
-    event.returnValue = app.getVersion();
+    event.returnValue = appVersion();
   });
   ipcMain.on('callum:platform', (event) => {
     event.returnValue = process.platform;

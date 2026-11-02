@@ -7,8 +7,8 @@ import { join } from 'node:path';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 
 const MAIN = 'dist/electron/main.js';
-// A root user (a container, CI) cannot use Chromium's sandbox.
-const flags = process.getuid?.() === 0 ? ['--no-sandbox', '--disable-gpu'] : ['--disable-gpu'];
+// A root user (a container) and most CI machines cannot use Chromium's sandbox; there is no display or graphics card either.
+const flags = ['--disable-gpu', ...(process.getuid?.() === 0 || process.env.CI ? ['--no-sandbox'] : [])];
 
 let userData: string;
 let env: Record<string, string>;

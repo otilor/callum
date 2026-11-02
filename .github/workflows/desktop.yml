@@ -1,0 +1,80 @@
+# The desktop app: tested on every push, and built for macOS, Windows and Linux when a version tag (v*) is pushed.
+# Kept apart from ci.yml so the two can change without touching each other.
+name: Desktop
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    name: Desktop app on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the web app and compile the desktop shell
+        run: npm run desktop:prepare
+      - name: Start the real app and check it
+        run: xvfb-run -a npx playwright test e2e/desktop.spec.ts
+        env:
+          CI: "true"
+      - name: Package the unpacked app
+        run: npx electron-builder --dir
+      - name: Upload the report when it fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-test-results
+          path: test-results
+
+  release:
+    name: Installer for ${{ matrix.name }}
+    # Only for a version tag, and only once the app starts.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: desktop
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            files: release/*.dmg
+          - name: Windows
+            os: windows-latest
+            files: release/*.exe
+          - name: Linux
+            os: ubuntu-latest
+            files: release/*.AppImage
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the installer
+        run: npm run desktop:dist
+        env:
+          # The builds are not signed yet (see the README).
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Attach it to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.files }}

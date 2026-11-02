@@ -16,6 +16,8 @@ extraResources:
   - from: build/icon.png
     to: icon.png
 asar: true
+# Installers are attached to the GitHub release by CI, not published by electron-builder.
+publish: null
 mac:
   category: public.app-category.productivity
   icon: build/icon.png
