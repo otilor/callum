@@ -8,6 +8,34 @@ export interface ImportResult {
   skipped: Skipped[];
   /** People already in Callum who gained a handle (email, LinkedIn or X) from a skipped row. */
   updated: Person[];
+  /** Dry run only: for each person in `added`, the place of their row in the list given. */
+  addedAt?: number[];
+}
+
+export interface ImportOptions {
+  known?: Set<string>;
+  /**
+   * Work out who would be added and who skipped, and write nothing. Added people come back with `id: 0`, and the
+   * project may be null (a project that does not exist yet): then everyone Callum already has is in another project.
+   */
+  dryRun?: boolean;
+  /** The time stamped on the people of a dry run. */
+  at?: string;
+}
+
+const NO_PROJECT = 0;
+
+/** The person a dry run reports for a row: what `insertPerson` would store, with no id. */
+export function sketchPerson(lead: PersonLead, name: string, projectId: number, at: string): Person {
+  return {
+    id: 0, projectId, name, firstName: lead.firstName ?? (name.split(/\s+/)[0] || name),
+    company: lead.company ?? null, role: lead.role ?? null,
+    email: normalizeEmail(lead.email), linkedinUrl: normalizeLinkedinUrl(lead.linkedinUrl), xHandle: normalizeXHandle(lead.xHandle),
+    timezone: lead.timezone ?? null, channel: lead.channel ?? null, stage: lead.stage ?? 'stranger', status: lead.status ?? 'active',
+    touches: lead.touches ?? 0, lastTouchAt: null, nextTouchAt: null, linkedinState: lead.linkedinState ?? 'none', invitedAt: null,
+    snoozedUntil: null, restUntil: null, badge: null, replyKind: null, suggested: null, draft: null, lastInbound: null, repliedAt: null,
+    source: lead.source, note: lead.note ?? null, createdAt: at, updatedAt: at,
+  };
 }
 
 /**
@@ -15,8 +43,11 @@ export interface ImportResult {
  * already written to their email (`known`), when they asked to stop (in any project), when they are already in this
  * project, or when they are already in another project. A batch is all or nothing.
  */
-export function importPeople(repo: Repo, projectId: number, people: PersonLead[], opts: { known?: Set<string> } = {}): ImportResult {
-  if (!repo.getProject(projectId)) throw new Error('No such project');
+export function importPeople(repo: Repo, projectId: number | null, people: PersonLead[], opts: ImportOptions = {}): ImportResult {
+  const dry = opts.dryRun === true;
+  if (projectId === null ? !dry : !repo.getProject(projectId)) throw new Error('No such project');
+  const here = projectId ?? NO_PROJECT;
+  const stamp = opts.at ?? new Date(0).toISOString();
   const known = new Set<string>();
   for (const e of opts.known ?? []) {
     const n = normalizeEmail(e);
@@ -31,10 +62,12 @@ export function importPeople(repo: Repo, projectId: number, people: PersonLead[]
     };
     const updated = new Map<number, Person>();
     const added: Person[] = [];
+    const addedAt: number[] = [];
     const skipped: Skipped[] = [];
     // A repeat may carry a handle Callum does not have yet. Keeping it means a stop, or a later list that knows the
     // person only by that handle, still finds them. Never overwrites, and never takes a handle someone else holds.
     const learnHandles = (person: Person, lead: PersonLead) => {
+      if (dry) return;
       const patch: Partial<Person> = {};
       const email = normalizeEmail(lead.email);
       const linkedin = normalizeLinkedinUrl(lead.linkedinUrl);
@@ -61,7 +94,7 @@ export function importPeople(repo: Repo, projectId: number, people: PersonLead[]
       return name;
     };
 
-    for (const { row, ...lead } of people) {
+    for (const [place, { row, ...lead }] of people.entries()) {
       const at = row === undefined ? {} : { row };
       const name = lead.name.trim() || fallbackName(lead) || '';
       const keys = identityKeys(lead);
@@ -80,16 +113,17 @@ export function importPeople(repo: Repo, projectId: number, people: PersonLead[]
         const only = ids.size === 1 ? matches[0]! : null;
         // The person gains the handles this row adds when they are stopped (so the stop holds on every handle) or
         // in this project. Someone in another project is left alone. A row that links two people changes neither.
-        if (only && (only.status === 'stopped' || only.projectId === projectId)) learnHandles(only, lead);
+        if (only && (only.status === 'stopped' || only.projectId === here)) learnHandles(only, lead);
         if (matches.some((m) => m.status === 'stopped')) skipped.push({ name, reason: 'stopped', ...at });
-        else if (matches.some((m) => m.projectId === projectId)) skipped.push({ name, reason: 'duplicate', ...at });
+        else if (matches.some((m) => m.projectId === here)) skipped.push({ name, reason: 'duplicate', ...at });
         else skipped.push({ name, reason: 'other_project', projectName: projectName(matches[0]!.projectId), ...at });
         continue;
       }
-      const person = repo.insertPerson({ ...lead, name, projectId });
+      const person = dry ? sketchPerson(lead, name, here, stamp) : repo.insertPerson({ ...lead, name, projectId: here });
       remember(person);
       added.push(person);
+      addedAt.push(place);
     }
-    return { added, skipped, updated: [...updated.values()] };
+    return { added, skipped, updated: [...updated.values()], ...(dry ? { addedAt } : {}) };
   });
 }

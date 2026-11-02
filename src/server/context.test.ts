@@ -34,6 +34,15 @@ describe('createCtx', () => {
     expect(createCtx({ db: openDb(':memory:'), env: { APOLLO_API_KEY: '  ' } }).apollo).toBeNull();
   });
 
+  it('reads the Apollo key stored in Your Callum, and prefers the environment', () => {
+    const db = openDb(':memory:');
+    const stored = createCtx({ db, env: {} });
+    stored.repo.setChannelSecret('apollo', { key: 'from-the-app' });
+    expect(createCtx({ db, env: {} }).apollo).toBeInstanceOf(ApolloSource);
+    expect(createCtx({ db, env: { APOLLO_API_KEY: 'from-env' } }).apollo).toBeInstanceOf(ApolloSource);
+    expect(createCtx({ db: openDb(':memory:'), env: {} }).apollo).toBeNull();
+  });
+
   it('uses the writer it is given, and the template writer without a key', () => {
     const writer = new TemplateWriter();
     expect(createCtx({ db: openDb(':memory:'), writer, env: {} }).writer).toBe(writer);

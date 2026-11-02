@@ -345,3 +345,52 @@ describe('importPeople', () => {
     expect(repo.listPeople()).toEqual([]);
   });
 });
+
+describe('importPeople as a dry run', () => {
+  const leads: PersonLead[] = [
+    { name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' },
+    { name: 'Femi Ade', email: 'femi@ledgerly.io', source: 'csv' },
+    { name: 'Nobody', source: 'csv' },
+    { name: 'Kemi Again', email: 'KEMI@okopay.com', source: 'csv' },
+    { name: 'Tunde Bello', email: 'tunde@sent.com', source: 'csv' },
+  ];
+
+  it('reports the same people as a real import and writes nothing', () => {
+    const dry = importPeople(repo, projectId, leads, { dryRun: true, known: new Set(['tunde@sent.com']) });
+    expect(repo.listPeople()).toEqual([]);
+    expect(dry.added.map((p) => [p.id, p.name, p.email, p.projectId, p.stage])).toEqual([[0, 'Kemi Eze', 'kemi@okopay.com', projectId, 'stranger'], [0, 'Femi Ade', 'femi@ledgerly.io', projectId, 'stranger']]);
+    expect(dry.addedAt).toEqual([0, 1]);
+    expect(dry.skipped.map((s) => `${s.name}:${s.reason}`)).toEqual(['Nobody:no_channel', 'Kemi Again:duplicate', 'Tunde Bello:known']);
+    const real = importPeople(repo, projectId, leads, { known: new Set(['tunde@sent.com']) });
+    expect(real.added.map((p) => p.name)).toEqual(dry.added.map((p) => p.name));
+    expect(real.skipped).toEqual(dry.skipped);
+    expect(real.addedAt).toBeUndefined();
+  });
+
+  it('does not teach people the handles of a repeat', () => {
+    const kemi = repo.insertPerson({ projectId, name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' });
+    const dry = importPeople(repo, projectId, [{ name: 'Kemi Eze', email: 'kemi@okopay.com', linkedinUrl: 'linkedin.com/in/kemi', source: 'csv' }], { dryRun: true });
+    expect(dry.skipped).toEqual([{ name: 'Kemi Eze', reason: 'duplicate' }]);
+    expect(dry.updated).toEqual([]);
+    expect(repo.getPerson(kemi.id)?.linkedinUrl).toBeNull();
+  });
+
+  it('works for a project that does not exist yet: everyone Callum has is in another project', () => {
+    repo.insertPerson({ projectId, name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' });
+    const stopped = repo.insertPerson({ projectId, name: 'Ruth Adeleke', email: 'ruth@x.com', source: 'csv' });
+    repo.updatePerson(stopped.id, { status: 'stopped' });
+    const dry = importPeople(repo, null, [
+      { name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' },
+      { name: 'Ruth Adeleke', email: 'ruth@x.com', source: 'csv' },
+      { name: 'New One', email: 'new@x.com', source: 'csv' },
+      { name: 'New One Twice', email: 'new@x.com', source: 'csv' },
+    ], { dryRun: true });
+    expect(dry.added.map((p) => p.name)).toEqual(['New One']);
+    expect(dry.skipped).toEqual([
+      { name: 'Kemi Eze', reason: 'other_project', projectName: 'Payroll' },
+      { name: 'Ruth Adeleke', reason: 'stopped' },
+      { name: 'New One Twice', reason: 'duplicate' },
+    ]);
+    expect(() => importPeople(repo, null, [{ name: 'A', email: 'a@x.com', source: 'csv' }])).toThrow('No such project');
+  });
+});

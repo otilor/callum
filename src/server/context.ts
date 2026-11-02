@@ -16,7 +16,7 @@ export interface Ctx {
   outbox: Outbox;
   writer: Writer;
   adapters: AdapterRegistry;
-  /** Set when APOLLO_API_KEY is. */
+  /** Set when APOLLO_API_KEY is, or when a key was stored in Your Callum. */
   apollo: ApolloSource | null;
   demo: boolean;
   dataDir: string;
@@ -39,7 +39,7 @@ export function createCtx(opts: CtxOptions): Ctx {
   const dataDir = opts.dataDir ?? (env.CALLUM_DATA_DIR?.trim() || './data');
   const repo = new Repo(opts.db, () => clock.now().toISOString());
   const bus = new Bus();
-  const apolloKey = env.APOLLO_API_KEY?.trim();
+  const apolloKey = env.APOLLO_API_KEY?.trim() || repo.getChannelSecret('apollo')?.key?.trim();
   return {
     repo,
     clock,

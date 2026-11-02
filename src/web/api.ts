@@ -146,3 +146,18 @@ export const api = {
   exportJsonUrl: (projectId?: number) => `/api${withQuery('/export.json', { projectId })}`,
   exportCsvUrl: (projectId?: number) => `/api${withQuery('/export.csv', { projectId })}`,
 };
+
+// Task 18: adding people, describing them, and the voice of a project that does not exist yet
+import type { AddCommit, AddPreview, Described } from '../shared/types.js';
+
+export interface HelloSample { body: string; to: { name: string; company: string | null } }
+export interface PreviewBody { csv?: string; csvBase64?: string; paste?: string; linkedinSearchUrl?: string; projectId?: number | null }
+
+export const peopleApi = {
+  preview: (body: PreviewBody) => post<AddPreview>('/people/preview', body),
+  commit: (body: { batchId: string; projectId?: number; drop?: string[] }) => post<AddCommit>('/people/commit', body),
+  undo: (batchId: string) => post<{ removed: number }>('/people/undo', { batchId }),
+  describe: (body: { query: string; filters?: string[]; projectId?: number | null }) => post<Described>('/people/describe', body),
+  connectApollo: (key: string) => post<{ connected: true }>('/apollo/connect', { key }),
+  sample: (body: { offer: string; tone: Tone; batchId?: string; key?: string }) => post<HelloSample>('/people/sample', body),
+};

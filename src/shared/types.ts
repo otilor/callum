@@ -95,3 +95,13 @@ export type AskAction =
   | { kind: 'switch_channel'; label: string; args: { personIds: number[]; channel: Channel } };
 export interface AskAnswer { text: string; personIds: number[]; action: AskAction | null }
 export type Scope = 'people' | 'outbox' | 'incidents' | 'settings' | 'channels' | 'projects';
+
+// Task 18: adding people
+export type SkipReason = 'duplicate' | 'known' | 'stopped' | 'no_channel' | 'other_project';
+/** People skipped for one reason, already worded: `2 already in Callum`. */
+export interface SkipGroup { reason: SkipReason; line: string; names: string[]; projectName?: string }
+/** A person on a preview. `key` names them in `drop` when the user says Not a fit. Apollo rows carry the id Apollo knows them by. */
+export type PreviewPerson = NewPerson & { key: string; apolloId?: string; hasEmail?: boolean };
+export interface AddPreview { batchId: string; added: PreviewPerson[]; groups: SkipGroup[] }
+export interface AddCommit { added: Person[]; line: string; groups: SkipGroup[]; creditsUsed?: number; warning?: string }
+export interface Described { batchId: string | null; total: number; people: PreviewPerson[]; narrow: string[] | null; line: string }

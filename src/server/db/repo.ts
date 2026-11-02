@@ -65,6 +65,9 @@ function normalizeHandles<T extends { email?: string | null; linkedinUrl?: strin
   return out;
 }
 
+/** The rows of `channel_secrets`: one per channel, and the Apollo key. */
+export type SecretKey = Channel | 'apollo';
+
 export class DuplicateProjectName extends Error {
   constructor(name: string) {
     super(`You already have a project called ${name}. Pick another name.`);
@@ -194,12 +197,12 @@ export class Repo {
     return next;
   }
 
-  getChannelSecret(ch: Channel): Record<string, string> | null {
+  getChannelSecret(ch: SecretKey): Record<string, string> | null {
     const row = this.db.prepare('SELECT data FROM channel_secrets WHERE channel = ?').get(ch) as { data: string } | undefined;
     return row ? (JSON.parse(row.data) as Record<string, string>) : null;
   }
 
-  setChannelSecret(ch: Channel, data: Record<string, string> | null): void {
+  setChannelSecret(ch: SecretKey, data: Record<string, string> | null): void {
     if (data === null) {
       this.db.prepare('DELETE FROM channel_secrets WHERE channel = ?').run(ch);
       return;
@@ -261,6 +264,11 @@ export class Repo {
     inList('status', filter.status);
     inList('stage', filter.stage);
     return { sql: where.length ? ` WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  /** Removes a person with their messages and outbox items. */
+  deletePerson(id: number): void {
+    this.db.prepare('DELETE FROM people WHERE id = ?').run(id);
   }
 
   findPersonByHandle(h: { email?: string | null; linkedinUrl?: string | null; xHandle?: string | null }): Person | null {
