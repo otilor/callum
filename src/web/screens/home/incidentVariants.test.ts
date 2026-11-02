@@ -225,3 +225,32 @@ describe('faceReactions', () => {
     expect(waitingOn([person(1, 'Ada One')], 'email')).toEqual([]);
   });
 });
+
+describe('the kinds the runner opens on its own', () => {
+  it('an X or LinkedIn sign-out is a signed-out card that reconnects that channel', () => {
+    const x = incidentVariant(incident(1, 'x_signed_out', { channel: 'x', message: 'X signed Callum out. 3 messages are waiting and nothing was lost.' }), appState(), NOW);
+    expect(x).toMatchObject({ key: 'signed_out', title: 'X signed Callum out', primary: { label: 'Reconnect X', action: { kind: 'reconnect', channel: 'x' } } });
+    const li = incidentVariant(incident(2, 'linkedin_signed_out', { channel: 'linkedin', message: 'LinkedIn signed Callum out. 1 message is waiting and nothing was lost.' }), appState(), NOW);
+    expect(li).toMatchObject({ key: 'signed_out', title: 'LinkedIn signed Callum out', primary: { action: { kind: 'reconnect', channel: 'linkedin' } } });
+  });
+
+  it('holds those channels\' people still, like the other sign-outs', () => {
+    const waiting = person(1, 'Ada One', { channel: 'x', nextTouchAt: '2026-11-04T08:00:00.000Z' });
+    const reactions = faceReactions(appState({ people: [waiting], incidents: [incident(1, 'x_signed_out', { channel: 'x', message: 'X signed Callum out.' })] }), null, NOW);
+    expect(reactions.get(1)).toMatchObject({ mark: 'pause', still: true });
+  });
+
+  it('a reply Callum could not read opens the person, or just says Okay when there is no one to open', () => {
+    const kemi = person(1, 'Kemi Eze');
+    const named = incidentVariant(incident(1, 'reply_unread', { message: "Callum couldn't read a reply from Kemi. It's on your dock.", personId: 1 }), appState({ people: [kemi] }), NOW);
+    expect(named).toMatchObject({ key: 'reply_unread', title: "Callum couldn't read a reply from Kemi", primary: { label: "Open Kemi's conversation", action: { kind: 'open_person', personId: 1 } } });
+    const unnamed = incidentVariant(incident(2, 'reply_unread', { message: "Callum couldn't read a reply on email. Check it by hand." }), appState(), NOW);
+    expect(unnamed?.primary).toEqual({ label: 'Okay', action: { kind: 'dismiss' } });
+  });
+
+  it('a channel that is not answering offers to connect it again and clears itself', () => {
+    const v = incidentVariant(incident(1, 'not_answering', { channel: 'linkedin', message: "LinkedIn isn't answering. Callum will keep trying." }), appState(), NOW);
+    expect(v).toMatchObject({ key: 'not_answering', title: "LinkedIn isn't answering", primary: { label: 'Connect LinkedIn again', action: { kind: 'reconnect', channel: 'linkedin' } }, secondary: { label: 'Okay' } });
+    expect(v?.lines[1]?.text).toContain('clears itself');
+  });
+});

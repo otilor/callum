@@ -2,8 +2,9 @@ import { chmodSync, existsSync, mkdtempSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AppState } from '../shared/types.js';
+import { Runner } from './runner/runner.js';
 import { startServer, type RunningServer } from './main.js';
 
 const running: RunningServer[] = [];
@@ -43,6 +44,42 @@ describe('startServer', () => {
     await new Promise<void>((resolve, reject) => {
       const probe = createServer().once('error', reject).listen(port, '127.0.0.1', () => probe.close(() => resolve()));
     });
+  });
+
+  it('waits for the runner for at most 5 seconds when it closes', async () => {
+    const stop = vi.spyOn(Runner.prototype, 'stop');
+    try {
+      const { server } = await start();
+      await server.close();
+      expect(stop).toHaveBeenCalledTimes(1);
+      expect(stop).toHaveBeenCalledWith({ timeoutMs: 5000 });
+    } finally {
+      stop.mockRestore();
+    }
+  });
+
+  it('puts a demo Callum with nothing in it in front of a scene, and leaves a used one alone', async () => {
+    const { server, dataDir } = await start();
+    expect(server.ctx.repo.listProjects().length).toBeGreaterThan(0);
+    expect(server.ctx.repo.getSettings().onboarded).toBe(false);
+    server.ctx.repo.updateSettings({ senderName: 'Ada Obi' });
+    const projects = server.ctx.repo.listProjects().length;
+    await server.close();
+    const again = await start({ dataDir });
+    expect(again.server.ctx.repo.listProjects()).toHaveLength(projects);
+    expect(again.server.ctx.repo.getSettings().senderName).toBe('Ada Obi');
+  });
+
+  it('starts a real (not demo) Callum empty', async () => {
+    const { server } = await start({ env: {} });
+    expect(server.ctx.repo.listProjects()).toEqual([]);
+    expect(server.ctx.demo).toBe(false);
+  });
+
+  it('keeps the morning scene for CALLUM_DEMO_SCENE=morning', async () => {
+    const { server } = await start({ env: { CALLUM_DEMO: '1', CALLUM_DEMO_SCENE: 'morning' } });
+    expect(server.ctx.repo.getSettings().onboarded).toBe(true);
+    expect(server.ctx.repo.listPeople({ status: ['waiting'] }).length).toBeGreaterThan(0);
   });
 
   it('closes even while a page is listening for live events', async () => {

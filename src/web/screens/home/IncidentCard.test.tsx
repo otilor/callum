@@ -215,6 +215,88 @@ describe('IncidentCards: the other kinds', () => {
   });
 });
 
+describe('IncidentCards: the kinds the runner opens on its own', () => {
+  it('an X or LinkedIn sign-out offers to connect that channel again', async () => {
+    const { user } = setup(
+      appState({
+        channels: [channel('email', 'connected'), channel('linkedin', 'error'), channel('x', 'error')],
+        incidents: [
+          incident(1, 'x_signed_out', INCIDENT_COPY.x_signed_out(2)),
+          incident(2, 'linkedin_signed_out', INCIDENT_COPY.linkedin_signed_out(1)),
+        ],
+      }),
+    );
+    expect(screen.getByRole('heading', { name: 'X signed Callum out' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'LinkedIn signed Callum out' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reconnect X' }));
+    expect(onReconnect).toHaveBeenLastCalledWith('x');
+    await user.click(screen.getByRole('button', { name: 'Reconnect LinkedIn' }));
+    expect(onReconnect).toHaveBeenLastCalledWith('linkedin');
+  });
+
+  it('a channel that is not answering offers to connect it again, or Okay', async () => {
+    const { user } = setup(appState({ incidents: [incident(1, 'not_answering', INCIDENT_COPY.not_answering('Email'))] }));
+    expect(screen.getByRole('heading', { name: "Email isn't answering" })).toBeInTheDocument();
+    expect(screen.getByText('Callum keeps trying. If it stays quiet, connect it again.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Connect email again' }));
+    expect(onReconnect).toHaveBeenCalledWith('email');
+    await user.click(screen.getByRole('button', { name: 'Okay' }));
+    expect(screen.queryByRole('heading', { name: "Email isn't answering" })).not.toBeInTheDocument();
+  });
+
+  it('a reply Callum could not read opens the conversation', async () => {
+    const onOpenPerson = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ToastProvider>
+        <IncidentCards
+          state={appState({ people: [person(1, 'Kemi')], incidents: [incident(1, 'reply_unread', INCIDENT_COPY.reply_unread('Kemi'), { personId: 1 })] })}
+          refresh={refresh}
+          onReconnect={onReconnect}
+          onOpenPerson={onOpenPerson}
+        />
+      </ToastProvider>,
+    );
+    expect(screen.getByRole('heading', { name: "Callum couldn't read a reply from Kemi" })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: "Open Kemi's conversation" }));
+    expect(onOpenPerson).toHaveBeenCalledWith(1);
+  });
+
+  it('a reply on a channel with no name to open is told once and put away with Okay', async () => {
+    const { user } = setup(appState({ incidents: [incident(1, 'reply_unread', INCIDENT_COPY.reply_unread_unknown('email'))] }));
+    expect(screen.getByText('Check that channel by hand, then press Okay.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Okay' }));
+    expect(screen.queryByRole('region', { name: 'Needs your attention' })).not.toBeInTheDocument();
+  });
+
+  it('a reply held back by the mailbox limit is only told, with nothing to retry', async () => {
+    setup(
+      appState({
+        people: [person(1, 'Kemi')],
+        incidents: [incident(1, 'send_failed', INCIDENT_COPY.send_deferred('Kemi', 'tomorrow at 9:00'), { personId: 1, detail: JSON.stringify({ outboxId: 4, deferred: true }) })],
+      }),
+    );
+    expect(screen.getByRole('heading', { name: 'Your reply to Kemi is waiting' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Okay' })).toBeInTheDocument();
+  });
+
+  it('shows only the incidents it is asked to', () => {
+    render(
+      <ToastProvider>
+        <IncidentCards
+          state={appState({ incidents: [incident(1, 'not_answering', 'a'), incident(2, 'x_limit', 'b')] })}
+          refresh={refresh}
+          onReconnect={onReconnect}
+          include={(i) => i.kind === 'x_limit'}
+        />
+      </ToastProvider>,
+    );
+    expect(screen.queryByRole('heading', { name: "Email isn't answering" })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'X stopped taking messages' })).toBeInTheDocument();
+  });
+});
+
 describe('stillChannels', () => {
   it('lists the channels that are paused or signed out, so the river holds their people still', () => {
     const state = appState({ channels: [channel('email', 'connected'), channel('linkedin', 'paused'), channel('x', 'error')] });
