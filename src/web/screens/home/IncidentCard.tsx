@@ -62,6 +62,15 @@ function bounceCount(incident: Incident): number {
   }
 }
 
+/** A reply the mailbox's daily limit held back: it goes by itself, so the notice only needs reading. */
+function isDeferred(incident: Incident): boolean {
+  try {
+    return (JSON.parse(incident.detail ?? 'null') as { deferred?: unknown } | null)?.deferred === true;
+  } catch {
+    return false;
+  }
+}
+
 function outboxIdOf(incident: Incident): number | null {
   try {
     const d = JSON.parse(incident.detail ?? 'null') as { outboxId?: unknown } | null;
@@ -86,12 +95,20 @@ function titleOf(incident: Incident, state: AppState): string {
       const subject = /^(.*?) signed Callum out/.exec(incident.message)?.[1];
       return subject ? `${subject} signed Callum out` : `${CHANNEL_NAME[incident.channel]} needs to be connected again`.replace(/^./, (c) => c.toUpperCase());
     }
+    case 'x_signed_out': return 'X signed Callum out';
+    case 'linkedin_signed_out': return 'LinkedIn signed Callum out';
+    case 'not_answering': return `${CHANNEL_NAME[incident.channel].replace(/^./, (c) => c.toUpperCase())} isn't answering`;
+    case 'reply_unread': {
+      const who = state.people.find((p) => p.id === incident.personId);
+      return who ? `Callum couldn't read a reply from ${who.firstName}` : "Callum couldn't read a reply";
+    }
     case 'bounces': {
       const n = bounceCount(incident);
       return n > 0 ? `${n} ${n === 1 ? 'email' : 'emails'} bounced` : 'Some emails bounced';
     }
     case 'send_failed': {
       const who = state.people.find((p) => p.id === incident.personId);
+      if (isDeferred(incident)) return who ? `Your reply to ${who.firstName} is waiting` : 'Your reply is waiting';
       return who ? `Your reply to ${who.firstName} didn't go out` : "Your reply didn't go out";
     }
   }
@@ -104,7 +121,11 @@ function nextStepOf(incident: Incident): string {
       const provider = signedOutProvider(incident);
       return incident.channel === 'email' ? `Reconnect ${provider ?? 'your email'} to send them.` : `Connect ${CHANNEL_NAME[incident.channel]} again to carry on.`;
     }
-    case 'send_failed': return 'Try again, or copy it and send it another way.';
+    case 'x_signed_out':
+    case 'linkedin_signed_out': return `Connect ${CHANNEL_NAME[incident.channel]} again to carry on.`;
+    case 'not_answering': return 'Callum keeps trying. If it stays quiet, connect it again.';
+    case 'reply_unread': return incident.personId === null ? 'Check that channel by hand, then press Okay.' : 'Open the conversation and read it yourself.';
+    case 'send_failed': return isDeferred(incident) ? 'Nothing to do. It goes by itself.' : 'Try again, or copy it and send it another way.';
     default: return 'Nothing to do.';
   }
 }
@@ -346,7 +367,7 @@ export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss,
   }
 
   // ---- email (or another channel) signed out -------------------------------------------------------------------------
-  if (incident.kind === 'mailbox_signed_out') {
+  if (incident.kind === 'mailbox_signed_out' || incident.kind === 'x_signed_out' || incident.kind === 'linkedin_signed_out') {
     const provider = signedOutProvider(incident);
     const label = incident.channel === 'email' ? `Reconnect ${provider ?? 'email'}` : `Reconnect ${CHANNEL_NAME[incident.channel]}`;
     const people = waitingFor(state, incident.channel);
@@ -361,8 +382,38 @@ export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss,
     );
   }
 
+  // ---- a channel that has stopped answering ------------------------------------------------------------------------------
+  if (incident.kind === 'not_answering') {
+    const name = CHANNEL_NAME[incident.channel];
+    return (
+      <Shell incident={incident} state={state} now={at} titleId={titleId} paused={false}>
+        <Lines what={incident.message} next={nextStepOf(incident)} />
+        <div className="inc-actions">
+          <button type="button" className="inc-primary" onClick={() => onReconnect(incident.channel)}>Connect {name} again</button>
+          <button type="button" className="inc-quiet" onClick={() => onDismiss(incident.id)}>Okay</button>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ---- a reply Callum could not read -----------------------------------------------------------------------------------
+  if (incident.kind === 'reply_unread') {
+    const person = state.people.find((p) => p.id === incident.personId);
+    return (
+      <Shell incident={incident} state={state} now={at} titleId={titleId} paused={false}>
+        <Lines what={incident.message} next={nextStepOf(incident)} />
+        <div className="inc-actions">
+          {person && onOpenPerson ? (
+            <button type="button" className="inc-primary" onClick={() => onOpenPerson(person.id)}>Open {person.firstName}'s conversation</button>
+          ) : null}
+          <button type="button" className={person && onOpenPerson ? 'inc-quiet' : 'inc-primary'} onClick={() => onDismiss(incident.id)}>Okay</button>
+        </div>
+      </Shell>
+    );
+  }
+
   // ---- a reply that did not go ---------------------------------------------------------------------------------------
-  if (incident.kind === 'send_failed') {
+  if (incident.kind === 'send_failed' && !isDeferred(incident)) {
     const outboxId = outboxIdOf(incident);
     const item: OutboxItem | undefined = state.outbox.find((o) => o.id === outboxId);
     const person = state.people.find((p) => p.id === incident.personId);

@@ -26,14 +26,14 @@ export function person(id: number, first: string, over: Partial<Person> = {}): P
 }
 
 export function incident(id: number, kind: Incident['kind'], message: string, over: Partial<Incident> = {}): Incident {
-  const ch: Incident['channel'] = kind.startsWith('linkedin') ? 'linkedin' : kind === 'x_limit' ? 'x' : 'email';
+  const ch: Incident['channel'] = kind.startsWith('linkedin') ? 'linkedin' : kind === 'x_limit' || kind === 'x_signed_out' ? 'x' : 'email';
   return { id, channel: ch, kind, state: 'open', message, detail: null, personId: null, createdAt: AT, resolvedAt: null, ...over };
 }
 
 export function outboxItem(id: number, personId: number, over: Partial<OutboxItem> = {}): OutboxItem {
   return {
     id, personId, channel: 'email', kind: 'reply', subject: null, body: 'Hi Tomas, Thursday at 14:00 works well.', state: 'scheduled', origin: 'user',
-    sendAfter: AT, undoUntil: new Date(NOW.getTime() + 10_000).toISOString(), error: null, approvalCounted: false, createdAt: AT, updatedAt: AT,
+    sendAfter: AT, undoUntil: new Date(NOW.getTime() + 10_000).toISOString(), error: null, approvalCounted: false, claimedAt: null, detail: null, createdAt: AT, updatedAt: AT,
     ...over,
   };
 }
