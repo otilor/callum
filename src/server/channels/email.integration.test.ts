@@ -78,7 +78,7 @@ describe.skipIf(!process.env.CALLUM_MAIL_IT)('email adapter against GreenMail', 
   it('connect with a wrong password rejects with the sign-in message', async () => {
     const failure = createEmailAdapter(null).connect({ ...connectInput, password: 'wrong' });
     await expect(failure).rejects.toBeInstanceOf(ConnectError);
-    await expect(failure).rejects.toThrow(`Couldn't sign in to ${YOU}. Check the app password.`);
+    await expect(failure).rejects.toThrow("Your mail server didn't accept that password. Check the password and both server names.");
   }, 30_000);
 
   it('connect to a port nobody listens on says the server could not be reached', async () => {

@@ -183,7 +183,7 @@ describe('migration V3', () => {
     const settings = migrated.getSettings();
     expect(settings).toEqual<Settings>({
       senderName: 'Ada', senderEmail: 'ada@x.com', timezone: 'Africa/Lagos', onboarded: true,
-      pauseState: 'running', pausedUntil: null, notifications: true, currentProjectId: 1,
+      pauseState: 'running', pausedUntil: null, notifications: true, currentProjectId: 1, morningBrief: true,
     });
     const raw = JSON.parse((db.prepare('SELECT data FROM settings WHERE id = 1').get() as { data: string }).data) as Record<string, unknown>;
     for (const gone of ['offer', 'audience', 'tone', 'sample', 'calendarUrl', 'startedAt', 'approvalsLeft']) {

@@ -37,7 +37,7 @@ function project(id: number, over: Partial<Project> = {}): Project {
 
 function appState(projects: Project[], currentProjectId: number | null = null): AppState {
   return {
-    settings: { senderName: null, senderEmail: null, timezone: 'UTC', onboarded: true, currentProjectId, pauseState: 'running', pausedUntil: null, notifications: null },
+    settings: { senderName: null, senderEmail: null, timezone: 'UTC', onboarded: true, currentProjectId, pauseState: 'running', pausedUntil: null, notifications: null, morningBrief: true },
     projects, channels: [], people: [], outbox: [], incidents: [], demo: false,
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], nextSendAt: null, line: '' },
   };

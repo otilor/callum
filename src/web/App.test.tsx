@@ -26,7 +26,7 @@ function awaiting(): OutboxItem {
 
 function appState(over: Partial<AppState> = {}, settings: Partial<AppState['settings']> = {}): AppState {
   return {
-    settings: { senderName: null, senderEmail: null, timezone: 'UTC', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null, ...settings },
+    settings: { senderName: null, senderEmail: null, timezone: 'UTC', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null, morningBrief: true, ...settings },
     projects: [project()], channels: [], people: [], outbox: [], incidents: [], demo: false,
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], nextSendAt: null, line: 'All caught up. Callum keeps the river moving.' },
     ...over,

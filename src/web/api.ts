@@ -146,3 +146,11 @@ export const api = {
   exportJsonUrl: (projectId?: number) => `/api${withQuery('/export.json', { projectId })}`,
   exportCsvUrl: (projectId?: number) => `/api${withQuery('/export.csv', { projectId })}`,
 };
+
+// Task 16
+export interface MicrosoftSetup { configured: boolean; source: 'env' | 'settings' | null }
+/** The one-time Microsoft app registration that device-code sign-in needs. */
+export const channelSetup = {
+  microsoft: () => get<MicrosoftSetup>('/channels/email/microsoft/setup'),
+  saveMicrosoftClientId: (clientId: string) => post<MicrosoftSetup>('/channels/email/microsoft/setup', { clientId }),
+};

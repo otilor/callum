@@ -80,6 +80,12 @@ export interface Settings {
   currentProjectId: number | null;    // the project last viewed
   pauseState: 'running' | 'paused' | 'wrapped'; pausedUntil: string | null;
   notifications: boolean | null;
+  /** The 8:30 brief tap. On unless turned off. */
+  morningBrief: boolean;
+  /** The Microsoft app registration id, when set from Your Callum in the desktop app (the environment variable wins). */
+  microsoftClientId?: string | null;
+  /** Set by the desktop app: open Callum when the computer starts. */
+  openAtLogin?: boolean;
 }
 
 export interface PathStep { label: string; at: string | null; done: boolean }
