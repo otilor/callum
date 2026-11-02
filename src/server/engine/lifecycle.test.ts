@@ -82,10 +82,16 @@ describe('nextKind', () => {
       expect(kinds).toEqual(['hello', 'follow_up', 'follow_up', null]);
     }
   });
+  it('linkedin: someone already connected gets a hello, not an invitation, and then follow-ups, not a thank-you', () => {
+    expect(nextKind(person({ channel: 'linkedin', touches: 0, linkedinState: 'connected' }))).toBe('hello');
+    expect(nextKind(person({ channel: 'linkedin', touches: 1, linkedinState: 'connected' }))).toBe('follow_up');
+    expect(nextKind(person({ channel: 'linkedin', touches: 2, linkedinState: 'connected' }))).toBe('follow_up');
+    expect(nextKind(person({ channel: 'linkedin', touches: 3, linkedinState: 'connected' }))).toBeNull();
+  });
   it('linkedin: invite, wait for acceptance, thanks, follow-up', () => {
     expect(nextKind(person({ channel: 'linkedin', touches: 0 }))).toBe('invite');
     expect(nextKind(person({ channel: 'linkedin', touches: 1, linkedinState: 'invited' }))).toBeNull();
-    expect(nextKind(person({ channel: 'linkedin', touches: 1, linkedinState: 'connected' }))).toBe('thanks');
+    expect(nextKind(person({ channel: 'linkedin', touches: 1, linkedinState: 'connected', invitedAt: '2026-11-01T10:00:00.000Z' }))).toBe('thanks');
     expect(nextKind(person({ channel: 'linkedin', touches: 2, linkedinState: 'connected' }))).toBe('follow_up');
     expect(nextKind(person({ channel: 'linkedin', touches: 3, linkedinState: 'connected' }))).toBeNull();
   });
@@ -447,7 +453,7 @@ describe('nextTouchTime', () => {
     expect(nextTouchTime(person({ touches: 2, lastTouchAt: lagos(10, 10).toISOString() }), lagos(11, 10), tz)?.toISOString()).toBe(lagos(16, 10).toISOString());
   });
   it('linkedin: thank-you at the next 11:00 weekday, follow-up 5 days after it', () => {
-    const connected = person({ channel: 'linkedin', touches: 1, linkedinState: 'connected' });
+    const connected = person({ channel: 'linkedin', touches: 1, linkedinState: 'connected', invitedAt: lagos(2, 10).toISOString() });
     expect(nextTouchTime(connected, lagos(6, 15), tz)?.toISOString()).toBe(lagos(9, 11).toISOString());
     const thanked = { ...connected, touches: 2, lastTouchAt: lagos(4, 11).toISOString() };
     expect(nextTouchTime(thanked, lagos(5, 10), tz)?.toISOString()).toBe(lagos(9, 11).toISOString());

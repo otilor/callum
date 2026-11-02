@@ -218,15 +218,23 @@ export function createXAdapter(secret: Record<string, string> | null, deps: XDep
       if (!account) return { ok: false, error: { code: 'auth', message: SIGNED_OUT_MESSAGE } };
       const handle = normalizeXHandle(msg.to.xHandle);
       if (!handle) return { ok: false, error: { code: 'invalid_recipient', message: `${msg.to.name} has no X handle.` } };
+      // Looking the person up changes nothing on X, so a failure there is safe to try again.
+      let target: Awaited<ReturnType<typeof resolveUserId>>;
       try {
-        const target = await resolveUserId(account, handle, msg.to.name);
-        if ('error' in target) return { ok: false, error: target.error };
-        const res = await authed(account, 'POST', `/dm_conversations/with/${encodeURIComponent(target.id)}/messages`, { text: msg.body });
-        if (res.status === 200 || res.status === 201) return { ok: true, externalId: str(record(res.body.data).dm_event_id) };
-        return { ok: false, error: sendFailure(res, msg.to.name) };
+        target = await resolveUserId(account, handle, msg.to.name);
       } catch {
         return { ok: false, error: { code: 'temporary', message: "Couldn't reach X. Callum will try again." } };
       }
+      if ('error' in target) return { ok: false, error: target.error };
+      // The message itself may have been taken before the answer was lost, so a failure here is not tried again on its own.
+      let res: XResponse;
+      try {
+        res = await authed(account, 'POST', `/dm_conversations/with/${encodeURIComponent(target.id)}/messages`, { text: msg.body });
+      } catch {
+        return { ok: false, error: { code: 'unknown', message: "Callum lost the connection to X while sending, so the message may have gone. Check X before trying again." } };
+      }
+      if (res.status === 200 || res.status === 201) return { ok: true, externalId: str(record(res.body.data).dm_event_id) };
+      return { ok: false, error: sendFailure(res, msg.to.name) };
     },
 
     async poll(since) {

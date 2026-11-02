@@ -135,6 +135,37 @@ export function profileUrlFromHref(href: string): string | null {
   }
 }
 
+/**
+ * The member id (`ACoAAB...`) when a profile link is the member-id form, else null. LinkedIn reads the id's letter case,
+ * so it is taken from the link as written, before the address is made lower case.
+ */
+export function memberIdFromHref(href: string): string | null {
+  try {
+    const id = /^\/in\/(ACo[A-Za-z0-9_-]+)\/?$/.exec(new URL(href, 'https://www.linkedin.com').pathname)?.[1];
+    return id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Who a conversation's header link points to: the vanity address Callum stores, and the member-id form when that is what
+ * the link was. `resolve` opens a member-id profile and returns the vanity address it lands on (null if it cannot).
+ * When it cannot, the member-id address stands in, and still matches a person stored under it.
+ */
+export async function replyProfile(
+  href: string,
+  resolve: (memberId: string) => Promise<string | null>,
+): Promise<{ url: string; alt?: string } | null> {
+  const direct = profileUrlFromHref(href);
+  if (!direct) return null;
+  const memberId = memberIdFromHref(href);
+  if (!memberId) return { url: direct };
+  const vanity = await resolve(memberId).catch(() => null);
+  const resolved = vanity ? profileUrlFromHref(vanity) : null;
+  return resolved && resolved !== direct ? { url: resolved, alt: direct } : { url: direct };
+}
+
 /** "Head of Payments at Okopay" -> role and company; a headline with no company stays whole as the role. */
 export function splitHeadline(headline: string): { role: string | null; company: string | null } {
   const text = headline.replace(/\s+/g, ' ').trim();

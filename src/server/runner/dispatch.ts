@@ -1,5 +1,5 @@
 import type { Channel, Message, OutboxItem, OutKind, Person } from '../../shared/types.js';
-import type { ChannelError, OutboundMessage, SendResult } from '../channels/types.js';
+import { failureDetail, type ChannelError, type OutboundMessage, type SendResult } from '../channels/types.js';
 import type { Ctx } from '../context.js';
 import { findPlaceholders, placeholderMessage, withOptOut } from '../engine/guard.js';
 import { afterSent, afterUserSent, personTz } from '../engine/lifecycle.js';
@@ -8,7 +8,7 @@ import { addLocalDays, startOfLocalDay } from '../engine/time.js';
 import { isSendingTime, nextSendingTime } from '../engine/windows.js';
 import { heldBackPeople } from './inbound.js';
 import {
-  channelCheckpoint, channelRateLimited, channelSignedOut, handleBounce, replyDeferred, resolveSendFailed, sendFailed, sendUnsure,
+  alreadyConnected, channelCheckpoint, channelRateLimited, channelSignedOut, handleBounce, mailboxHeld, mailboxLimitReached, replyDeferred, resolveSendFailed, sendFailed, sendUnsure,
   weeklyInviteLimit,
 } from './incidents.js';
 
@@ -123,7 +123,7 @@ async function dispatchOne(ctx: Ctx, id: number, held: Set<number>, report: (err
   if (item.origin === 'auto' && held.has(person.id)) return false;
 
   const account = repo.getChannel(item.channel);
-  if (account.status !== 'connected') return false;
+  if (account.status !== 'connected' || (item.origin === 'auto' && mailboxHeld(account, now))) return false;
   const adapter = ctx.adapters.get(item.channel);
   if (!adapter) return false;
 
@@ -276,10 +276,14 @@ function onFailure(ctx: Ctx, item: OutboxItem, person: Person, error: ChannelErr
     case 'checkpoint':
       channelCheckpoint(ctx, item.channel);
       return;
+    case 'already_connected':
+      alreadyConnected(ctx, person.id);
+      return;
     case 'rate_limit':
       if (item.channel === 'x') {
         channelRateLimited(ctx, 'x', error.message);
       } else {
+        mailboxLimitReached(ctx, item.channel, item);
         const slot = tomorrow(ctx, person);
         repo.updateOutbox(item.id, { sendAfter: iso(slot) });
         // Callum's own messages just wait; the user's reply gets a notice with the time it goes.
@@ -291,7 +295,7 @@ function onFailure(ctx: Ctx, item: OutboxItem, person: Person, error: ChannelErr
   }
 
   if (item.origin === 'user') {
-    repo.updateOutbox(item.id, { state: 'failed', error: error.message });
+    repo.updateOutbox(item.id, { state: 'failed', error: error.message, detail: failureDetail(error) });
     sendFailed(ctx, item, person, error.message);
     ctx.bus.emit('outbox');
     return;
@@ -309,11 +313,11 @@ function onFailure(ctx: Ctx, item: OutboxItem, person: Person, error: ChannelErr
       handleBounce(ctx, person.id, item.channel);
       break;
     case 'temporary':
-      repo.updateOutbox(item.id, { sendAfter: iso(new Date(now.getTime() + RETRY_AFTER_MS)) });
+      repo.updateOutbox(item.id, { sendAfter: iso(new Date(now.getTime() + RETRY_AFTER_MS)), detail: failureDetail(error) });
       break;
     default:
       // Nobody knows whether it went. Sending it again could double a hello, so it waits for the user to look.
-      repo.updateOutbox(item.id, { state: 'failed', error: error.message });
+      repo.updateOutbox(item.id, { state: 'failed', error: error.message, detail: failureDetail(error) });
   }
   ctx.bus.emit('outbox');
 }

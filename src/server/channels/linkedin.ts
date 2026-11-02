@@ -6,7 +6,7 @@ import { findBrowser as findInstalledBrowser, installedChannel, type BrowserChoi
 import { systemClock, type Clock } from '../engine/clock.js';
 import {
   SELECTORS, clampNote, cleanName, hasWeeklyLimitText, headerNameCandidates, humanDelayMs, isBlockedStatus, isCheckpointUrl,
-  hasSendFailureText, isOwnSnippet, lastSender, isSignInUrl, isUnavailableProfileText, normalizeText, parseListTimestamp, profileUrlFromHref,
+  hasSendFailureText, isOwnSnippet, lastSender, isSignInUrl, isUnavailableProfileText, memberIdFromHref, normalizeText, parseListTimestamp, profileUrlFromHref, replyProfile,
   sameParticipant, snippetMatches, splitHeadline,
 } from './linkedin-detect.js';
 import { ConnectError, type ChannelAdapter, type ChannelError, type InboundEvent, type OutboundMessage, type SendResult } from './types.js';
@@ -378,7 +378,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
       }
       if (!connect) {
         // Only say something about the person when the page shows why; otherwise the page is not what Callum expects.
-        if (await locate(top, SELECTORS.messageButton)) throw new Stop(fail('invalid_recipient', `You're already connected to ${msg.to.name} on LinkedIn.`));
+        if (await locate(top, SELECTORS.messageButton)) throw new Stop(fail('already_connected', `You're already connected to ${msg.to.name} on LinkedIn.`));
         if (await locate(top, SELECTORS.followButton)) throw new Stop(fail('invalid_recipient', `LinkedIn doesn't offer Connect for ${msg.to.name}.`));
         throw unexpectedPage('find Connect');
       }
@@ -635,6 +635,8 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
 
     const events: InboundEvent[] = [];
     const checkpoint = (): InboundEvent => ({ type: 'checkpoint', at: now.toISOString() });
+    // Member-id addresses already looked up in this run.
+    const vanityOf = new Map<string, string | null>();
     /** The open conversation's other person and newest message. */
     const readPanel = async () => {
       const panel = (await locate(page, SELECTORS.threadPanel)) ?? page.locator('body');
@@ -725,13 +727,31 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
       });
       if (sender !== 'other') continue;
       const profile = await locate(page, SELECTORS.threadProfileLink, 3000);
-      const linkedinUrl = profileUrlFromHref((await profile?.getAttribute('href').catch(() => null)) ?? '');
-      if (!linkedinUrl) continue;
+      // A thread header can link to the member-id address (/in/ACo...). Stored people have the vanity one, so look it up.
+      let checkAgain = false;
+      const who = await replyProfile((await profile?.getAttribute('href').catch(() => null)) ?? '', async (memberId) => {
+        if (vanityOf.has(memberId)) return vanityOf.get(memberId) ?? null;
+        await open(page, `/in/${memberId}/`);
+        onList = false;
+        if (await blocker(page)) {
+          checkAgain = true;
+          return null;
+        }
+        const landed = page.url();
+        const vanity = profileUrlFromHref(landed) && !memberIdFromHref(landed) ? landed : null;
+        vanityOf.set(memberId, vanity);
+        return vanity;
+      });
+      if (checkAgain) return [...events, checkpoint()];
+      if (!who) continue;
       const key = `${threadId}:${hash(text)}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const name = cleanName(row.name);
-      events.push({ type: 'reply', from: { linkedinUrl, ...(name ? { name } : {}) }, text, at: at.toISOString(), externalId: key });
+      events.push({
+        type: 'reply', from: { linkedinUrl: who.url, ...(who.alt ? { linkedinAltUrl: who.alt } : {}), ...(name ? { name } : {}) },
+        text, at: at.toISOString(), externalId: key,
+      });
     }
     return events;
   }

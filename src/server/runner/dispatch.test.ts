@@ -662,7 +662,7 @@ describe('dispatchDue: a send is never repeated', () => {
     const other = reported.due(reported.person().id, 'hello');
     reported.adapters.email.results.push({ ok: false, error: { code: 'unknown', message: 'Something odd' } });
     await dispatchDue(reported.ctx);
-    expect(reported.ctx.repo.getOutbox(other)).toMatchObject({ state: 'failed', detail: null });
+    expect(reported.ctx.repo.getOutbox(other)).toMatchObject({ state: 'failed', detail: '{"maybeSent":true}' });
   });
 
   it('turns a claim left by a run that never finished into a failure marked maybe sent, on the next start', () => {

@@ -332,7 +332,7 @@ describe('handleInbound: an event that cannot be handled', () => {
     h.ctx.repo.updateInboundFailure(1, { attempts: MAX_INBOUND_ATTEMPTS - 1, error: 'x' });
     h.clock.advance(60 * 60_000);
     await retryFailedInbound(ctx);
-    expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([{ channel: 'linkedin', kind: 'reply_unread', personId: null, message: "Callum couldn't read a reply on LinkedIn. Check it by hand." }]);
+    expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([{ channel: 'linkedin', kind: 'reply_unread', personId: null, message: "Callum couldn't read a reply from https://www.linkedin.com/in/ghost on LinkedIn. Check it by hand." }]);
   });
 
   it('leaves someone who said stop stopped when it gives up on a later reply', async () => {

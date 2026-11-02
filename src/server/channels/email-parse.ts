@@ -116,6 +116,21 @@ export function isConnectionError(err: unknown): boolean {
   return CONNECTION_CODES.includes(code) || code.startsWith('ERR_SSL') || code.startsWith('ERR_TLS');
 }
 
+// Failures that can only happen before the message was handed over (DATA): the server was never reached, or the secure
+// connection was never set up. Anything that breaks later, or cannot say when, may have left the message half sent.
+const NEVER_REACHED = ['ECONNREFUSED', 'ENOTFOUND', 'EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN'];
+const SETUP_ONLY = ['EDNS', 'ETLS', 'CONNECT_TIMEOUT', 'GREETING_TIMEOUT', 'UPGRADE_TIMEOUT', 'CERT_HAS_EXPIRED', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'];
+
+/** True when the failure certainly came before the message body was sent, so trying again cannot double it. */
+export function failedBeforeData(err: unknown): boolean {
+  const o = typeof err === 'object' && err !== null ? (err as { code?: unknown; originalCode?: unknown; timeoutType?: unknown }) : {};
+  const code = typeof o.code === 'string' ? o.code : '';
+  const original = typeof o.originalCode === 'string' ? o.originalCode : '';
+  const timeout = typeof o.timeoutType === 'string' ? o.timeoutType : '';
+  if (SETUP_ONLY.includes(code) || SETUP_ONLY.includes(timeout) || code.startsWith('ERR_SSL') || code.startsWith('ERR_TLS')) return true;
+  return NEVER_REACHED.includes(code) || NEVER_REACHED.includes(original);
+}
+
 /** Maps a nodemailer error to a ChannelError, using the SMTP reply code and its enhanced status (RFC 3463). */
 export function mapSmtpError(err: unknown): ChannelError {
   const obj = typeof err === 'object' && err !== null ? (err as { code?: unknown; responseCode?: unknown; response?: unknown; message?: unknown }) : {};
@@ -130,10 +145,12 @@ export function mapSmtpError(err: unknown): ChannelError {
   if (code === 'EAUTH' || status === 530 || status === 534 || status === 535) return { code: 'auth', message };
   // The sending account is blocked or refused (policy, sender reputation, basic auth switched off).
   if (/^5\.7\./.test(enhanced) || enhanced === '5.1.8') return { code: 'auth', message };
-  if (enhanced === '5.4.5' || enhanced === '4.5.3' || (/^5\.5\./.test(enhanced) && /quota|limit|exceed/i.test(detail))) {
+  if (enhanced === '5.4.5' || enhanced === '4.5.3' || /daily user sending (?:limit|quota)/i.test(detail) || (/^5\.5\./.test(enhanced) && /quota|limit|exceed/i.test(detail))) {
     return { code: 'rate_limit', message };
   }
   if (/^5\.1\./.test(enhanced) || [550, 551, 553].includes(status)) return { code: 'invalid_recipient', message };
-  if ([421, 450, 451, 452].includes(status) || isConnectionError(err)) return { code: 'temporary', message };
+  // The server answered no: the message was not accepted, so trying again is safe.
+  if ([421, 450, 451, 452].includes(status) || failedBeforeData(err)) return { code: 'temporary', message };
+  // A dropped connection or a timeout with no answer: the message may have been accepted, so it is not sent again on its own.
   return { code: 'unknown', message };
 }

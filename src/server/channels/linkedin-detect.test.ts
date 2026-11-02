@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   SELECTORS, clampNote, lastSender, hasSendFailureText, sameParticipant, headerNameCandidates, isUnavailableProfileText, normalizeText, snippetMatches, hasWeeklyLimitText, humanDelayMs, isBlockedStatus, isCheckpointUrl, isOwnSnippet, isSignInUrl,
-  cleanName, parseListTimestamp, profileUrlFromHref, splitHeadline,
+  cleanName, memberIdFromHref, parseListTimestamp, profileUrlFromHref, replyProfile, splitHeadline,
 } from './linkedin-detect.js';
 
 describe('isCheckpointUrl', () => {
@@ -244,5 +244,44 @@ describe('SELECTORS', () => {
   });
   it('has no comma unions: alternatives are separate entries', () => {
     for (const [name, list] of Object.entries(SELECTORS)) for (const sel of list) expect(sel.includes(', '), `${name}: ${sel}`).toBe(false);
+  });
+});
+
+describe('member-id profile addresses', () => {
+  it('reads the member id with its letter case, from any form of the link', () => {
+    expect(memberIdFromHref('/in/ACoAABcdEf123/')).toBe('ACoAABcdEf123');
+    expect(memberIdFromHref('https://www.linkedin.com/in/ACoAABcdEf123')).toBe('ACoAABcdEf123');
+    expect(memberIdFromHref('/in/ACoAABcdEf123/?miniProfileUrn=urn%3Ali')).toBe('ACoAABcdEf123');
+  });
+  it('is null for a vanity address, anything else, or nothing', () => {
+    for (const href of ['/in/kemi-eze/', 'https://www.linkedin.com/in/acorn-co', '/in/Acosta/', '/company/ACoAA', '', 'not a url at all %%']) {
+      expect(memberIdFromHref(href), href).toBeNull();
+    }
+  });
+
+  it('keeps a vanity address as it is and never looks anything up', async () => {
+    let looked = 0;
+    const who = await replyProfile('/in/kemi-eze/', async () => { looked++; return null; });
+    expect(who).toEqual({ url: 'https://www.linkedin.com/in/kemi-eze' });
+    expect(looked).toBe(0);
+  });
+
+  it('resolves a member-id address to the vanity address and keeps the member-id form beside it', async () => {
+    const asked: string[] = [];
+    const who = await replyProfile('/in/ACoAABcdEf123/', async (id) => { asked.push(id); return 'https://www.linkedin.com/in/kemi-eze/'; });
+    expect(asked).toEqual(['ACoAABcdEf123']);
+    expect(who).toEqual({ url: 'https://www.linkedin.com/in/kemi-eze', alt: 'https://www.linkedin.com/in/acoaabcdef123' });
+  });
+
+  it('falls back to the member-id address when it cannot be resolved, so a person stored under it still matches', async () => {
+    const expected = { url: 'https://www.linkedin.com/in/acoaabcdef123' };
+    expect(await replyProfile('/in/ACoAABcdEf123/', async () => null)).toEqual(expected);
+    expect(await replyProfile('/in/ACoAABcdEf123/', async () => { throw new Error('offline'); })).toEqual(expected);
+    // Landing on the same member-id address (no redirect) is not a resolution.
+    expect(await replyProfile('/in/ACoAABcdEf123/', async () => 'https://www.linkedin.com/in/ACoAABcdEf123/')).toEqual(expected);
+  });
+
+  it('is null when there is no link', async () => {
+    expect(await replyProfile('', async () => 'https://www.linkedin.com/in/x')).toBeNull();
   });
 });

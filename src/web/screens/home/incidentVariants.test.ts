@@ -106,6 +106,30 @@ describe('X limit', () => {
   });
 });
 
+describe('mailbox limit', () => {
+  it('says email is held until tomorrow, names the time, and asks for nothing', () => {
+    const limit = incident(5, 'mailbox_limit', {
+      channel: 'email',
+      message: 'Your mailbox reached its daily sending limit, so Callum paused email until tomorrow. Nothing is lost and replies keep arriving.',
+    });
+    const s = appState({
+      channels: [channel('email', 'connected', { pausedUntil: '2026-11-03T23:00:00.000Z' }), channel('linkedin'), channel('x')],
+      people: [person(1, 'Ea One', { nextTouchAt: '2026-11-04T08:00:00.000Z' }), person(2, 'Eb Two', { nextTouchAt: '2026-11-04T08:00:00.000Z' })],
+      incidents: [limit],
+    });
+    const v = incidentVariant(limit, s, NOW);
+    expect(v?.title).toBe('Your mailbox reached its daily limit');
+    expect(v?.lines.map((l) => l.text)).toEqual([
+      'Your mailbox reached its daily sending limit, so Callum paused email until tomorrow.',
+      'Callum paused email until tomorrow. LinkedIn and X keep going.',
+      'Nothing to do. Email resumes tomorrow at 9:00.',
+    ]);
+    expect(v?.waitLine).toBe('2 people wait for email. Nothing is lost.');
+    expect(v?.primary).toMatchObject({ label: 'Okay', action: { kind: 'dismiss' } });
+    expect(faceReactions(s).get(1)).toMatchObject({ mark: 'pause', label: 'waiting' });
+  });
+});
+
 describe('failed reply', () => {
   const failed = incident(6, 'send_failed', {
     personId: 9, message: "Your reply to Tomás didn't go out: Gmail says the mailbox is full. It's saved here.", detail: JSON.stringify({ outboxId: 31 }),

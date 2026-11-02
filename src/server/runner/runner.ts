@@ -9,7 +9,7 @@ import { addLocalDays, startOfLocalDay } from '../engine/time.js';
 import { firstSlotAfterStart, isSendingTime, nextSendingTime } from '../engine/windows.js';
 import { capKinds, dispatchDue } from './dispatch.js';
 import { handleInbound, heldBackPeople, retryFailedInbound } from './inbound.js';
-import { INCIDENT_COPY, channelSignedOut, openIncident, refreshSignedOutCount, resolveChannelIncidents } from './incidents.js';
+import { INCIDENT_COPY, channelSignedOut, openIncident, refreshSignedOutCount, releaseMailboxLimit, resolveChannelIncidents } from './incidents.js';
 import { isHeldReferral, trackPause } from '../services/quiet.js';
 import { maybeSendWeekly } from '../services/weekly.js';
 
@@ -305,6 +305,7 @@ export class Runner {
       resolveChannelIncidents(this.ctx, 'x', ['x_limit']);
       bus.emit('channels');
     }
+    releaseMailboxLimit(this.ctx);
     const linkedin = repo.getChannel('linkedin');
     if (reached(linkedin.invitesBlockedUntil, now)) {
       repo.updateChannel('linkedin', { invitesBlockedUntil: null });

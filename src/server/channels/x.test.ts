@@ -202,6 +202,27 @@ describe('x send', () => {
     expect(await down.send(HELLO)).toMatchObject({ ok: false, error: { code: 'temporary' } });
   });
 
+  it('maps a message that was sent and whose answer was lost to unknown, not temporary', async () => {
+    const calls: string[] = [];
+    const f = fakeFetch((c) => {
+      calls.push(`${c.method} ${c.url}`);
+      if (c.method === 'GET') return json(200, { data: { id: '200', username: 'kemi_ok' } });
+      throw new TypeError('terminated');
+    });
+    const result = await adapterWith(f).send(HELLO);
+    expect(result).toMatchObject({ ok: false, error: { code: 'unknown' } });
+    expect(result.ok ? '' : result.error.message).toMatch(/may have gone/);
+    expect(calls.filter((c) => c.startsWith('POST'))).toHaveLength(1);
+  });
+
+  it('keeps a failed lookup temporary, since nothing was sent', async () => {
+    const f = fakeFetch(() => {
+      throw new TypeError('fetch failed');
+    });
+    expect(await adapterWith(f).send(HELLO)).toMatchObject({ ok: false, error: { code: 'temporary' } });
+    expect(f.calls.every((c) => c.method === 'GET')).toBe(true);
+  });
+
   it('reports auth when nothing is connected', async () => {
     const f = fakeFetch(() => json(200, {}));
     expect(await createXAdapter(null, { fetch: f.fetch }).send(HELLO)).toMatchObject({ ok: false, error: { code: 'auth' } });

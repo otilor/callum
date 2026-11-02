@@ -4,6 +4,7 @@ import type { Ctx } from '../context.js';
 import { afterUserSent, chooseChannel, onAccepted, onInbound, personTz } from '../engine/lifecycle.js';
 import { importPeople } from '../leads/import.js';
 import { INCIDENT_COPY, channelCheckpoint, handleBounce, openIncident } from './incidents.js';
+import type { Classification } from '../ai/writer.js';
 
 type Reply = Extract<InboundEvent, { type: 'reply' }>;
 
@@ -57,10 +58,29 @@ export async function handleEvent(ctx: Ctx, ch: Channel, event: InboundEvent): P
   }
 }
 
-function personOf(ctx: Ctx, event: InboundEvent): number | null {
+/** The person a reply is from: by the address it came from, a LinkedIn profile (either form) or an X handle, else by the thread it answers. */
+function replyPerson(ctx: Ctx, ch: Channel, event: Reply): Person | null {
+  const { repo } = ctx;
+  const direct = repo.findPersonByHandle({ email: event.from.email ?? null, linkedinUrl: event.from.linkedinUrl ?? null, xHandle: event.from.xHandle ?? null })
+    ?? (event.from.linkedinAltUrl ? repo.findPersonByHandle({ linkedinUrl: event.from.linkedinAltUrl }) : null);
+  if (direct) return direct;
+  // A reply from another address of the same person (a personal account, a forwarding alias) still answers Callum's own mail.
+  const thread = [event.inReplyTo ?? '', ...(event.references ?? [])].filter(Boolean);
+  return ch === 'email' && thread.length > 0 ? repo.findPersonByOutboundMessageId(ch, thread) : null;
+}
+
+/** "stop" or "unsubscribe" as the whole subject, under any Re:/Fwd: prefixes: what the List-Unsubscribe mailto sends. */
+export function isStopSubject(subject: string | null | undefined): boolean {
+  const bare = (subject ?? '').replace(/^(?:\s*(?:re|fwd?|aw|sv)\s*:)+/i, '').trim();
+  return /^(?:stop|unsubscribe)[\s.!?,;:]*$/i.test(bare);
+}
+
+const EXPLICIT_STOP: Classification = { kind: 'stop', suggested: 'close', returnDate: null, referral: null, language: 'en' };
+
+function personOf(ctx: Ctx, event: InboundEvent, ch: Channel): number | null {
   switch (event.type) {
     case 'reply':
-      return ctx.repo.findPersonByHandle({ email: event.from.email ?? null, linkedinUrl: event.from.linkedinUrl ?? null, xHandle: event.from.xHandle ?? null })?.id ?? null;
+      return replyPerson(ctx, ch, event)?.id ?? null;
     case 'accepted': return ctx.repo.findPersonByHandle({ linkedinUrl: event.linkedinUrl })?.id ?? null;
     case 'bounce':
     case 'outbound_seen': return ctx.repo.findPersonByHandle({ email: event.email })?.id ?? null;
@@ -75,7 +95,7 @@ function keepFailed(ctx: Ctx, ch: Channel, event: InboundEvent, err: unknown): v
   try {
     const same = ctx.repo.listInboundFailures().find((f) => f.channel === ch && f.event === json);
     if (same) ctx.repo.updateInboundFailure(same.id, { attempts: same.attempts, error: message });
-    else ctx.repo.insertInboundFailure({ channel: ch, externalId, personId: personOf(ctx, event), event: json, error: message });
+    else ctx.repo.insertInboundFailure({ channel: ch, externalId, personId: personOf(ctx, event, ch), event: json, error: message });
   } catch {
     // The store itself is failing; the error is still reported by the caller.
   }
@@ -99,11 +119,9 @@ const CHANNEL_NAME: Record<Channel, string> = { email: 'email', linkedin: 'Linke
 function giveUp(ctx: Ctx, ch: Channel, event: InboundEvent): void {
   if (event.type !== 'reply') return;
   const { repo } = ctx;
-  const person = repo.findPersonByHandle({
-    email: event.from.email ?? null, linkedinUrl: event.from.linkedinUrl ?? null, xHandle: event.from.xHandle ?? null,
-  });
+  const person = replyPerson(ctx, ch, event);
   if (!person) {
-    openIncident(ctx, { channel: ch, kind: 'reply_unread', message: INCIDENT_COPY.reply_unread_unknown(CHANNEL_NAME[ch]) });
+    reportUnmatched(ctx, ch, event);
     return;
   }
   const at = atOf(ctx, event.at);
@@ -122,6 +140,27 @@ function giveUp(ctx: Ctx, ch: Channel, event: InboundEvent): void {
   });
   openIncident(ctx, { channel: ch, kind: 'reply_unread', message: INCIDENT_COPY.reply_unread(person.firstName), personId: person.id });
   ctx.bus.emit('people');
+}
+
+/**
+ * A reply that matches nobody Callum wrote to is never dropped silently: the user is told, with the address it came from,
+ * so a stop that arrived from somewhere unexpected can still be acted on by hand.
+ */
+function reportUnmatched(ctx: Ctx, ch: Channel, event: Reply): void {
+  const who = event.from.email ?? event.from.linkedinUrl ?? (event.from.xHandle ? `@${event.from.xHandle}` : null);
+  const open = ctx.repo.listIncidents({ open: true }).find((i) => i.kind === 'reply_unread' && i.channel === ch && i.personId === null);
+  let senders: string[] = [];
+  try {
+    const parsed = JSON.parse(open?.detail ?? 'null') as { senders?: unknown } | null;
+    if (Array.isArray(parsed?.senders)) senders = parsed.senders.filter((x): x is string => typeof x === 'string');
+  } catch {
+    // An old notice with no list: start one.
+  }
+  if (who && !senders.includes(who)) senders.push(who);
+  openIncident(ctx, {
+    channel: ch, kind: 'reply_unread', message: INCIDENT_COPY.reply_unread_unknown(CHANNEL_NAME[ch], senders),
+    detail: JSON.stringify({ senders }),
+  });
 }
 
 /** Tries the kept events again, a little later each time, up to five attempts. */
@@ -153,10 +192,11 @@ async function onReply(ctx: Ctx, ch: Channel, event: Reply): Promise<void> {
   // Adapters only remember what they have seen in this run, so the stored messages are the record.
   const seen = () => event.externalId !== null && repo.hasMessageWithExternalId(ch, event.externalId, 'in');
   if (seen()) return;
-  const found = repo.findPersonByHandle({
-    email: event.from.email ?? null, linkedinUrl: event.from.linkedinUrl ?? null, xHandle: event.from.xHandle ?? null,
-  });
-  if (!found) return;
+  const found = replyPerson(ctx, ch, event);
+  if (!found) {
+    reportUnmatched(ctx, ch, event);
+    return;
+  }
 
   const at = atOf(ctx, event.at);
   const message: NewMessage = {
@@ -177,7 +217,8 @@ async function onReply(ctx: Ctx, ch: Channel, event: Reply): Promise<void> {
     person: found, project, settings, channel: ch,
     history: [...repo.listMessages(found.id), { ...message, id: 0 }],
   };
-  const classification = await writer.classify(event.text, write);
+  // The List-Unsubscribe mailto sends a message whose subject says stop and whose body is whatever the mail program adds.
+  const classification = isStopSubject(event.subject) ? EXPLICIT_STOP : await writer.classify(event.text, write);
 
   const current = repo.getPerson(found.id);
   if (!current || finished(current)) {
