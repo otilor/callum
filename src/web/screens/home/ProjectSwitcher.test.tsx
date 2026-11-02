@@ -108,12 +108,12 @@ describe('ProjectSwitcher', () => {
   });
 
   it('asks before wrapping up, says what happens, and can download first', async () => {
-    mocks.wrapProject.mockResolvedValue({ cancelledFollowUps: 1, cancelledHellos: 2, summary: '' });
+    mocks.wrapProject.mockResolvedValue({ cancelledFollowUps: 1, cancelledHellos: 2, summary: 'Reconciliation is wrapped up. 2 hellos and 1 follow-up are cancelled.' });
     mocks.setCurrentProject.mockResolvedValue({});
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    const people = [person(1, 1, { stage: 'talking' }), person(2, 1), person(3, 1)];
+    const people = [person(1, 1, { stage: 'talking', status: 'waiting' }), person(2, 1), person(3, 1)];
     const user = userEvent.setup();
-    view(state({ people, outbox: [scheduled(1, 2), scheduled(2, 3)] }));
+    view(state({ people, outbox: [scheduled(1, 2), scheduled(2, 3), { ...scheduled(3, 1), kind: 'reply', origin: 'user' }] }));
     await open(user);
     await user.click(screen.getByRole('button', { name: 'More for Reconciliation' }));
     await user.click(screen.getByRole('menuitem', { name: 'Wrap up' }));
@@ -129,7 +129,7 @@ describe('ProjectSwitcher', () => {
     expect(mocks.wrapProject).toHaveBeenCalledWith(1);
     // The project being viewed was wrapped, so the other one takes over.
     expect(mocks.setCurrentProject).toHaveBeenCalledWith(2);
-    expect(await screen.findByText('Reconciliation’s people are downloading. Reconciliation is wrapped up. Its scheduled hellos are cancelled.')).toBeInTheDocument();
+    expect(await screen.findByText('Reconciliation’s people are downloading. Reconciliation is wrapped up. 2 hellos and 1 follow-up are cancelled.')).toBeInTheDocument();
   });
 
   it('keeps at least one project', async () => {

@@ -121,6 +121,53 @@ describe('Deck', () => {
     expect(await screen.findByRole('article', { name: 'Reply from Kemi Eze' })).toBeInTheDocument();
   });
 
+  it('says so when Undo comes too late, and keeps the card gone', async () => {
+    mocks.undo.mockRejectedValue(new Error('Already sent'));
+    const user = userEvent.setup();
+    render(<Harness people={[kemi()]} />);
+    await user.click(screen.getByRole('button', { name: 'Reply' }));
+    await user.click(await screen.findByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(mocks.undo).toHaveBeenCalledWith(50));
+    expect(await screen.findByText('Too late. Your reply already went to Kemi.')).toBeInTheDocument();
+    expect(screen.queryByRole('article', { name: 'Reply from Kemi Eze' })).not.toBeInTheDocument();
+  });
+
+  it('puts the cursor on the name when a card arrives, and on the next card after an answer', async () => {
+    const user = userEvent.setup();
+    render(<Harness people={[kemi(), femi()]} />);
+    expect(screen.getByRole('heading', { name: 'Kemi Eze' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Snooze' }));
+    expect(await screen.findByRole('heading', { name: 'Femi Adeyemi' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Femi Adeyemi' })).toHaveFocus());
+  });
+
+  it('keeps Reply off for an empty draft and says to write a few words', async () => {
+    const user = userEvent.setup();
+    render(<Harness people={[kemi()]} />);
+    await user.clear(screen.getByRole('textbox', { name: 'Your reply to Kemi' }));
+    expect(screen.getByText('Write a few words first.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reply' }));
+    expect(mocks.reply).not.toHaveBeenCalled();
+  });
+
+  it('says plainly when Callum could not write a draft', async () => {
+    mocks.draft.mockRejectedValue(new Error('offline'));
+    render(<Harness people={[waiting(1, 'Kemi Eze', { draft: null })]} />);
+    expect(await screen.findByText("Callum couldn't write a draft. Write your own.")).toBeInTheDocument();
+  });
+
+  it('closes the menu on Escape before it closes the deck', async () => {
+    const user = userEvent.setup();
+    render(<Harness people={[kemi()]} />);
+    await user.click(screen.getByRole('button', { name: 'More' }));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('turns Reply off while the draft holds a placeholder, and says why', async () => {
     const user = userEvent.setup();
     render(<Harness people={[femi()]} />);

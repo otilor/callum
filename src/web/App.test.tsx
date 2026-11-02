@@ -3,7 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppState, OutboxItem, Person, Project } from '../shared/types.js';
 import { ApiError } from './api.js';
-import { App, screenFor } from './App.js';
+import { App, dayOneAsBanner, screenFor } from './App.js';
 
 const mocks = vi.hoisted(() => ({ state: vi.fn(), login: vi.fn(), logout: vi.fn() }));
 vi.mock('./api.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('./api.js')>()), api: mocks }));
@@ -58,6 +58,39 @@ describe('screenFor', () => {
     // Hellos waiting in another project do not hold this one on Day one.
     expect(screenFor(appState({ people: [kemi({ projectId: 2 })], outbox: [awaiting()] }), project())).toBe('home');
     expect(screenFor(appState(), project())).toBe('home');
+  });
+});
+
+describe('Day one beside other projects', () => {
+  const second = () => project({ id: 2, name: 'Payroll', approvalsLeft: 0 });
+  const waiting = () => kemi({ id: 2, projectId: 2, name: 'Femi Ade', firstName: 'Femi', stage: 'talking', status: 'waiting', repliedAt: AT, lastInbound: 'Tell me more.' });
+
+  it('is a banner on Home when another project runs and someone waits in the dock', async () => {
+    const state = appState({ projects: [project(), second()], people: [kemi(), waiting()], outbox: [awaiting()] });
+    expect(dayOneAsBanner(state, project())).toBe(true);
+    mocks.state.mockResolvedValue(state);
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    expect(await screen.findByText('10 of 10 hellos left to OK in Reconciliation')).toBeInTheDocument();
+    expect(container.querySelector('main')).toHaveAttribute('data-screen', 'home');
+    expect(screen.getByRole('button', { name: 'Femi Ade, replied and waiting on you' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'OK the hellos' }));
+    await waitFor(() => expect(container.querySelector('main')).toHaveAttribute('data-screen', 'day-one'));
+    await user.click(screen.getByRole('button', { name: 'Back to the river' }));
+    await waitFor(() => expect(container.querySelector('main')).toHaveAttribute('data-screen', 'home'));
+  });
+
+  it('stays full screen when nobody waits, or when it is the only project', async () => {
+    const lonely = appState({ people: [kemi()], outbox: [awaiting()] });
+    expect(dayOneAsBanner(lonely, project())).toBe(false);
+    const quiet = appState({ projects: [project(), second()], people: [kemi()], outbox: [awaiting()] });
+    expect(dayOneAsBanner(quiet, project())).toBe(false);
+    mocks.state.mockResolvedValue(quiet);
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector('main')).toHaveAttribute('data-screen', 'day-one'));
+    // The project switcher is there, since another project runs.
+    expect(screen.getByRole('button', { name: 'Projects, now showing Reconciliation' })).toBeInTheDocument();
   });
 });
 

@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { DayOne } from './screens/dayone/DayOne.js';
 import { FirstRun } from './screens/firstrun/FirstRun.js';
 import { Home } from './screens/home/Home.js';
+import { dockPeople } from './screens/home/dock.js';
 import { ProjectSwitcher } from './screens/home/ProjectSwitcher.js';
 import { SignInCard } from './screens/signin/SignInCard.js';
 import type { AppState, Project } from '../shared/types.js';
@@ -27,6 +28,14 @@ export function screenFor(state: AppState, current: Project | null): ScreenName 
   if (state.settings.pauseState === 'wrapped') return 'wrapped';
   if ((current?.approvalsLeft ?? 0) > 0 && awaitingHellos(state, current).length > 0) return 'day-one';
   return 'home';
+}
+
+/**
+ * With more than one project running and someone waiting in the dock, Day one is a banner on Home instead of the whole
+ * screen, so a reply is never stuck behind the hellos. A single project keeps the full-screen Day one.
+ */
+export function dayOneAsBanner(state: AppState, current: Project | null): boolean {
+  return screenFor(state, current) === 'day-one' && state.projects.filter((p) => p.state !== 'wrapped').length > 1 && dockPeople(state).length > 0;
 }
 
 function Placeholder({ screen, state, project }: { screen: Exclude<ScreenName, 'first-run' | 'day-one' | 'home'>; state: AppState; project: Project | null }) {
@@ -67,9 +76,15 @@ export function App() {
   const [dayOneFor, setDayOneFor] = useState<number | null>(null);
 
   const screen = state ? screenFor(state, currentProject) : null;
+  const banner = state ? dayOneAsBanner(state, currentProject) : false;
+  const currentId = currentProject?.id ?? null;
   useEffect(() => {
-    if (screen === 'day-one' && currentProject) setDayOneFor(currentProject.id);
-  }, [screen, currentProject]);
+    setDayOneFor((held) => {
+      if (screen === 'day-one' && currentId !== null && !banner) return currentId;
+      // Day one belongs to the project it was opened for: switching away lets it go.
+      return held !== null && held !== currentId ? null : held;
+    });
+  }, [screen, currentId, banner]);
 
   const signOut = async () => {
     try {
@@ -103,7 +118,7 @@ export function App() {
     );
   } else if (screen === 'first-run') {
     body = <FirstRun state={state} refresh={refresh} />;
-  } else if (currentProject && (screen === 'day-one' || (screen === 'home' && dayOneFor === currentProject.id))) {
+  } else if (currentProject && (dayOneFor === currentProject.id ? screen === 'day-one' || screen === 'home' : screen === 'day-one' && !banner)) {
     const several = state.projects.filter((p) => p.state !== 'wrapped').length > 1;
     body = (
       <DayOne
@@ -113,13 +128,22 @@ export function App() {
         refresh={refresh}
         account={account}
         onLeave={() => setDayOneFor(null)}
+        {...(banner ? { onBack: () => setDayOneFor(null) } : {})}
         {...(several ? { switcher: <ProjectSwitcher state={state} project={currentProject} refresh={refresh} /> } : {})}
       />
     );
   } else if (currentProject && screen !== 'wrapped') {
     // Slots for the later tasks: incident, quiet, overlay, onAddPeople, onNewProject, onOpenPerson, and the
     // account entries (onYourCallum, onLeave, onWeekly). See the header of Home.tsx.
-    body = <Home state={state} project={currentProject} refresh={refresh} account={account} />;
+    body = (
+      <Home
+        state={state}
+        project={currentProject}
+        refresh={refresh}
+        account={account}
+        {...(banner ? { dayOne: { left: currentProject.approvalsLeft, onOpen: () => setDayOneFor(currentProject.id) } } : {})}
+      />
+    );
   } else {
     body = <Placeholder screen="wrapped" state={state} project={currentProject} />;
   }

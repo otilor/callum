@@ -466,3 +466,103 @@
 .is-list .dock-faces {
   display: none;
 }
+
+/* More than five people waiting: the rest are one sun button in the sixth spot. */
+.dock-more {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  margin: 0 0 0 -36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: var(--sun);
+  box-shadow: 0 0 0 3px var(--sun-tint), 0 14px 28px -10px rgba(255, 176, 32, 0.6);
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: dock-face-in 0.7s var(--ease-pop) backwards;
+}
+.dock-more:hover,
+.dock-more:focus-visible {
+  transform: scale(1.06);
+}
+@media (max-width: 760px) {
+  .dock-more {
+    position: static;
+    margin: 0;
+    width: 60px;
+    height: 60px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dock-more {
+    animation: none;
+  }
+}
+
+/* Hellos still to OK, while more than one project runs: a banner in the water, after V4Projects. */
+.home-dayone {
+  position: absolute;
+  left: 0;
+  top: 64px;
+  z-index: 5;
+  max-width: 62%;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 8px 8px 8px 20px;
+  border-radius: 30px;
+  background: #ffffff;
+  box-shadow: 0 20px 44px -24px rgba(29, 33, 64, 0.4), 0 0 0 1px rgba(29, 33, 64, 0.07);
+  animation: fade-in 0.5s ease backwards;
+}
+.home-dayone-segs {
+  display: flex;
+  gap: 3px;
+}
+.home-dayone-segs span {
+  width: 14px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track);
+}
+.home-dayone-segs span.is-ok {
+  background: var(--ink);
+}
+.home-dayone-line {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.home-dayone-btn {
+  min-height: 44px;
+  padding: 0 22px;
+  border: none;
+  border-radius: 22px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .home-dayone {
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    border-radius: 24px;
+    padding-left: 16px;
+  }
+  .home-dayone-segs {
+    display: none;
+  }
+}

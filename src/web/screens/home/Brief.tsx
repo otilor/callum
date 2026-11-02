@@ -8,7 +8,13 @@ export function Brief({ state, now }: { state: AppState; now: Date }) {
   const { brief } = state;
   const tz = state.settings.timezone;
   const accepted = brief.acceptedRecently;
-  const face: Person | undefined = accepted.length > 0 ? state.people.find((p) => p.firstName === accepted[0]) : undefined;
+  // The brief names people by first name only, so the face is the newest person of that name who is now connected.
+  const face: Person | undefined =
+    accepted.length > 0
+      ? state.people
+          .filter((p) => p.firstName === accepted[0] && p.linkedinState === 'connected')
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id - a.id)[0]
+      : undefined;
   const since: { key: string; node: ReactNode; text: string }[] = [];
 
   if (brief.wantToTalk > 0) {
@@ -32,7 +38,7 @@ export function Brief({ state, now }: { state: AppState; now: Date }) {
 
   if (since.length === 0 && !next) return null;
   return (
-    <div className="brief" aria-label="Since yesterday">
+    <div className="brief" role="group" aria-label="Since yesterday">
       {since.length > 0 ? <span className="brief-label">Since yesterday</span> : null}
       {[...since, ...(next ? [next] : [])].map((p) => (
         <span key={p.key} className="brief-pill">

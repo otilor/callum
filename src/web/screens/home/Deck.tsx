@@ -85,6 +85,7 @@ export function Deck({ people, projects, tz, now, startAt, toasts, refresh, onCl
   const [handled, setHandled] = useState<Set<number>>(new Set());
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [fetched, setFetched] = useState<Record<number, string>>({});
+  const [failedDraft, setFailedDraft] = useState<Set<number>>(new Set());
   const [leaving, setLeaving] = useState<{ id: number; act: Act } | null>(null);
   const [error, setError] = useState('');
   const [menu, setMenu] = useState(false);
@@ -113,17 +114,30 @@ export function Deck({ people, projects, tz, now, startAt, toasts, refresh, onCl
     asked.current.add(person.id);
     api.draft(person.id, 'reply').then(
       (r) => setFetched((f) => ({ ...f, [person.id]: r.body })),
-      () => setFetched((f) => ({ ...f, [person.id]: '' })),
+      () => {
+        setFetched((f) => ({ ...f, [person.id]: '' }));
+        setFailedDraft((set) => new Set(set).add(person.id));
+      },
     );
   }, [person, drafts, fetched]);
 
+  // Escape closes what is open inside the card first (the menu, the calendar field), and the deck only after that.
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      if (menu) setMenu(false);
+      else if (calendar.open) setCalendar((c) => ({ ...c, open: false, error: '' }));
+      else onClose();
     };
     document.addEventListener('keydown', key);
     return () => document.removeEventListener('keydown', key);
-  }, [onClose]);
+  }, [onClose, menu, calendar.open]);
+
+  // Each card announces itself: focus moves to the name when the deck opens and when the next card arrives.
+  const nameRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    nameRef.current?.focus();
+  }, [currentId]);
 
   useEffect(() => {
     setError('');
@@ -133,7 +147,9 @@ export function Deck({ people, projects, tz, now, startAt, toasts, refresh, onCl
 
   const draft = person ? (drafts[person.id] ?? person.draft ?? fetched[person.id] ?? '') : '';
   const holes = findPlaceholders(draft);
-  const blocked = holes.length > 0;
+  const empty = draft.trim() === '';
+  const drafting = person !== undefined && !person.draft && drafts[person.id] === undefined && fetched[person.id] === undefined;
+  const blocked = holes.length > 0 || empty;
   const suggested = person?.suggested ?? null;
 
   const remaining = order.filter((id) => live.has(id) && !handled.has(id) && id !== currentId).length;
@@ -168,6 +184,7 @@ export function Deck({ people, projects, tz, now, startAt, toasts, refresh, onCl
           text: kind === 'reply' ? `Sending your reply to ${first}` : kind === 'book' ? `Sending ${first} your calendar link` : `Thanking ${first}. No more follow-ups.`,
           doneText: kind === 'reply' ? `Sent to ${first}` : kind === 'book' ? `Calendar link sent to ${first}` : `Sent. Callum won't follow up with ${first} again.`,
           ms,
+          failText: `Too late. Your reply already went to ${first}.`,
           onUndo: async () => {
             await api.undo(item.id);
             setHandled((h) => {
@@ -266,7 +283,7 @@ export function Deck({ people, projects, tz, now, startAt, toasts, refresh, onCl
 
               <div className="deck-who">
                 <span className="deck-face" aria-hidden="true" style={{ background: marbleBackground(300 + person.id) }} />
-                <h2 className="deck-name">{person.name}</h2>
+                <h2 className="deck-name" ref={nameRef} tabIndex={-1}>{person.name}</h2>
                 <span className="deck-role">{[person.role, person.company].filter(Boolean).join(' at ')}</span>
               </div>
 
@@ -281,7 +298,12 @@ export function Deck({ people, projects, tz, now, startAt, toasts, refresh, onCl
               </label>
               <DraftField id="deck-draft" label={`Your reply to ${person.firstName}`} value={draft} onChange={(v) => setDrafts((d) => ({ ...d, [person.id]: v }))} />
 
-              {blocked ? (
+              {empty && !drafting ? (
+                <p className="deck-hint fade-in" role="status">
+                  {failedDraft.has(person.id) && drafts[person.id] === undefined ? "Callum couldn't write a draft. Write your own." : 'Write a few words first.'}
+                </p>
+              ) : null}
+              {holes.length > 0 ? (
                 <div className="deck-guard fade-in" role="alert">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D9480F" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.6v.01" /></svg>
                   <span className="deck-guard-text">{guardLine(holes[0]!)}</span>
@@ -293,7 +315,7 @@ export function Deck({ people, projects, tz, now, startAt, toasts, refresh, onCl
 
               <p className="deck-suggest">
                 <span className="deck-sun" aria-hidden="true" />
-                {suggested ? SUGGEST[suggested] : 'Callum has no suggestion. You know this person best.'}
+                {suggested ? (suggested === 'reply' && empty ? 'Suggested: reply.' : SUGGEST[suggested]) : 'Callum has no suggestion. You know this person best.'}
               </p>
 
               <div className="deck-actions">

@@ -11,6 +11,7 @@ interface Item {
   ms: number;
   onUndo?: () => Promise<string | void> | string | void;
   doneText?: string;
+  failText?: string;
 }
 
 export interface PendingToast {
@@ -20,6 +21,8 @@ export interface PendingToast {
   onUndo: () => Promise<string | void> | string | void;
   /** Shown briefly once the undo window has closed. */
   doneText?: string;
+  /** Said when Undo could not take the send back. Default: `Too late. It already went out.` */
+  failText?: string;
 }
 
 export interface UndoToasts {
@@ -33,6 +36,8 @@ export interface UndoToasts {
   event(text: string, ms?: number): void;
   /** Take whatever is showing away. */
   clear(): void;
+  /** True while a send can still be undone. Leaving the screen then would lose the Undo. */
+  undoing: boolean;
 }
 
 function Ring({ ms, toastKey }: { ms: number; toastKey: number }) {
@@ -107,7 +112,8 @@ class ToastController {
     try {
       line = await item.onUndo();
     } catch {
-      this.flushSoon(300);
+      // A failed Undo is never silent: the person pressed it and needs to know the message went.
+      if (this.alive) this.present({ id: this.id(), kind: 'info', text: item.failText ?? 'Too late. It already went out.', ms: 3600 });
       return;
     }
     if (!this.alive) return;
@@ -146,7 +152,7 @@ export function useUndoToasts(): UndoToasts {
     () => ({
       // A newer send replaces the one showing; the older one still goes out when its own window closes.
       pending: (t: PendingToast) =>
-        c.present({ id: c.id(), kind: 'pending', text: t.text, ms: t.ms ?? UNDO_MS, onUndo: t.onUndo, ...(t.doneText ? { doneText: t.doneText } : {}) }),
+        c.present({ id: c.id(), kind: 'pending', text: t.text, ms: t.ms ?? UNDO_MS, onUndo: t.onUndo, ...(t.doneText ? { doneText: t.doneText } : {}), ...(t.failText ? { failText: t.failText } : {}) }),
       info: (text: string, ms = 3200) => c.offer({ id: c.id(), kind: 'info', text, ms }),
       event: (text: string, ms = 4200) => c.offer({ id: c.id(), kind: 'event', text, ms }),
       clear: () => c.clear(),
@@ -170,5 +176,5 @@ export function useUndoToasts(): UndoToasts {
       ) : null}
     </div>
   );
-  return { node, ...calls };
+  return { node, ...calls, undoing: current?.kind === 'pending' };
 }

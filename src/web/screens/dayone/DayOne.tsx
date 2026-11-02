@@ -27,6 +27,8 @@ export interface DayOneProps {
   account?: AccountSlots;
   /** The project switcher, shown beside the wordmark when there is more than one project. */
   switcher?: ReactNode;
+  /** Goes back to Home with hellos still waiting, so replies are never stuck behind Day one. */
+  onBack?: () => void;
 }
 
 type Verdict = 'ok' | 'skip';
@@ -51,7 +53,7 @@ function errorText(e: unknown): string {
  * Day one: the person OKs the first 10 hellos one card at a time, then Callum runs on its own.
  * The river sits underneath so the faces they approve light up where they will go.
  */
-export function DayOne({ state, project, refresh, now, onLeave, account = {}, switcher }: DayOneProps) {
+export function DayOne({ state, project, refresh, now, onLeave, account = {}, switcher, onBack }: DayOneProps) {
   const clock = now ?? (() => new Date());
   const tz = state.settings.timezone;
   const toasts = useUndoToasts();
@@ -71,6 +73,8 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
   const [notif, setNotif] = useState<'on' | 'no' | null>(null);
   const [notifError, setNotifError] = useState('');
   const [skipped, setSkipped] = useState(0);
+  const msg = useRef<HTMLTextAreaElement>(null);
+  const refocus = useRef(false);
 
   const visible = useMemo(() => awaiting.filter((o) => !decided[o.id]), [awaiting, decided]);
   const firstPerson = visible[0] ? byId.get(visible[0].personId) : undefined;
@@ -81,7 +85,7 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
   const okStillListed = awaiting.filter((o) => decided[o.id] === 'ok').length;
   const left = Math.max(0, project.approvalsLeft - okStillListed);
   const reviewing = card !== null;
-  const lonely = state.projects.length <= 1;
+  const lonely = state.projects.filter((p) => p.state !== 'wrapped').length <= 1;
 
   // The hour Callum starts is read off the earliest hello; it is kept once the hellos are all approved.
   const earliest = awaiting.reduce<string | null>((min, o) => (min === null || o.sendAfter < min ? o.sendAfter : min), null);
@@ -107,6 +111,14 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
     return out;
   }, [awaiting, decided, visible]);
 
+  // After an OK or a skip the cursor goes to the next message, so the keyboard can carry on without a click.
+  const cardId = card?.item.id;
+  useEffect(() => {
+    if (!refocus.current || cardId === undefined || leaving) return;
+    refocus.current = false;
+    msg.current?.focus();
+  }, [cardId, leaving]);
+
   const text = card ? (edits[card.item.id] ?? card.item.body) : '';
   const edited = card ? edits[card.item.id] !== undefined && edits[card.item.id] !== card.item.body : false;
 
@@ -119,12 +131,14 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
       const body = kind === 'ok' && edited ? text : undefined;
       const [result] = await Promise.all([kind === 'ok' ? api.approve(target.item.id, body) : api.skip(target.item.id), wait(prefersReducedMotion() ? 0 : LEAVE_MS)]);
       setDecided((d) => ({ ...d, [target.item.id]: kind }));
+      refocus.current = true;
       const first = target.person.firstName;
       if (kind === 'ok') {
         const when = formatSlot(target.item.sendAfter, target.person.timezone ?? tz, clock());
         const ms = result.undoUntil ? Math.min(UNDO_MS, Math.max(1000, Date.parse(result.undoUntil) - clock().getTime())) : UNDO_MS;
         toastPending({
-          text: `${first}'s hello goes out ${when} their time`,
+          text: `${first}'s hello goes out ${when}${target.person.timezone ? ' their time' : ''}`,
+          failText: `Too late. ${first}'s hello already went out.`,
           ms,
           onUndo: async () => {
             await api.undo(target.item.id);
@@ -197,6 +211,9 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
               Starts {slot}
             </span>
           ) : null}
+          {onBack ? (
+            <button type="button" className="d1-back" onClick={onBack}>Back to the river</button>
+          ) : null}
           <AccountMenu slots={account} />
         </div>
       </header>
@@ -235,6 +252,7 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
               <label className="sr-only" htmlFor="d1-msg">{`Message to ${card.person.firstName}. You can change any words.`}</label>
               <textarea
                 id="d1-msg"
+                ref={msg}
                 className="d1-msg"
                 rows={4}
                 value={text}
@@ -283,7 +301,7 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
                 {notif === 'on' ? "Done. You'll get a tap the moment someone replies." : 'Okay. Replies will wait for you right here.'}
               </p>
             ) : null}
-            <button type="button" className="d1-go" onClick={() => onLeave?.()}>
+            <button type="button" className="d1-go" disabled={toasts.undoing} onClick={() => onLeave?.()}>
               See your river
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M5 12h14M13 6l6 6-6 6" />
@@ -301,7 +319,6 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
           running={!isStill(state, project)}
           still={stillChannels(state)}
           marks={marks}
-          now={clock}
           overlay={
             <div className="d1-place">
               <span className="d1-place-text">Replies land here.<br />It's normal for this<br />to stay quiet a few days.</span>

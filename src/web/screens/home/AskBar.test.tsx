@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Person, Project } from '../../../shared/types.js';
@@ -69,5 +69,70 @@ describe('AskBar', () => {
     await user.click(screen.getByRole('button', { name: "Who's warming up?" }));
     expect(mocks.ask).toHaveBeenCalledWith("Who's warming up?", 7);
     expect(await screen.findByRole('alert')).toHaveTextContent('Callum could not read that. Try asking another way.');
+  });
+
+  it('lets the keyboard reach a chip: Tab from the field, then Enter or Space', async () => {
+    mocks.ask.mockResolvedValue({ text: 'Two people are warming up.', personIds: [], action: null });
+    const user = userEvent.setup();
+    const { unmount } = render(<AskBar project={project} people={[]} />);
+    await user.click(screen.getByRole('textbox', { name: 'Ask Callum' }));
+    await user.tab();
+    await user.tab();
+    expect(screen.getByRole('button', { name: "Who's warming up?" })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(mocks.ask).toHaveBeenCalledWith("Who's warming up?", 7);
+    await screen.findByText('Two people are warming up.');
+    unmount();
+
+    mocks.ask.mockClear();
+    render(<AskBar project={project} people={[]} />);
+    await user.click(screen.getByRole('textbox', { name: 'Ask Callum' }));
+    await user.tab();
+    await user.tab();
+    await user.tab();
+    expect(screen.getByRole('button', { name: /Find 20 more/ })).toHaveFocus();
+    await user.keyboard(' ');
+    expect(mocks.ask).toHaveBeenCalledWith('Find 20 more people', 7);
+  });
+
+  it('closes the chips when focus leaves the bar', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <AskBar project={project} people={[]} />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+    await user.click(screen.getByRole('textbox', { name: 'Ask Callum' }));
+    expect(screen.getByRole('button', { name: "Who's warming up?" })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Elsewhere' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: "Who's warming up?" })).not.toBeInTheDocument());
+  });
+
+  it('does nothing on an empty Enter', async () => {
+    const user = userEvent.setup();
+    render(<AskBar project={project} people={[]} />);
+    await user.click(screen.getByRole('textbox', { name: 'Ask Callum' }));
+    await user.keyboard('{Enter}');
+    expect(mocks.ask).not.toHaveBeenCalled();
+  });
+
+  it('drops the result of an action when a newer question has replaced the answer', async () => {
+    let finish: (a: unknown) => void = () => {};
+    mocks.ask
+      .mockResolvedValueOnce({ text: 'First answer.', personIds: [], action: { kind: 'pause_channel', label: 'Pause LinkedIn', args: { channel: 'linkedin' } } })
+      .mockResolvedValueOnce({ text: 'Second answer.', personIds: [], action: null });
+    mocks.act.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const user = userEvent.setup();
+    render(<AskBar project={project} people={[]} />);
+    const box = screen.getByRole('textbox', { name: 'Ask Callum' });
+    await user.type(box, 'one{Enter}');
+    await user.click(await screen.findByRole('button', { name: 'Pause LinkedIn' }));
+    await user.type(box, 'two{Enter}');
+    await screen.findByText('Second answer.');
+    finish({ text: 'LinkedIn is paused.', personIds: [], action: null });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText('LinkedIn is paused.')).not.toBeInTheDocument();
+    expect(screen.getByText('Second answer.')).toBeInTheDocument();
   });
 });

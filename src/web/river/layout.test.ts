@@ -41,15 +41,14 @@ describe('riverLayout', () => {
     }
   });
 
-  it('sends waiting people and snoozed people who are due to the dock, not the river', () => {
-    const now = new Date('2026-11-02T10:00:00Z');
+  it('sends only waiting people to the dock; snoozed people wait out of sight until the server says they are back', () => {
     const people = [
       person(1, 'talking', 'waiting', { repliedAt: '2026-11-02T08:00:00Z' }),
-      person(2, 'hello', 'snoozed', { snoozedUntil: '2026-11-02T09:00:00Z', repliedAt: '2026-11-01T08:00:00Z' }),
-      person(3, 'hello', 'snoozed', { snoozedUntil: '2026-11-09T09:00:00Z' }),
+      person(2, 'hello', 'waiting', { repliedAt: '2026-11-01T08:00:00Z' }),
+      person(3, 'hello', 'snoozed', { snoozedUntil: '2026-11-02T09:00:00Z' }),
       person(4, 'hello'),
     ];
-    const out = riverLayout(people, 1000, 280, { now });
+    const out = riverLayout(people, 1000, 280);
     expect(out.dock.map((p) => p.id)).toEqual([2, 1]);
     expect(faces(out.items).map((f) => f.person.id)).toEqual([4]);
   });

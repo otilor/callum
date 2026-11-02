@@ -1,7 +1,8 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppState, OutboxItem, Person, Project } from '../../../shared/types.js';
+import { marbleBackground } from '../../ui/Marble.js';
 import { ToastProvider } from '../../ui/Toast.js';
 import { Home, type HomeProps } from './Home.js';
 
@@ -231,5 +232,128 @@ describe('Home', () => {
     view(appState({ people: [replied(1, 'Kemi Eze')], outbox: [queued] }));
     expect(screen.queryByRole('button', { name: 'Kemi Eze, replied and waiting on you' })).not.toBeInTheDocument();
     expect(screen.getByText("You're all caught up. Callum will tap you when someone replies.")).toBeInTheDocument();
+  });
+
+  it('opens the list from a group bubble when the river has too many faces to draw', async () => {
+    const user = userEvent.setup();
+    const crowd = Array.from({ length: 70 }, (_, i) => person(i + 1, `Person ${i + 1}`, { stage: 'stranger' }));
+    view(appState({ people: crowd }));
+    await user.click(screen.getByRole('button', { name: '70 people, Strangers' }));
+    expect(screen.getByRole('table')).toBeInTheDocument();
+  });
+
+  it('puts the cursor on a face card and gives it back to the face on Escape', async () => {
+    mocks.person.mockResolvedValue({ person: person(4, 'Ada Obi'), messages: [], path: [] });
+    const user = userEvent.setup();
+    view(appState({ people: [person(4, 'Ada Obi')] }));
+    const face = await screen.findByRole('button', { name: 'Ada Obi, Said hello' });
+    await user.click(face);
+    const card = await screen.findByRole('dialog', { name: 'Ada Obi' });
+    await waitFor(() => expect(within(card).getByRole('button', { name: 'Nudge now' })).toHaveFocus());
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Ada Obi, Said hello' })).toHaveFocus());
+  });
+
+  it('gives the cursor back to what opened the deck', async () => {
+    const user = userEvent.setup();
+    view(appState({ people: [replied(1, 'Kemi Eze')] }));
+    const open = screen.getByRole('button', { name: 'Open reply' });
+    await user.click(open);
+    expect(await screen.findByRole('dialog', { name: 'Replies waiting for you' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Replies waiting for you' })).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Open reply' })).toHaveFocus();
+  });
+
+  it('shows five faces at most and counts the rest in one button that opens the deck', async () => {
+    const user = userEvent.setup();
+    const people = Array.from({ length: 7 }, (_, i) => replied(i + 1, `Person ${i + 1}`));
+    view(appState({ people }));
+    expect(screen.getAllByRole('button', { name: /replied and waiting on you/ })).toHaveLength(5);
+    await user.click(screen.getByRole('button', { name: '2 more people want to talk' }));
+    expect(await screen.findByRole('dialog', { name: 'Replies waiting for you' })).toBeInTheDocument();
+  });
+
+  it('shows a Day one banner when the app asks for one, and opens Day one from it', async () => {
+    const onOpen = vi.fn();
+    const user = userEvent.setup();
+    view(appState({ people: [person(4, 'Ada Obi')] }), { dayOne: { left: 7, onOpen } });
+    expect(screen.getByText('7 of 10 hellos left to OK in Reconciliation')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'OK the hellos' }));
+    expect(onOpen).toHaveBeenCalled();
+  });
+
+  it('resumes both when the whole of Callum and this project are paused', async () => {
+    mocks.resumeAll.mockResolvedValue({});
+    mocks.resumeProject.mockResolvedValue({});
+    const user = userEvent.setup();
+    view(appState({ projects: [project({ state: 'paused' })] }, { pauseState: 'paused' }));
+    await user.click(screen.getByRole('button', { name: 'Resume' }));
+    expect(mocks.resumeAll).toHaveBeenCalled();
+    expect(mocks.resumeProject).toHaveBeenCalledWith(1);
+  });
+
+  it('keeps a snoozed person out of the dock until the server says they are back', () => {
+    const snoozed = person(4, 'Ada Obi', { status: 'snoozed', stage: 'talking', snoozedUntil: '2026-11-02T08:00:00Z', repliedAt: '2026-11-01T08:00:00Z' });
+    view(appState({ people: [snoozed] }));
+    expect(screen.queryByRole('button', { name: /replied and waiting on you/ })).not.toBeInTheDocument();
+  });
+
+  it('lists a snoozed person under Resting', async () => {
+    const user = userEvent.setup();
+    const snoozed = person(4, 'Ada Obi', { status: 'snoozed', stage: 'talking', snoozedUntil: '2026-11-09T08:00:00Z' });
+    view(appState({ people: [snoozed] }));
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    const table = screen.getByRole('table');
+    expect(within(table).getByRole('rowheader', { name: /^Resting/ })).toBeInTheDocument();
+    expect(within(table).getByText(/^Back /)).toBeInTheDocument();
+  });
+
+  it('does not announce a reply that is only a snooze coming due', () => {
+    const snoozed = person(4, 'Ada Obi', { status: 'snoozed', stage: 'talking', snoozedUntil: '2026-11-02T08:00:00Z' });
+    const first = view(appState({ people: [snoozed] }));
+    first.rerender(
+      <ToastProvider>
+        <Home state={appState({ people: [replied(4, 'Ada Obi')] })} project={project()} refresh={refresh} now={clock} />
+      </ToastProvider>,
+    );
+    expect(screen.queryByText('Ada replied')).not.toBeInTheDocument();
+  });
+
+  it('names the next hello only for hellos Callum sends by itself', () => {
+    const out = (id: number, over: Partial<OutboxItem>): OutboxItem => ({
+      id, personId: 4, channel: 'email', kind: 'hello', subject: null, body: 'x', state: 'scheduled', origin: 'auto', sendAfter: '2026-11-03T09:00:00Z',
+      undoUntil: null, error: null, approvalCounted: false, createdAt: AT, updatedAt: AT, ...over,
+    });
+    const people = [person(4, 'Ada Obi')];
+    const first = view(appState({ people, outbox: [out(1, { kind: 'reply', origin: 'user', sendAfter: '2026-11-02T10:01:00Z' })] }));
+    expect(screen.queryByText(/Next hello goes to/)).not.toBeInTheDocument();
+    first.unmount();
+    view(appState({ people, outbox: [out(1, { kind: 'reply', origin: 'user', sendAfter: '2026-11-02T10:01:00Z' }), out(2, {})] }));
+    expect(screen.getByText('Next hello goes to Ada')).toBeInTheDocument();
+  });
+
+  it('lists only the running project when it is the only one', async () => {
+    const user = userEvent.setup();
+    const people = [person(4, 'Ada Obi'), person(5, 'Old Timer', { projectId: 2 })];
+    view(appState({ people, projects: [project(), project({ id: 2, name: 'Old', state: 'wrapped' })] }));
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('Ada Obi')).toBeInTheDocument();
+    expect(within(table).queryByText('Old Timer')).not.toBeInTheDocument();
+  });
+
+  it('draws the face of the person who accepted, by who is connected', () => {
+    const people = [person(4, 'Ada Obi', { linkedinState: 'invited' }), person(5, 'Ada Eze', { linkedinState: 'connected' })];
+    const { container } = view(appState({ people, brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: ['Ada'], nextSendAt: null, line: '' } }));
+    expect(screen.getByRole('group', { name: 'Since yesterday' })).toBeInTheDocument();
+    const face = container.querySelector('.brief-face') as HTMLElement;
+    const probe = (id: number) => {
+      const el = document.createElement('div');
+      el.style.background = marbleBackground(300 + id);
+      return el.style.background;
+    };
+    expect(face.style.background).toBe(probe(5));
+    expect(face.style.background).not.toBe(probe(4));
   });
 });

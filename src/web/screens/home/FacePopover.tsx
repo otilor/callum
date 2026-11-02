@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PathStep, Person, Project, Stage } from '../../../shared/types.js';
 import { api } from '../../api.js';
 import { marbleBackground } from '../../ui/Marble.js';
@@ -34,7 +34,7 @@ function nextLine(p: Person, path: PathStep[], tz: string, now: Date): string {
   const at = next?.at ?? p.nextTouchAt;
   if (!at) return p.status === 'resting' ? `${p.firstName} is resting. Callum will try again later.` : `Callum has nothing queued for ${p.firstName} yet.`;
   const when = formatWhen(at, p.timezone ?? tz, now);
-  if (p.stage === 'stranger') return `Callum says hello ${when.replace(' at ', ' after ')} their time.`;
+  if (p.stage === 'stranger') return `Callum says hello ${when.replace(' at ', ' after ')}${p.timezone ? ' their time' : ''}.`;
   return `If ${p.firstName} doesn't reply, ${next?.label ? `the ${next.label.toLowerCase()}` : 'the next message'} goes out ${when}.`;
 }
 
@@ -44,6 +44,7 @@ function nextLine(p: Person, path: PathStep[], tz: string, now: Date): string {
 export function FacePopover({ person, project, tz, now, notify, refresh, inline = false, onClose, onOpenPerson }: FacePopoverProps) {
   const [path, setPath] = useState<PathStep[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const actions = useRef<HTMLDivElement>(null);
   const held = person.status === 'held';
   const talking = person.stage === 'talking';
 
@@ -58,6 +59,12 @@ export function FacePopover({ person, project, tz, now, notify, refresh, inline 
       alive = false;
     };
   }, [person.id, person.touches, person.stage, person.status]);
+
+  // A card that floats over the river takes the cursor with it, so the keyboard lands on what you can do.
+  useEffect(() => {
+    if (inline) return;
+    actions.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+  }, [inline, person.id]);
 
   async function run(label: 'nudge' | 'hold' | 'resume') {
     if (busy) return;
@@ -130,7 +137,7 @@ export function FacePopover({ person, project, tz, now, notify, refresh, inline 
 
       <p className="pop-next">{nextLine(person, steps, tz, now())}</p>
 
-      <div className="pop-actions">
+      <div className="pop-actions" ref={actions}>
         {!talking ? (
           <button type="button" className="pop-btn pop-btn-ink" disabled={busy || held} onClick={() => void run('nudge')}>
             Nudge now

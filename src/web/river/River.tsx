@@ -17,8 +17,6 @@ export interface RiverProps {
   onFace?: (person: Person) => void;
   /** A smaller river, for under Day one and for narrow screens. */
   compact?: boolean;
-  /** Decides when a snoozed person is due back. Defaults to the clock. */
-  now?: () => Date;
   /** The person whose popover is open. */
   selectedId?: number | null;
   /** Rendered next to the selected face, above it. */
@@ -144,16 +142,14 @@ function faceStyle(item: Extract<RiverItem, { kind: 'face' }>, width: number, h:
  * Faces slide to the next lane when a person moves on, and the water stands still when Callum is not running.
  */
 export function River({
-  people, running, still, onFace, compact = false, now, selectedId = null, popover, sendingIds, marks, overlay, onGroup, height, className,
+  people, running, still, onFace, compact = false, selectedId = null, popover, sendingIds, marks, overlay, onGroup, height, className,
 }: RiverProps) {
   const h = height ?? (compact ? 160 : 280);
   const ref = useRef<HTMLDivElement>(null);
   const width = useSize(ref, 1000);
   const bedId = useId();
-  const clock = now ?? (() => new Date());
   const layout = useMemo(
-    () => riverLayout(people, width, h, { now: clock() }),
-    // The clock is read when people or the size change; a snoozed person comes back on the next state update.
+    () => riverLayout(people, width, h),
     [people, width, h],
   );
 
@@ -208,20 +204,20 @@ export function River({
           if (item.kind === 'group') {
             const half = item.size / 2;
             const look = LOOK[item.stage];
-            return (
-              <button
-                key={`group-${item.stage}`}
-                type="button"
-                className="river-group"
-                aria-label={`${item.count} ${item.count === 1 ? 'person' : 'people'}, ${STAGE_LABEL[item.stage]}`}
-                onClick={() => onGroup?.(item.stage)}
-                style={{
-                  left: `${((item.x / width) * 100).toFixed(2)}%`, top: `${((item.y / h) * 100).toFixed(2)}%`, width: item.size, height: item.size,
-                  margin: `-${half}px 0 0 -${half}px`, boxShadow: `0 0 0 2px ${look.ring}`,
-                }}
-              >
+            const label = `${item.count} ${item.count === 1 ? 'person' : 'people'}, ${STAGE_LABEL[item.stage]}`;
+            const groupStyle: CSSProperties = {
+              left: `${((item.x / width) * 100).toFixed(2)}%`, top: `${((item.y / h) * 100).toFixed(2)}%`, width: item.size, height: item.size,
+              margin: `-${half}px 0 0 -${half}px`, boxShadow: `0 0 0 2px ${look.ring}`,
+            };
+            // A group is a button only when there is somewhere to go; otherwise it is a picture, like the faces.
+            return onGroup ? (
+              <button key={`group-${item.stage}`} type="button" className="river-group" aria-label={label} onClick={() => onGroup(item.stage)} style={groupStyle}>
                 <span className="river-group-count">{item.count}</span>
               </button>
+            ) : (
+              <span key={`group-${item.stage}`} role="img" className="river-group" aria-label={label} style={groupStyle}>
+                <span className="river-group-count">{item.count}</span>
+              </span>
             );
           }
           const p = item.person;

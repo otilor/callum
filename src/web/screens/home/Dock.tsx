@@ -6,14 +6,11 @@ import { channelPhrase } from './dock.js';
 
 /** Where a waiting face floats above the river, as a percentage across and px down. Same spots as the boards. */
 const SLOTS = [{ x: 72, y: 92 }, { x: 81, y: 128 }, { x: 90, y: 100 }, { x: 63, y: 122 }, { x: 56, y: 86 }];
+/** At most this many faces float; anyone beyond them is one sun `+N` button in the sixth spot. */
+const MAX_FACES = SLOTS.length;
+const MORE_SLOT = { x: 47, y: 118 };
 /** The water starts here, in the stage's own pixels, and the dashed lines run down to it. */
 export const RIVER_TOP = 285;
-
-function slotFor(index: number): { x: number; y: number } {
-  const base = SLOTS[index % SLOTS.length]!;
-  const ring = Math.floor(index / SLOTS.length);
-  return { x: Math.max(8, base.x - ring * 6), y: base.y + (ring % 2 === 0 ? 0 : -18) };
-}
 
 export interface DockProps {
   /** People who wait on you, oldest reply first, from every project. */
@@ -39,11 +36,14 @@ export interface DockProps {
  */
 export function Dock({ people, projects, tz, now, idle, greeting, quiet, above, onOpenDeck }: DockProps) {
   const slots = useRef(new Map<number, number>());
+  // The longest-waiting float; the rest are counted in the `+N` button.
+  const shown = people.slice(0, MAX_FACES);
+  const extra = people.length - shown.length;
   // A person keeps their spot while they wait; a spot opens up when they leave.
-  const live = new Set(people.map((p) => p.id));
+  const live = new Set(shown.map((p) => p.id));
   for (const id of [...slots.current.keys()]) if (!live.has(id)) slots.current.delete(id);
   const used = new Set(slots.current.values());
-  for (const p of people) {
+  for (const p of shown) {
     if (slots.current.has(p.id)) continue;
     let at = 0;
     while (used.has(at)) at++;
@@ -86,8 +86,8 @@ export function Dock({ people, projects, tz, now, idle, greeting, quiet, above, 
       </div>
 
       <div className="dock-faces">
-        {people.map((p) => {
-          const at = slotFor(slots.current.get(p.id) ?? 0);
+        {shown.map((p) => {
+          const at = SLOTS[slots.current.get(p.id) ?? 0] ?? SLOTS[0]!;
           const top = at.y + 36 + 8;
           const style: CSSProperties = { left: `${at.x}%`, top: at.y };
           return (
@@ -107,6 +107,17 @@ export function Dock({ people, projects, tz, now, idle, greeting, quiet, above, 
             </div>
           );
         })}
+        {extra > 0 ? (
+          <button
+            type="button"
+            className="dock-more"
+            aria-label={extra === 1 ? '1 more person wants to talk' : `${extra} more people want to talk`}
+            onClick={() => onOpenDeck()}
+            style={{ left: `${MORE_SLOT.x}%`, top: MORE_SLOT.y }}
+          >
+            {`+${extra}`}
+          </button>
+        ) : null}
       </div>
     </>
   );

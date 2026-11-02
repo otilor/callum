@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { findPlaceholders, guardLine, leaveOutLabel, removePlaceholderSentence, splitPlaceholders } from './highlight.js';
 
 describe('splitPlaceholders', () => {
+  it('marks exactly what the server guard refuses', async () => {
+    const { findPlaceholders: guard } = await import('../../server/engine/guard.js');
+    const text = "Hi {first_name}, [YOUR PRICE] and {{company}} and [Ada’s CALL] but not {Plain Words} or [lower].";
+    expect(splitPlaceholders(text).filter((p) => p.placeholder).map((p) => p.text)).toEqual(['{first_name}', '[YOUR PRICE]', '{{company}}']);
+    expect(findPlaceholders(text)).toEqual(guard(text));
+  });
+
   it('splits text around a placeholder and flags it', () => {
     expect(splitPlaceholders('Our price is [YOUR PRICE] a month.')).toEqual([
       { text: 'Our price is ', placeholder: false },

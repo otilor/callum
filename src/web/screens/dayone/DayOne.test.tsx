@@ -109,7 +109,7 @@ describe('DayOne', () => {
     await user.click(screen.getByRole('button', { name: 'OK' }));
     await waitFor(() => expect(mocks.approve).toHaveBeenCalledWith(100, 'edited text'));
     expect(refresh).toHaveBeenCalled();
-    expect(await screen.findByText("Kemi's hello goes out tomorrow at 9:00 their time")).toBeInTheDocument();
+    expect(await screen.findByText("Kemi's hello goes out tomorrow at 9:00")).toBeInTheDocument();
   });
 
   it('approves an unedited message without sending the text again', async () => {
@@ -133,6 +133,51 @@ describe('DayOne', () => {
     await waitFor(() => expect(mocks.undo).toHaveBeenCalledWith(100));
     expect(await screen.findByText('Kemi Eze')).toBeInTheDocument();
     expect(screen.getByText('Not sent. Nothing went to Kemi.')).toBeInTheDocument();
+  });
+
+  it('says so when Undo comes too late', async () => {
+    mocks.undo.mockRejectedValue(new Error('Already sent'));
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: 'OK' }));
+    await user.click(await screen.findByRole('button', { name: 'Undo' }));
+    expect(await screen.findByText("Too late. Kemi's hello already went out.")).toBeInTheDocument();
+  });
+
+  it('puts the cursor in the next message after an OK', async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: 'OK' }));
+    const next = await screen.findByRole('textbox', { name: /Message to Tunde/ });
+    await waitFor(() => expect(next).toHaveFocus());
+  });
+
+  it('keeps See your river off while the last OK can still be undone', async () => {
+    const { user } = setup(appState({ projects: [project({ approvalsLeft: 1 })], outbox: [item(100, 1, 'Hi Kemi')] }));
+    await user.click(screen.getByRole('button', { name: 'OK' }));
+    const go = await screen.findByRole('button', { name: 'See your river' });
+    expect(go).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(mocks.undo).toHaveBeenCalled());
+  });
+
+  it('says their time only when the person has a time zone of their own', async () => {
+    const people = [person(1, 'Kemi Eze', { timezone: 'Europe/London' })];
+    const { user } = setup(appState({ people, outbox: [item(100, 1, 'Hi Kemi')], projects: [project({ approvalsLeft: 5 })] }));
+    await user.click(screen.getByRole('button', { name: 'OK' }));
+    expect(await screen.findByText(/Kemi's hello goes out .* their time/)).toBeInTheDocument();
+  });
+
+  it('does not count a wrapped project as company', () => {
+    setup(appState({ projects: [project({ approvalsLeft: 7 }), project({ id: 2, name: 'Old', state: 'wrapped' })] }));
+    expect(screen.getByText('7 left')).toBeInTheDocument();
+  });
+
+  it('can go back to Home while hellos are still waiting', async () => {
+    const onBack = vi.fn();
+    const state = appState();
+    const user = userEvent.setup();
+    render(<DayOne state={state} project={state.projects[0]!} refresh={refresh} now={() => NOW} onLeave={onLeave} onBack={onBack} />);
+    await user.click(screen.getByRole('button', { name: 'Back to the river' }));
+    expect(onBack).toHaveBeenCalled();
   });
 
   it("leaves a person alone with Don't contact", async () => {

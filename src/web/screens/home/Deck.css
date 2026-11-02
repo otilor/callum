@@ -444,3 +444,20 @@
     animation: none;
   }
 }
+.deck-hint {
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 18px;
+  background: var(--mist);
+  font-size: 14px;
+  color: var(--slate);
+  text-align: center;
+}
+.deck-name:focus {
+  outline: none;
+}
+.deck-name:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+  border-radius: 6px;
+}

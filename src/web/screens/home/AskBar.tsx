@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type Ref } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type Ref } from 'react';
 import type { AskAnswer, Person, Project } from '../../../shared/types.js';
 import { api } from '../../api.js';
 import { marbleBackground } from '../../ui/Marble.js';
@@ -36,6 +36,7 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
   const [acting, setActing] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const asking = useRef(0);
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
 
   const suggestions = [
     "Who's warming up?",
@@ -44,7 +45,8 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
   ];
 
   async function ask(raw: string) {
-    const question = raw.trim() || "Who's warming up?";
+    const question = raw.trim();
+    if (!question) return;
     const ticket = ++asking.current;
     setText('');
     setChips(false);
@@ -60,13 +62,15 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
   async function act() {
     const action = turn?.answer?.action;
     if (!turn || !action || acting) return;
+    // A newer question may have replaced this answer while the action ran; its result then belongs to nobody.
+    const ticket = asking.current;
     setActing(true);
     try {
       const result = await api.act(action, project?.id);
-      setTurn((t) => (t ? { ...t, result, error: '' } : t));
+      if (ticket === asking.current) setTurn((t) => (t ? { ...t, result, error: '' } : t));
       await onChanged?.();
     } catch (e) {
-      setTurn((t) => (t ? { ...t, error: errorText(e) } : t));
+      if (ticket === asking.current) setTurn((t) => (t ? { ...t, error: errorText(e) } : t));
     } finally {
       setActing(false);
     }
@@ -85,7 +89,15 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
   const action = turn?.answer?.action ?? null;
 
   return (
-    <div className="ab">
+    <div
+      className="ab"
+      onBlur={(e) => {
+        // Focus moving from the input to a chip (Tab) is still inside the bar; anything else closes the chips.
+        if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;
+        clearTimeout(closeTimer.current);
+        closeTimer.current = setTimeout(() => setChips(false), 160);
+      }}
+    >
       {turn ? (
         <div className="ab-panel panel-in" role="region" aria-label="Callum's answer" aria-live="polite">
           <div className="ab-top">
@@ -122,28 +134,6 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
         </div>
       ) : null}
 
-      {chips && !turn ? (
-        <div className="ab-chips panel-in">
-          {suggestions.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className="ab-chip"
-              // The mouse goes down before the input loses focus, so the chip is still there to be pressed.
-              onMouseDown={(e) => {
-                e.preventDefault();
-                void ask(s);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void ask(s);
-              }}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
       <div className="ab-pill">
         <span className="ab-dot" aria-hidden="true" />
         <label className="sr-only" htmlFor="ab-input">Ask Callum</label>
@@ -160,15 +150,31 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
             clearTimeout(closeTimer.current);
             setChips(true);
           }}
-          onBlur={() => {
-            closeTimer.current = setTimeout(() => setChips(false), 160);
-          }}
           onKeyDown={onKey}
         />
         <button type="button" className="ab-send" aria-label="Send" onClick={() => void ask(text)}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
         </button>
       </div>
+
+      {chips && !turn ? (
+        <div className="ab-chips panel-in">
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className="ab-chip"
+              // The mouse goes down before the input loses focus; keeping focus where it is lets the click land.
+              onMouseDown={(e) => e.preventDefault()}
+              onFocus={() => clearTimeout(closeTimer.current)}
+              // Enter and Space both arrive as a click.
+              onClick={() => void ask(s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

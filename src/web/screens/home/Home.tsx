@@ -9,6 +9,8 @@
  *   onAddPeople   () => void  Shows `Add people` in the top bar (Task 18).
  *   onNewProject  () => void  Shows `New project` in the project sheet (Task 18).
  *   onOpenPerson  (id) => void  Adds `See everything` to a face's card and to list rows (Task 17).
+ *   dayOne        { left, onOpen }  App passes it while this project still has hellos to OK and more than one project
+ *                 runs: a banner in the water, so replies are never stuck behind Day one.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AppState, Channel, Person, Project } from '../../../shared/types.js';
@@ -45,6 +47,7 @@ export interface HomeProps {
   onAddPeople?: () => void;
   onNewProject?: () => void;
   onOpenPerson?: (id: number) => void;
+  dayOne?: { left: number; onOpen: () => void };
 }
 
 const ALL_CHANNELS: Channel[] = ['email', 'linkedin', 'x'];
@@ -84,7 +87,7 @@ function PlayGlyph() {
   );
 }
 
-export function Home({ state, project, refresh, now, account = {}, incident, quiet, overlay, onAddPeople, onNewProject, onOpenPerson }: HomeProps) {
+export function Home({ state, project, refresh, now, account = {}, incident, quiet, overlay, onAddPeople, onNewProject, onOpenPerson, dayOne }: HomeProps) {
   const clock = useMemo(() => now ?? (() => new Date()), [now]);
   const toasts = useUndoToasts();
   const [view, setView] = useState<'river' | 'list'>('river');
@@ -92,6 +95,8 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
   const [selected, setSelected] = useState<number | null>(null);
   const [, tick] = useState(0);
   const askInput = useRef<HTMLInputElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
 
   // Faces that wait on someone and snoozed people who come due change with the clock, not only with the server.
   useEffect(() => {
@@ -102,7 +107,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
   const tz = state.settings.timezone;
   const at = clock();
   const sending = pendingSendIds(state);
-  const waiting = dockPeople(state, at);
+  const waiting = dockPeople(state);
   const mine = state.people.filter((p) => p.projectId === project.id);
   const inRiver = riverPeople(state, project.id, sending);
   const everyone = riverPeople(state, null, sending);
@@ -124,7 +129,8 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
     for (const p of state.people) {
       const was = before.get(p.id);
       if (!was) continue;
-      if (p.status === 'waiting' && was.status !== 'waiting') toasts.event(`${p.firstName} replied`);
+      // Coming back from a snooze is not news: the person asked for it.
+      if (p.status === 'waiting' && was.status !== 'waiting' && was.status !== 'snoozed') toasts.event(`${p.firstName} replied`);
       else if (p.linkedinState === 'connected' && was.link === 'invited') toasts.event(`${p.firstName} accepted`);
     }
     // toasts is a stable controller; only the people matter here.
@@ -145,6 +151,32 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
     if (selected !== null && !selectedPerson) setSelected(null);
   }, [selected, selectedPerson]);
 
+  // Opening the deck remembers what opened it; closing puts the cursor back there.
+  const openDeck = (startAt?: number) => {
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setDeck(startAt === undefined ? {} : { startAt });
+  };
+  useEffect(() => {
+    if (deck) {
+      wasOpen.current = true;
+      return;
+    }
+    if (!wasOpen.current) return;
+    wasOpen.current = false;
+    const back = opener.current;
+    opener.current = null;
+    if (back?.isConnected) back.focus();
+    else document.querySelector<HTMLElement>('.dock-open-btn, .dock-face, .dock-more')?.focus();
+  }, [deck]);
+
+  // Closing a face's card puts the cursor back on the face.
+  const lastSelected = useRef<number | null>(null);
+  useEffect(() => {
+    const was = lastSelected.current;
+    lastSelected.current = selected;
+    if (selected === null && was !== null) document.querySelector<HTMLElement>(`.river-face[data-id="${was}"]`)?.focus();
+  }, [selected]);
+
   const notify = useCallback((text: string) => toasts.info(text), [toasts]);
 
   async function toggleRun() {
@@ -164,8 +196,9 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
 
   async function resumeHere() {
     try {
+      // Both can be paused at once: resuming only one would leave the river still.
       if (allPaused) await api.resumeAll();
-      else await api.resumeProject(project.id);
+      if (project.state === 'paused') await api.resumeProject(project.id);
       toasts.info(`${project.name} is back to work`);
       await refresh();
     } catch (e) {
@@ -178,7 +211,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
     .sort((a, b) => (b.repliedAt ?? '').localeCompare(a.repliedAt ?? ''))[0];
 
   const nextItem = state.outbox
-    .filter((o) => o.state === 'scheduled' && mine.some((p) => p.id === o.personId))
+    .filter((o) => o.state === 'scheduled' && o.origin === 'auto' && (o.kind === 'hello' || o.kind === 'invite') && mine.some((p) => p.id === o.personId))
     .sort((a, b) => a.sendAfter.localeCompare(b.sendAfter))[0];
   const nextPerson = nextItem ? mine.find((p) => p.id === nextItem.personId) : undefined;
 
@@ -197,6 +230,17 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
         <div className="home-paused">
           <span className="home-paused-text">{pausedLine}</span>
           <button type="button" className="home-paused-btn" onClick={() => void resumeHere()}>Resume</button>
+        </div>
+      ) : null}
+      {dayOne && !stillAll ? (
+        <div className="home-dayone">
+          <span className="home-dayone-segs" aria-hidden="true">
+            {Array.from({ length: 10 }, (_, i) => (
+              <span key={i} className={i < 10 - dayOne.left ? 'is-ok' : ''} />
+            ))}
+          </span>
+          <span className="home-dayone-line">{`${dayOne.left} of 10 hellos left to OK in ${project.name}`}</span>
+          <button type="button" className="home-dayone-btn" onClick={dayOne.onOpen}>OK the hellos</button>
         </div>
       ) : null}
       {empty && !stillAll ? (
@@ -258,7 +302,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
                 <Brief state={state} now={at} />
               </>
             }
-            onOpenDeck={(id) => setDeck(id === undefined ? {} : { startAt: id })}
+            onOpenDeck={openDeck}
           />
 
           {view === 'river' ? (
@@ -268,11 +312,11 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
                   people={inRiver}
                   running={!stillAll}
                   still={stillAll ? ALL_CHANNELS : stillChannels(state)}
-                  now={clock}
                   height={RIVER_HEIGHT}
                   sendingIds={[...sending]}
                   selectedId={selectedPerson?.id ?? null}
                   onFace={(p) => setSelected((s) => (s === p.id ? null : p.id))}
+                  onGroup={() => setView('list')}
                   popover={
                     selectedPerson ? (
                       <FacePopover
@@ -301,7 +345,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
               now={clock}
               notify={notify}
               refresh={refresh}
-              onOpenDeck={(id) => setDeck({ startAt: id })}
+              onOpenDeck={(id) => openDeck(id)}
               {...(onOpenPerson ? { onOpenPerson } : {})}
             />
           )}

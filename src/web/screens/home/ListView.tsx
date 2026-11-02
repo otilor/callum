@@ -37,9 +37,7 @@ export interface ListViewProps {
 
 function nextStep(p: Person, tz: string, now: Date): string {
   const zone = p.timezone ?? tz;
-  if (p.status === 'waiting' || (p.status === 'snoozed' && (!p.snoozedUntil || Date.parse(p.snoozedUntil) <= now.getTime()))) {
-    return p.repliedAt ? `Replied ${formatWhen(p.repliedAt, tz, now)}` : 'Replied';
-  }
+  if (p.status === 'waiting') return p.repliedAt ? `Replied ${formatWhen(p.repliedAt, tz, now)}` : 'Replied';
   if (p.status === 'snoozed') return p.snoozedUntil ? `Back ${formatWhen(p.snoozedUntil, tz, now)}` : 'Snoozed';
   if (p.status === 'resting') return p.restUntil ? `Rests until ${formatWhen(p.restUntil, tz, now)}` : 'Resting';
   if (p.status === 'held') return 'On hold';
@@ -49,10 +47,9 @@ function nextStep(p: Person, tz: string, now: Date): string {
   return 'Nothing queued';
 }
 
-function groupOf(p: Person, now: Date): GroupKey | null {
+function groupOf(p: Person): GroupKey | null {
   if (p.status === 'waiting') return 'talk';
-  if (p.status === 'resting') return 'resting';
-  if (p.status === 'snoozed') return p.snoozedUntil && Date.parse(p.snoozedUntil) > now.getTime() ? 'resting' : 'talk';
+  if (p.status === 'resting' || p.status === 'snoozed') return 'resting';
   if (p.status === 'active' || p.status === 'held') return p.stage;
   return null;
 }
@@ -68,17 +65,23 @@ export function ListView({ people, projects, currentProjectId, tz, now, notify, 
   const [open, setOpen] = useState<number | null>(null);
   const clock = now();
 
-  // The filter only means something with more than one project; a project that went away falls back to all.
-  const active: number | 'all' = many && filter !== 'all' && running.some((p) => p.id === filter) ? filter : 'all';
-  const shown = useMemo(() => people.filter((p) => active === 'all' || p.projectId === active), [people, active]);
+  // The filter only means something with more than one project. With one, the list is that project's people; a project
+  // that was wrapped up or went away falls back to all that are still running.
+  const active: number | 'all' = !many ? (running[0]?.id ?? currentProjectId ?? 'all') : filter !== 'all' && running.some((p) => p.id === filter) ? filter : 'all';
+  const shown = useMemo(
+    () => people.filter((p) => (active === 'all' ? running.some((r) => r.id === p.projectId) : p.projectId === active)),
+    // `running` is rebuilt every render from `projects`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [people, active, projects],
+  );
   const byGroup = new Map<GroupKey, Person[]>();
   for (const p of shown) {
-    const g = groupOf(p, clock);
+    const g = groupOf(p);
     if (g) byGroup.set(g, [...(byGroup.get(g) ?? []), p]);
   }
   const projectName = (p: Person) => projects.find((x) => x.id === p.projectId)?.name ?? '';
   const columns = many ? 6 : 5;
-  const total = shown.filter((p) => groupOf(p, clock) !== null).length;
+  const total = shown.filter((p) => groupOf(p) !== null).length;
 
   return (
     <section className="lv" aria-label="Everyone, as a list">

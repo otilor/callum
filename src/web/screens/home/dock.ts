@@ -7,12 +7,13 @@ export function pendingSendIds(state: AppState): Set<number> {
 }
 
 /**
- * Who waits on the user, across every project, oldest reply first. A person whose reply is already on its way is
+ * Who waits on the user, across every project, oldest reply first: status `waiting` only (the server moves a snoozed
+ * person back to waiting when they are due). A person whose reply is already on its way is
  * not waiting any more, even if the server has not moved them yet.
  */
-export function dockPeople(state: AppState, now: Date): Person[] {
+export function dockPeople(state: AppState): Person[] {
   const sending = pendingSendIds(state);
-  return riverLayout(state.people, 1000, 280, { now }).dock.filter((p) => !sending.has(p.id));
+  return riverLayout(state.people, 1000, 280).dock.filter((p) => !sending.has(p.id));
 }
 
 /** The people the river draws for one project: the ones with a reply on its way sit among those talking. */

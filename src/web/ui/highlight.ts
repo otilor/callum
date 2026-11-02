@@ -1,13 +1,20 @@
+import { findPlaceholders as guardPlaceholders } from '../../server/engine/guard.js';
+
 export interface TextPart { text: string; placeholder: boolean }
 
-/** `[YOUR PRICE]`, `{{first_name}}` and `{x}`: the shapes Callum never sends. */
-const PLACEHOLDER = /\[[A-Z][A-Z0-9 _'-]*\]|\{\{[^{}]*\}\}|\{[^{}]+\}/g;
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** The text in order, with each placeholder as a part of its own. */
+/**
+ * The text in order, with each placeholder as a part of its own. What counts as a placeholder is decided by the same
+ * function the server uses before it sends, so what is marked here is exactly what would be refused there.
+ */
 export function splitPlaceholders(text: string): TextPart[] {
+  const holes = guardPlaceholders(text);
+  if (holes.length === 0) return text ? [{ text, placeholder: false }] : [];
+  const pattern = new RegExp([...holes].sort((a, b) => b.length - a.length).map(escape).join('|'), 'g');
   const parts: TextPart[] = [];
   let at = 0;
-  for (const m of text.matchAll(PLACEHOLDER)) {
+  for (const m of text.matchAll(pattern)) {
     const start = m.index ?? 0;
     if (start > at) parts.push({ text: text.slice(at, start), placeholder: false });
     parts.push({ text: m[0], placeholder: true });
@@ -19,7 +26,7 @@ export function splitPlaceholders(text: string): TextPart[] {
 
 /** Each placeholder once, in the order it first appears. */
 export function findPlaceholders(text: string): string[] {
-  return [...new Set(splitPlaceholders(text).filter((p) => p.placeholder).map((p) => p.text))];
+  return guardPlaceholders(text);
 }
 
 /** Where the sentence around `at` starts and ends: at . ! ? followed by space, or at a line break. */

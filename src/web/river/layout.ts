@@ -28,8 +28,6 @@ export interface RiverLayout {
 export interface RiverLayoutOptions {
   /** More faces than this collapse each lane into one group bubble. Default 60. */
   groupAbove?: number;
-  /** Decides whether a snoozed person is due back. Without it every snoozed person counts as due. */
-  now?: Date;
 }
 
 interface Lane { x0: number; x1: number; rows: number; cols: number; step: number }
@@ -50,12 +48,11 @@ function hash(n: number): number {
 
 type Where = 'dock' | 'river' | 'nowhere';
 
-function whereIs(p: Person, now: Date | undefined): Where {
+/** Only a person whose status is `waiting` is in the dock. The server moves a snoozed person back to waiting when they are due. */
+function whereIs(p: Person): Where {
   switch (p.status) {
     case 'waiting':
       return 'dock';
-    case 'snoozed':
-      return !now || !p.snoozedUntil || Date.parse(p.snoozedUntil) <= now.getTime() ? 'dock' : 'nowhere';
     case 'active':
     case 'held':
       return 'river';
@@ -104,7 +101,7 @@ export function riverLayout(people: Person[], width: number, height: number, opt
   const dock: Person[] = [];
   const lanes: Record<Stage, Person[]> = { stranger: [], hello: [], following: [], talking: [] };
   for (const p of people) {
-    const where = whereIs(p, opts.now);
+    const where = whereIs(p);
     if (where === 'dock') dock.push(p);
     else if (where === 'river') lanes[p.stage].push(p);
   }

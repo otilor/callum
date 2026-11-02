@@ -35,8 +35,12 @@ function strip(people: Person[]): Person[] {
 function counts(state: AppState, p: Project) {
   const mine = state.people.filter((x) => x.projectId === p.id && ALIVE.includes(x.status));
   const talking = mine.filter((x) => x.stage === 'talking' || x.status === 'waiting').length;
-  const scheduled = state.outbox.filter((o) => (o.state === 'scheduled' || o.state === 'awaiting_ok') && mine.some((x) => x.id === o.personId)).length;
-  return { people: mine, n: mine.length, talking, scheduled };
+  // What wrapping up cancels: hellos and invitations not yet gone. What stays: people waiting in the dock.
+  const scheduled = state.outbox.filter(
+    (o) => (o.state === 'scheduled' || o.state === 'awaiting_ok') && (o.kind === 'hello' || o.kind === 'invite') && mine.some((x) => x.id === o.personId),
+  ).length;
+  const docked = mine.filter((x) => x.status === 'waiting').length;
+  return { people: mine, n: mine.length, talking, scheduled, docked };
 }
 
 function line(state: AppState, p: Project, now: Date): string {
@@ -147,10 +151,11 @@ export function ProjectSwitcher({ state, project, refresh, now = () => new Date(
   const wrap = (p: Project, andDownload: boolean) =>
     run(async () => {
       if (andDownload) download(api.exportCsvUrl(p.id));
-      await api.wrapProject(p.id);
+      const result = await api.wrapProject(p.id);
       const other = rows.find((r) => r.id !== p.id);
       if (p.id === project.id && other) await api.setCurrentProject(other.id);
-      toast(`${andDownload ? `${poss(p.name)} people are downloading. ` : ''}${p.name} is wrapped up. Its scheduled hellos are cancelled.`);
+      const said = result.summary?.trim() || `${p.name} is wrapped up. Its scheduled hellos are cancelled.`;
+      toast(`${andDownload ? `${poss(p.name)} people are downloading. ` : ''}${said}`);
       setConfirm(null);
       await refresh();
       close();
@@ -290,10 +295,7 @@ export function ProjectSwitcher({ state, project, refresh, now = () => new Date(
                 {confirm === p.id ? (
                   <div className="psw-confirm panel-in">
                     <p>
-                      {`Wrap up ${p.name}? `}
-                      {c.scheduled === 0 ? 'No hellos are scheduled. ' : `${c.scheduled} scheduled ${c.scheduled === 1 ? 'hello is' : 'hellos are'} cancelled. `}
-                      {c.talking === 0 ? '' : c.talking === 1 ? '1 person you’re talking with stays in your dock. ' : `${c.talking} people you’re talking with stay in your dock. `}
-                      {`Download ${poss(p.name)} people first.`}
+                      {`Wrap up ${p.name}? ${c.scheduled} scheduled ${c.scheduled === 1 ? 'hello is' : 'hellos are'} cancelled. ${c.docked} ${c.docked === 1 ? 'person' : 'people'} you’re talking with ${c.docked === 1 ? 'stays' : 'stay'} in your dock. Download ${poss(p.name)} people first.`}
                     </p>
                     <div className="psw-confirm-row">
                       <button type="button" className="psw-save" disabled={busy} onClick={() => void wrap(p, true)}>Download and wrap up</button>
