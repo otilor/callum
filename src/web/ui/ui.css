@@ -1,0 +1,116 @@
+/* ---- wordmark ---- */
+.wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+.wm-lockup {
+  display: inline-flex;
+  align-items: baseline;
+}
+.wm-dot {
+  display: inline-block;
+  width: 0.53em;
+  height: 0.53em;
+  margin-right: 0.11em;
+  border-radius: 50%;
+  background: var(--sun);
+}
+.wm-sep,
+.wm-project {
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--slate);
+}
+
+/* ---- buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: none;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: opacity 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+.btn-md {
+  min-height: 52px;
+  padding: 0 30px;
+  border-radius: 26px;
+  font-size: 16px;
+}
+.btn-lg {
+  min-height: 56px;
+  padding: 0 28px;
+  border-radius: 28px;
+  font-size: 17px;
+}
+.btn-primary {
+  background: var(--ink);
+  color: var(--white);
+}
+.btn-quiet {
+  background: var(--mist);
+  color: var(--ink);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--slate);
+  padding-inline: 16px;
+}
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.35;
+}
+.btn[aria-busy='true'] {
+  opacity: 0.7;
+}
+
+/* ---- toasts ---- */
+.toasts {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 12px 12px 12px 18px;
+  border-radius: 24px;
+  background: var(--ink);
+  color: var(--white);
+  font-size: 15px;
+  box-shadow: var(--lift);
+}
+.toast-dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--sun);
+}
+.toast-action {
+  min-height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+}
