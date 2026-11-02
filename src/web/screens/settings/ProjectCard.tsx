@@ -71,6 +71,7 @@ export function ProjectCard({
   const [confirming, setConfirming] = useState(false);
   const [bubbleKey, setBubbleKey] = useState(0);
   const offerRef = useRef<HTMLTextAreaElement>(null);
+  const audienceRef = useRef<HTMLTextAreaElement>(null);
   const bubbleRef = useRef<HTMLTextAreaElement>(null);
   const ticket = useRef(0);
   const asked = useRef(false);
@@ -100,6 +101,7 @@ export function ProjectCard({
   }, [open, sample, tone, project.id]);
 
   useAutoGrow(offerRef, offerDraft, open);
+  useAutoGrow(audienceRef, audienceDraft, open);
   useAutoGrow(bubbleRef, sample ?? '', open && !confirming);
 
   const fail = (field: Field, text: string) => setErr({ field, text });
@@ -302,14 +304,20 @@ export function ProjectCard({
           <div className="yc-who">
             <label className="yc-field yc-who-field">
               <span>Who to meet</span>
-              <input
-                className="yc-input"
-                type="text"
+              <textarea
+                ref={audienceRef}
+                className="yc-input yc-audience"
+                rows={1}
                 value={audienceDraft}
                 placeholder="Ops teams at fintechs in Lagos"
-                onChange={(e) => setAudienceDraft(e.target.value)}
+                onChange={(e) => setAudienceDraft(e.target.value.replace(/\n/g, ' '))}
                 onBlur={() => void saveAudience()}
-                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  }
+                }}
               />
             </label>
             {onAddPeople ? <button type="button" className="yc-pill" onClick={() => onAddPeople(project.id)}>Add people</button> : null}

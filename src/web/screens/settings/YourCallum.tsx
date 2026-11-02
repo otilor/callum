@@ -476,12 +476,14 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
                 </Row>
               ) : null}
 
-              <section className="yc-row yc-data">
-                <span className="yc-row-title">Your data</span>
-                <span className="yc-data-actions">
-                  <button type="button" className="yc-pill" onClick={() => download(api.exportJsonUrl())}>Download everything</button>
-                  {onLeave ? <button type="button" className="yc-pill" onClick={onLeave}>Take a break or wrap up</button> : null}
-                </span>
+              <section className="yc-row yc-data" data-row="data">
+                <div className="yc-rowhead yc-data-head">
+                  <span className="yc-row-title">Your data</span>
+                  <span className="yc-data-actions">
+                    <button type="button" className="yc-pill" onClick={() => download(api.exportJsonUrl())}>Download everything</button>
+                    {onLeave ? <button type="button" className="yc-pill" onClick={onLeave}>Take a break or wrap up</button> : null}
+                  </span>
+                </div>
               </section>
             </div>
           </div>

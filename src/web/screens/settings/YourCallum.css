@@ -203,6 +203,11 @@ textarea.yc-input {
   font-size: 18px;
   font-weight: 500;
 }
+/* One line to start with, growing to whatever is written so nothing is cut off. */
+textarea.yc-audience {
+  min-height: 52px;
+  padding: 14px 18px;
+}
 .yc-two {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -660,17 +665,20 @@ textarea.yc-input {
   transform: translateX(20px);
 }
 .yc-data {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-height: 66px;
-  padding: 0 12px;
-  flex-wrap: wrap;
+  padding: 0;
 }
-.yc-data .yc-row-title {
-  flex: 0 0 168px;
+/* The same head as every other row (title in the first column, what it holds after it), without the chevron. */
+.yc-data-head {
+  min-height: 66px;
+  padding-block: 12px;
+  cursor: default;
+}
+.yc-data-head:hover {
+  background: transparent;
 }
 .yc-data-actions {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

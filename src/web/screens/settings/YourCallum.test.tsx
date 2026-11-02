@@ -205,6 +205,19 @@ describe('Projects', () => {
     expect(await screen.findByText('Saved. Book a call sends this link.')).toBeInTheDocument();
   });
 
+  it('keeps a long Who to meet whole in a field that grows, and saves it on Enter', async () => {
+    const user = setup();
+    const who = screen.getByLabelText('Who to meet');
+    // A text box that wraps, like the offer field, so a long line is never cut off.
+    expect(who.tagName).toBe('TEXTAREA');
+    const long = 'Founders and finance leads at fintechs in Lagos and Accra who still reconcile by hand every month';
+    await user.type(who, long);
+    expect(who).toHaveValue(long);
+    await user.keyboard('{Enter}');
+    expect(who).toHaveValue(long);
+    expect(mocks.updateProject).toHaveBeenCalledWith(1, { audience: long });
+  });
+
   it('saves what you offer when you leave the field, and refuses an empty one', async () => {
     const user = setup();
     const offer = screen.getByLabelText('What you offer');
@@ -414,6 +427,20 @@ describe('When Callum sends, Taps and Your data', () => {
     await user.click(screen.getByRole('switch', { name: 'Morning brief at 8:30' }));
     expect(await screen.findByText("Callum can't be reached. Check that it is still running.")).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Morning brief at 8:30' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('gives Your data the same row as the others: a head with the title first and its actions after it', () => {
+    setup(appState(), { onLeave: vi.fn() });
+    const row = document.querySelector('[data-row="data"]') as HTMLElement;
+    const head = row.firstElementChild as HTMLElement;
+    expect(row).toHaveClass('yc-row');
+    expect(head).toHaveClass('yc-rowhead');
+    expect(head.firstElementChild).toHaveClass('yc-row-title');
+    expect(head.firstElementChild).toHaveTextContent('Your data');
+    expect(within(head).getByRole('button', { name: 'Download everything' })).toBeInTheDocument();
+    // Every other row has the same head.
+    const claude = document.querySelector('[data-row="claude"]') as HTMLElement;
+    expect(claude.firstElementChild).toHaveClass('yc-rowhead');
   });
 
   it('downloads everything and opens the leave sheet', async () => {
