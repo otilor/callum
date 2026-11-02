@@ -118,6 +118,12 @@ describe('Microsoft routes', () => {
     expect(await ok.json()).toEqual({ configured: true, source: 'settings' });
   });
 
+  it('reports the setup as done in demo mode, so the demo code is reachable', async () => {
+    const demo = createCtx({ db: openDb(':memory:'), clock, demo: true, env: {} });
+    const demoApp = new Hono().route('/', channelsRoutes(demo, { env: {} }));
+    expect(await (await demoApp.request('/channels/email/microsoft/setup')).json()).toEqual({ configured: true, source: null });
+  });
+
   it('says why when there is no client id', async () => {
     const bare = new Hono().route('/', channelsRoutes(ctx, { env: {} }));
     const res = await bare.request('/channels/email/microsoft/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ address: 'you@contoso.com' }) });

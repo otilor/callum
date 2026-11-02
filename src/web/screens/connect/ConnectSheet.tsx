@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { Channel, ChannelAccount } from '../../../shared/types.js';
 import { Button } from '../../ui/Button.js';
 import './Connect.css';
@@ -34,6 +34,7 @@ export function ConnectSheet({ channel = 'email', provider = 'google', accounts,
   const [again, setAgain] = useState<Partial<Record<Channel, boolean>>>(reconnect ? { [channel]: true } : {});
   const [working, setWorking] = useState<Channel | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const tabs = useRef<Partial<Record<Channel, HTMLButtonElement | null>>>({});
 
   useEffect(() => {
     const el = ref.current;
@@ -48,6 +49,22 @@ export function ConnectSheet({ channel = 'email', provider = 'google', accounts,
     void onConnected(done, ch);
   };
   const busy = (ch: Channel) => (on: boolean) => setWorking((w) => (on ? ch : w === ch ? null : w));
+
+  // Arrow keys move between the tabs; only the selected tab is in the tab order.
+  const onTabKey = (e: KeyboardEvent, ch: Channel) => {
+    if (working !== null) return;
+    const at = ORDER.indexOf(ch);
+    const next =
+      e.key === 'ArrowRight' ? ORDER[(at + 1) % ORDER.length]
+      : e.key === 'ArrowLeft' ? ORDER[(at + ORDER.length - 1) % ORDER.length]
+      : e.key === 'Home' ? ORDER[0]
+      : e.key === 'End' ? ORDER[ORDER.length - 1]
+      : undefined;
+    if (!next) return;
+    e.preventDefault();
+    setTab(next);
+    tabs.current[next]?.focus();
+  };
 
   const doneIn = (ch: Channel) => merged[ch]?.status === 'connected' && !again[ch];
 
@@ -83,6 +100,11 @@ export function ConnectSheet({ channel = 'email', provider = 'google', accounts,
               id={`cs-tab-${ch}`}
               aria-selected={tab === ch}
               aria-controls="cs-panel"
+              tabIndex={tab === ch ? 0 : -1}
+              ref={(el) => {
+                tabs.current[ch] = el;
+              }}
+              onKeyDown={(e) => onTabKey(e, ch)}
               className="cs-tab"
               disabled={working !== null && working !== ch}
               onClick={() => setTab(ch)}

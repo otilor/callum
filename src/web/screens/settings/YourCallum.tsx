@@ -324,7 +324,7 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
                   const summary = summaries[ch];
                   const working = busy === ch;
                   const accountText = st === 'off' ? 'Not connected' : st === 'error' ? 'Sign in again' : st === 'paused' ? 'Paused' : (account?.identity ?? 'Connected');
-                  const pace = st === 'off' ? `Nobody hears from Callum here${sharedBy ? ', in any project' : ''}` : (summary?.paceLine ?? '');
+                  const pace = st === 'off' ? `Nobody hears from Callum here${sharedBy ? ', in any project' : ''}.` : summary?.paceLine ? `${summary.paceLine}.` : '';
                   return (
                     <div key={ch} className="yc-ch" data-channel={ch}>
                       <div className="yc-ch-main">

@@ -115,7 +115,7 @@ describe('Email tab', () => {
     mocks.setup.mockResolvedValue({ configured: false, source: null });
     setup({ provider: 'microsoft' });
     expect(await screen.findByText(/Microsoft needs a one-time app setup on this computer first\./)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /How to set it up/ })).toHaveAttribute('href', 'docs/SETUP.md#microsoft');
+    expect(screen.getByRole('link', { name: /How to set it up/ })).toHaveAttribute('href', 'https://github.com/otilor/callum/blob/main/docs/SETUP.md#microsoft');
     expect(screen.getByRole('button', { name: 'Open Microsoft' })).toBeDisabled();
   });
 
@@ -218,6 +218,19 @@ describe('the sheet', () => {
     expect(within(tabs).getAllByRole('tab')).toHaveLength(3);
     await user.click(within(tabs).getByRole('tab', { name: 'X' }));
     expect(await screen.findByText('@gabriel. 20 messages a day.')).toBeInTheDocument();
+  });
+
+  it('moves between tabs with the arrow keys, and only the selected tab is a tab stop', async () => {
+    const { user } = setup();
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs.map((t) => t.getAttribute('tabindex'))).toEqual(['0', '-1', '-1']);
+    tabs[0]?.focus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'LinkedIn', selected: true })).toHaveFocus();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Email', selected: true })).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('tab', { name: 'X', selected: true })).toHaveFocus();
   });
 
   it('closes on Escape', async () => {

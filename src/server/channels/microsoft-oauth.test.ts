@@ -68,7 +68,7 @@ describe('pollDeviceToken', () => {
     expect(requests[0]?.form.get('device_code')).toBe('dev');
     expect(requests[0]?.form.get('client_id')).toBe('client-1');
     respond(400, { error: 'slow_down' });
-    expect(await pollDeviceToken('client-1', 'dev', { baseUrl })).toEqual({ status: 'waiting' });
+    expect(await pollDeviceToken('client-1', 'dev', { baseUrl })).toEqual({ status: 'waiting', slowDown: true });
   });
 
   it('reports expired and denied', async () => {

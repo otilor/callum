@@ -261,7 +261,7 @@ describe('Projects', () => {
   it('asks before wrapping up, counting what is cancelled and who stays', async () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'Wrap up Reconciliation' }));
-    expect(screen.getByText(/Wrap up Reconciliation\? 1 scheduled message is cancelled\. 1 person you're talking with stay in your dock\. Download Reconciliation's people first\./)).toBeInTheDocument();
+    expect(screen.getByText('Wrap up Reconciliation? 1 scheduled hellos are cancelled. 1 people you\u2019re talking with stay in your dock. Download Reconciliation\u2019s people first.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Keep it' }));
     expect(mocks.wrapProject).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Wrap up Reconciliation' })).toBeInTheDocument();
@@ -312,16 +312,16 @@ describe('Where Callum reaches people', () => {
     setup();
     const email = screen.getByText('Email').closest('.yc-ch') as HTMLElement;
     expect(within(email).getByText('gabriel@yourcompany.com')).toBeInTheDocument();
-    expect(await within(email).findByText('20 emails a day across both projects, 120 by week 3')).toBeInTheDocument();
+    expect(await within(email).findByText('20 emails a day across both projects, 120 by week 3.')).toBeInTheDocument();
     const x = screen.getByText('X').closest('.yc-ch') as HTMLElement;
     expect(within(x).getByText('Not connected')).toBeInTheDocument();
-    expect(within(x).getByText('Nobody hears from Callum here, in any project')).toBeInTheDocument();
+    expect(within(x).getByText('Nobody hears from Callum here, in any project.')).toBeInTheDocument();
     expect(screen.getByText('Two projects, sharing email and LinkedIn')).toBeInTheDocument();
   });
 
   it('asks before disconnecting, with the counts, and Keep it changes nothing', async () => {
     const user = setup();
-    await screen.findByText(/15 invites a day across both projects/);
+    await screen.findByText(/15 invites a day across both projects.*\.$/);
     await user.click(screen.getByRole('button', { name: 'Disconnect LinkedIn' }));
     expect(screen.getByText('Disconnect LinkedIn? 6 invites and 2 follow-ups wait until you connect again, in both projects.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Keep it' }));
@@ -331,7 +331,7 @@ describe('Where Callum reaches people', () => {
 
   it('disconnects after the confirm', async () => {
     const user = setup();
-    await screen.findByText(/15 invites a day across both projects/);
+    await screen.findByText(/15 invites a day across both projects.*\.$/);
     await user.click(screen.getByRole('button', { name: 'Disconnect LinkedIn' }));
     await user.click(screen.getByRole('button', { name: 'Disconnect' }));
     expect(mocks.disconnect).toHaveBeenCalledWith('linkedin');

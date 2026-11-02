@@ -124,6 +124,8 @@ function clientIdOf(ctx: Ctx, env: Env): { id: string; source: 'env' | 'settings
 
 /** Whether Microsoft sign-in can start: `CALLUM_MICROSOFT_CLIENT_ID` wins, then the id saved from Your Callum. */
 export function microsoftSetup(ctx: Ctx, env: Env = process.env): MicrosoftSetup {
+  // Demo mode has no real Microsoft to set up; the demo code works without an app registration.
+  if (ctx.demo) return { configured: true, source: null };
   const found = clientIdOf(ctx, env);
   return { configured: found !== null, source: found?.source ?? null };
 }
@@ -177,13 +179,14 @@ export async function microsoftStart(ctx: Ctx, input: { address?: string }, env:
   } catch (err) {
     throw oauthFailure(err, "Microsoft wouldn't start the sign-in.");
   }
-  const expiresAtMs = now + device.expiresIn * 1000;
+  const expiresIn = Number.isFinite(device.expiresIn) ? device.expiresIn : 900;
+  const expiresAtMs = now + expiresIn * 1000;
   signIns.set(ctx, { clientId: found.id, address, device, expiresAtMs, nextAskMs: now + device.interval * 1000, demo: false });
   return { userCode: device.userCode, verificationUri: device.verificationUri, expiresAt: new Date(expiresAtMs).toISOString() };
 }
 
 /** Asks whether the code was entered. Connects the mailbox the moment it was. */
-export async function microsoftPoll(ctx: Ctx, input: { address?: string }, env: Env = process.env, oauth: OAuthOptions = {}): Promise<DevicePoll> {
+export async function microsoftPoll(ctx: Ctx, _input: { address?: string }, env: Env = process.env, oauth: OAuthOptions = {}): Promise<DevicePoll> {
   const pending = signIns.get(ctx);
   if (!pending) throw new UserError(NO_SIGN_IN);
   const now = ctx.clock.now().getTime();
@@ -191,7 +194,8 @@ export async function microsoftPoll(ctx: Ctx, input: { address?: string }, env: 
     signIns.delete(ctx);
     return { status: 'expired' };
   }
-  const address = (input.address ?? '').trim() || pending.address;
+  // The address the code was started for; a later body cannot change who is being connected.
+  const address = pending.address;
 
   if (pending.demo) {
     signIns.delete(ctx);
@@ -206,8 +210,14 @@ export async function microsoftPoll(ctx: Ctx, input: { address?: string }, env: 
   try {
     result = await pollDeviceToken(pending.clientId, pending.device.deviceCode, { clock: ctx.clock, ...oauth });
   } catch (err) {
+    // A network blip is not the end of the sign-in: the code is still good, so keep waiting.
+    if (!(err instanceof OAuthError)) return { status: 'waiting' };
     signIns.delete(ctx);
     throw oauthFailure(err, "Microsoft didn't finish the sign-in.");
+  }
+  if (result.status === 'waiting' && result.slowDown) {
+    pending.device = { ...pending.device, interval: pending.device.interval + 5 };
+    pending.nextAskMs = now + pending.device.interval * 1000;
   }
   if (result.status === 'waiting') return { status: 'waiting' };
   signIns.delete(ctx);

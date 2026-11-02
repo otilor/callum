@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { OutboxItem, Person, Project, Tone } from '../../../shared/types.js';
 import { api } from '../../api.js';
 import { formatSlot } from '../../ui/format.js';
@@ -40,7 +40,17 @@ export interface ProjectCardProps {
 }
 
 function poss(name: string): string {
-  return /s$/i.test(name) ? `${name}'` : `${name}'s`;
+  return /s$/i.test(name) ? `${name}\u2019` : `${name}\u2019s`;
+}
+
+/** Grows a textarea to fit what is in it, so nothing is clipped at phone width. */
+function useAutoGrow(ref: RefObject<HTMLTextAreaElement | null>, value: string, open: boolean): void {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    if (el.scrollHeight > 0) el.style.height = `${el.scrollHeight}px`;
+  }, [ref, value, open]);
 }
 
 export function ProjectCard({
@@ -60,6 +70,8 @@ export function ProjectCard({
   const [calSaved, setCalSaved] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [bubbleKey, setBubbleKey] = useState(0);
+  const offerRef = useRef<HTMLTextAreaElement>(null);
+  const bubbleRef = useRef<HTMLTextAreaElement>(null);
   const ticket = useRef(0);
   const asked = useRef(false);
 
@@ -86,6 +98,9 @@ export function ProjectCard({
         asked.current = false;
       });
   }, [open, sample, tone, project.id]);
+
+  useAutoGrow(offerRef, offerDraft, open);
+  useAutoGrow(bubbleRef, sample ?? '', open && !confirming);
 
   const fail = (field: Field, text: string) => setErr({ field, text });
   const clear = () => setErr(null);
@@ -206,7 +221,10 @@ export function ProjectCard({
   };
 
   const ids = new Set(people.map((p) => p.id));
-  const scheduled = outbox.filter((o) => ids.has(o.personId) && o.origin === 'auto' && (o.state === 'scheduled' || o.state === 'awaiting_ok')).length;
+  // The same count the server gives back when it wraps: first hellos and invitations that have not gone out.
+  const scheduled = outbox.filter(
+    (o) => ids.has(o.personId) && o.origin === 'auto' && (o.state === 'scheduled' || o.state === 'awaiting_ok') && (o.kind === 'hello' || o.kind === 'invite'),
+  ).length;
   const canWrap = othersLive > 0 && project.state !== 'wrapped';
   const bad = (f: Field) => (err?.field === f ? true : undefined);
   const sampleFor = `A first hello${first ? ` to ${first.firstName}${first.company ? ` at ${first.company}` : ''}` : ''}, in your ${TONES.find((t) => t.key === tone)?.name ?? ''} voice`;
@@ -266,6 +284,7 @@ export function ProjectCard({
           <label className="yc-field">
             <span>What you offer</span>
             <textarea
+              ref={offerRef}
               className="yc-input yc-offer"
               rows={2}
               value={offerDraft}
@@ -313,6 +332,7 @@ export function ProjectCard({
                   <textarea
                     id={`yc-sample-${project.id}`}
                     key={bubbleKey}
+                    ref={bubbleRef}
                     className="yc-bubble"
                     rows={3}
                     value={sample ?? ''}
@@ -332,8 +352,7 @@ export function ProjectCard({
           {confirming ? (
             <div className="yc-confirm fade-in">
               <p>
-                {`Wrap up ${project.name}? ${scheduled} scheduled ${scheduled === 1 ? 'message is' : 'messages are'} cancelled. `}
-                {`${talking.length} ${talking.length === 1 ? 'person' : 'people'} you're talking with stay in your dock. Download ${poss(project.name)} people first.`}
+                {`Wrap up ${project.name}? ${scheduled} scheduled hellos are cancelled. ${talking.length} people you\u2019re talking with stay in your dock. Download ${poss(project.name)} people first.`}
               </p>
               <div className="yc-confirm-actions">
                 <button type="button" className="yc-solid" onClick={() => void wrap(true)}>Download and wrap up</button>

@@ -76,12 +76,14 @@ describe('SignIn', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('button', { name: 'Try again in 3 s' })).toBeDisabled();
     expect(screen.getByRole('alert')).toHaveTextContent("That's 5 wrong tries, so sign-in is paused for a minute. Nothing else changed.");
-    expect(screen.getByLabelText('Password')).toBeDisabled();
+    expect(screen.getByLabelText('Password')).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Password')).toHaveFocus();
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     expect(screen.getByRole('button', { name: 'Try again in 2 s' })).toBeInTheDocument();
     await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
-    expect(screen.getByLabelText('Password')).toBeEnabled();
+    expect(screen.getByLabelText('Password')).not.toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Password')).toHaveFocus();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 

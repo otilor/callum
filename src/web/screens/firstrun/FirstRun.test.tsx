@@ -187,7 +187,9 @@ describe('Channels', () => {
 
   it('signs in to Microsoft with a short code', async () => {
     mocks.microsoftStart.mockResolvedValue({ userCode: 'ABCD-EFGH', verificationUri: 'https://microsoft.com/devicelogin', expiresAt: '2026-11-02T10:15:00.000Z' });
-    mocks.microsoftPoll.mockResolvedValue({ status: 'connected', account: channel('email', 'connected', 'gabriel@yourcompany.com') });
+    mocks.microsoftPoll
+      .mockResolvedValueOnce({ status: 'waiting' })
+      .mockResolvedValue({ status: 'connected', account: channel('email', 'connected', 'gabriel@yourcompany.com') });
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'Continue with Microsoft' }));
     const sheet = await screen.findByRole('dialog');

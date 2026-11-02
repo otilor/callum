@@ -310,6 +310,58 @@ describe('Microsoft sign-in', () => {
     await expect(microsoftPoll(ctx, {}, env, opts)).rejects.toThrow('Start the Microsoft sign-in first.');
   });
 
+  it('waits five seconds longer when Microsoft says slow down', async () => {
+    const oauth = oauthFetch([DEVICE, { error: 'slow_down' }, TOKENS]);
+    const opts = { fetch: oauth.fetch, clock };
+    await microsoftStart(ctx, { address: 'you@contoso.com' }, env, opts);
+    clock.advance(6_000);
+    expect(await microsoftPoll(ctx, {}, env, opts)).toEqual({ status: 'waiting' });
+    expect(oauth.calls).toHaveLength(2);
+    clock.advance(6_000);
+    expect(await microsoftPoll(ctx, {}, env, opts)).toEqual({ status: 'waiting' });
+    expect(oauth.calls).toHaveLength(2);
+    clock.advance(5_000);
+    expect(await microsoftPoll(ctx, {}, env, opts)).toMatchObject({ status: 'connected' });
+  });
+
+  it('keeps the code through a network failure and keeps waiting', async () => {
+    const oauth = oauthFetch([DEVICE, TOKENS]);
+    let fail = true;
+    const flaky = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (fail && String(input).endsWith('/token')) {
+        fail = false;
+        throw new TypeError('fetch failed');
+      }
+      return (oauth.fetch as typeof fetch)(input, init);
+    }) as unknown as typeof fetch;
+    const opts = { fetch: flaky, clock };
+    await microsoftStart(ctx, { address: 'you@contoso.com' }, env, opts);
+    clock.advance(6_000);
+    expect(await microsoftPoll(ctx, {}, env, opts)).toEqual({ status: 'waiting' });
+    clock.advance(6_000);
+    expect(await microsoftPoll(ctx, {}, env, opts)).toMatchObject({ status: 'connected' });
+  });
+
+  it('connects the address the code was started for, whatever a later poll says', async () => {
+    const oauth = oauthFetch([DEVICE, TOKENS]);
+    const opts = { fetch: oauth.fetch, clock };
+    await microsoftStart(ctx, { address: 'you@contoso.com' }, env, opts);
+    clock.advance(6_000);
+    await microsoftPoll(ctx, { address: 'someone@else.com' }, env, opts);
+    expect(adapters.at(-1)?.inputs[0]?.address).toBe('you@contoso.com');
+  });
+
+  it('gives a code 15 minutes when Microsoft does not say how long', async () => {
+    const oauth = oauthFetch([{ ...DEVICE, expires_in: undefined }]);
+    const res = await microsoftStart(ctx, { address: 'you@contoso.com' }, env, { fetch: oauth.fetch, clock });
+    expect(res.expiresAt).toBe('2026-11-02T10:15:00.000Z');
+  });
+
+  it('is always set up in demo mode', () => {
+    const demo = createCtx({ db: openDb(':memory:'), clock, demo: true, env: {} });
+    expect(microsoftSetup(demo, {})).toEqual({ configured: true, source: null });
+  });
+
   it('in demo mode shows a demo code and connects on the first check', async () => {
     const demo = createCtx({ db: openDb(':memory:'), clock, demo: true, env: {} });
     const res = await microsoftStart(demo, { address: 'you@contoso.com' }, {});

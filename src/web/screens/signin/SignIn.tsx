@@ -123,6 +123,7 @@ export function SignIn({ mode, refresh, wakeMs }: SignInProps) {
   const [until, setUntil] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const alive = useRef(true);
+  const field = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     alive.current = true;
@@ -142,6 +143,7 @@ export function SignIn({ mode, refresh, wakeMs }: SignInProps) {
       if (t >= until) {
         setUntil(0);
         setError('');
+        field.current?.focus();
       }
     };
     const timer = setInterval(tick, 250);
@@ -168,6 +170,8 @@ export function SignIn({ mode, refresh, wakeMs }: SignInProps) {
         const t = Date.now();
         setNow(t);
         setUntil(t + Math.max(1, err.retryAfter ?? 60) * 1000);
+        // The button the person pressed is now disabled; keep them in the field.
+        field.current?.focus();
         setError(PAUSED);
       } else if (err instanceof ApiError && err.status === 401) {
         setError(WRONG_PASSWORD);
@@ -228,7 +232,8 @@ export function SignIn({ mode, refresh, wakeMs }: SignInProps) {
                   className="si-input"
                   type={show ? 'text' : 'password'}
                   value={password}
-                  disabled={cool > 0}
+                  ref={field}
+                  readOnly={cool > 0}
                   aria-invalid={error && cool === 0 ? true : undefined}
                   autoComplete="current-password"
                   autoFocus

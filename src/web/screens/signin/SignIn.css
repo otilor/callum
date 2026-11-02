@@ -151,7 +151,7 @@
   box-shadow: 0 0 0 2px var(--error);
   background: var(--error-tint);
 }
-.si-input:disabled {
+.si-input[readonly] {
   opacity: 0.6;
 }
 .si-eye {

@@ -54,7 +54,7 @@ export function isPersonalAddress(address: string): boolean {
 }
 
 /** The open-source docs page for the one-time Microsoft app setup. */
-export const MICROSOFT_SETUP_DOC = 'docs/SETUP.md#microsoft';
+export const MICROSOFT_SETUP_DOC = 'https://github.com/otilor/callum/blob/main/docs/SETUP.md#microsoft';
 
 /** The desktop app's bridge, present only inside the desktop app. */
 export interface CallumDesktop {
