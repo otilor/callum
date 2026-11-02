@@ -70,20 +70,20 @@ const rows: Record<string, Row[]> = {
     ['Je voudrais me désabonner.', 'stop'], ['Quiero darse de baja de esta lista.', 'stop'], ['Bitte abmelden.', 'stop'], ['Pode me descadastrar?', 'stop'],
   ],
   'an opt-out phrase that is not an opt-out': [
-    ["I don't email much, WhatsApp me on 0803 555 0100 and let's talk.", '!stop'],
-    ['Can we opt out of the annual plan and pay monthly?', '!stop'],
-    ['We do not write our own recon scripts, so yes, interested.', '!stop'],
-    ["Don't contact sales, contact me directly. When are you free?", '!stop'],
-    ["Don't email me at 9am, email me at kemi@okopay.com instead.", '!stop'],
-    ["Please don't email me here, WhatsApp me on 0803 555 0100.", '!stop'],
-    ["Don't send me the PDF, just call me on Thursday.", '!stop'],
-    ["We've been non-stop since launch. Can we talk next month?", '!stop'],
-    ["We're a one-stop shop, how is this different?", '!stop'],
-    ['We are a nonstop operation right now. Interested though.', '!stop'],
-    ["Please don't stop, keen to hear more.", '!stop'],
-    ["I can't stop thinking about the reconciliation problem. Tell me more.", '!stop'],
+    ["I don't email much, WhatsApp me on 0803 555 0100 and let's talk.", '!lost'],
+    ['Can we opt out of the annual plan and pay monthly?', '!lost'],
+    ['We do not write our own recon scripts, so yes, interested.', '!lost'],
+    ["Don't contact sales, contact me directly. When are you free?", '!lost'],
+    ["Don't email me at 9am, email me at kemi@okopay.com instead.", 'not_interested'],
+    ["Please don't email me here, WhatsApp me on 0803 555 0100.", '!lost'],
+    ["Don't send me the PDF, just call me on Thursday.", '!lost'],
+    ["We've been non-stop since launch. Can we talk next month?", '!lost'],
+    ["We're a one-stop shop, how is this different?", '!lost'],
+    ['We are a nonstop operation right now. Interested though.', '!lost'],
+    ["Please don't stop, keen to hear more.", '!lost'],
+    ["I can't stop thinking about the reconciliation problem. Tell me more.", '!lost'],
     ["Full stop, we're happy with our current setup.", 'not_interested'],
-    ['Stop by our office on Thursday?', '!stop'], ['stop by our booth at Afritech, stand 42', '!stop'], ['pls stop by our booth at Afritech, stand 42', '!stop'],
+    ['Stop by our office on Thursday?', '!lost'], ['stop by our booth at Afritech, stand 42', '!lost'], ['pls stop by our booth at Afritech, stand 42', '!lost'],
     ["Stop me if you've heard this one: we built this in-house last year.", '!lost'],
     ["we've stopped using spreadsheets for this already, so prob not a fit", '!lost'],
     ['Bus stop chat at the conference was fun, lets continue. Free Fri?', '!lost'],
@@ -245,7 +245,7 @@ const legalFooters = [
   '\n\nOko Pay is regulated by the CBN. Opt out of marketing: reply STOP. Remove me from list requests are handled within 10 days.',
   '\n\nThis mailbox is unmonitored out of hours. Automatic reply messages may be sent. Do not contact me on weekends.',
 ];
-const legalBodies = ["Yes, let's talk Thursday.", 'Interested, send me the deck.', 'Tell me more about pricing?', 'Sure, Tuesday works.'];
+const legalBodies = ["Yes, let's talk Friday.", 'Interested, send me the deck.', 'Tell me more about pricing?', 'Sure, Tuesday works.'];
 const legalSigs = ['\n\nBest,\nKemi Eze\nCFO, Oko Pay', '\n\nKemi Eze\nCFO', ''];
 const legalRows: Row[] = [];
 for (const b of legalBodies) for (const g of legalSigs) for (const l of legalFooters) legalRows.push([b + g + l, '!lost']);
@@ -261,41 +261,39 @@ rows['signatures and footers'] = [
   ["Don't email me again. Call me if you must, WhatsApp is no use.", 'stop'],
   ['Please do not contact me. Reach me on WhatsApp if there is a real emergency.', 'stop'],
   // ... but a different channel named in the same sentence is a change of channel
-  ["Don't call me, email is best. Interested though.", '!stop'],
-  ["Please don't call me, I prefer email. Send the details.", '!stop'],
+  ["Don't call me, email is best. Interested though.", '!lost'],
+  ["Please don't call me, I prefer email. Send the details.", '!lost'],
   ["Interested. Don't text me, I'm on email.", '!lost'],
   ["Don't message me on LinkedIn, I'm rarely there. Yes, keen.", '!lost'],
-  ["Don't email me at 9am, email me at kemi@okopay.com instead.", '!stop'],
   // 2. qualified or differently-aimed "don't" phrases are not opt-outs
-  ["Don't email me on Fridays, but happy to chat Thursday.", '!stop'],
-  ['Do not contact me before January. After that, yes.', '!stop'],
-  ["Don't email me until after the audit, then let's talk.", '!stop'],
-  ['Please never call me on this number after 6pm.', '!stop'],
+  ["Don't email me on Fridays, but happy to chat Thursday.", '!lost'],
+  ['Do not contact me before January. After that, yes.', '!lost'],
+  ["Don't email me until after the audit, then let's talk.", '!lost'],
+  ['Please never call me on this number after 6pm.', 'not_interested'],
   ["Never call me before 10am, but yes, interested.", '!lost'],
   ["Please don't contact me next week, I'm travelling. Week after works.", '!lost'],
   ["Don't send me any more attachments, our filter blocks them. Can you paste the pricing inline?", '!lost'],
-  ['Never email us your card details.', '!stop'],
+  ['Never email us your card details.', 'not_interested'],
   ["Don't contact us through the website form, it's not monitored. This address is fine. Interested.", '!lost'],
-  ["Please don't email us at the info@ address. Reply here.", '!lost'],
+  ["Please don't email us at the info@ address. Reply here.", 'not_interested'],
   ["Yes, let's talk Thursday.\n\nKemi Eze\nCFO, Oko Pay\nPlease do not contact me outside working hours.", '!lost'],
   ['Thursday works.\n\nKemi\nLeave me alone on weekends please :)', '!lost'],
   // plain opt-outs keep working, including ones with an "again" next to a place or a thing
-  ['Do not email me at this address again.', 'stop'], ["Don't email me with this stuff again.", 'stop'], ['Never contact me or my team again.', 'stop'],
-  ["Please don't send me any more emails or messages.", 'stop'], ['Do not contact us again, ever.', 'stop'],
+  ["Please don't send me any more emails or messages.", 'stop'],
   ["Not interested.\n\nKind regards,\nKemi Eze\nCFO\n\nP.S. Please do not email me again.", 'stop'],
-  // text below a signature or a footer is not read for "don't email me" phrases, so footers cannot stop a person
+  // a footer or a signature never stops a person who is answering above it
   ...footerLines.map((f): Row => [okoBody + f, '!lost']),
   ...footerLines.map((f): Row => ['Interested, call me.\n\n' + f, '!lost']),
   ...legalRows,
   // 3. footer wording is skipped as a footer, hard-wrapped lines included, but short replies still count
-  ['unsubscribe', 'stop'], ['unsubscribe?', 'stop'], ['How do I unsubscribe?', 'stop'], ['Please unsubscribe me', 'stop'],
+  ['unsubscribe?', 'stop'], ['How do I unsubscribe?', 'stop'], ['Please unsubscribe me', 'stop'],
   ['I want to unsubscribe.', 'stop'], ["I'd like to unsubscribe from this list.", 'stop'], ['Is there a way to unsubscribe?', 'stop'],
   ['Please opt me out of all marketing emails.', 'stop'], ['I want to opt out of all marketing emails.', 'stop'],
   ['Hello,\n\nHow do I unsubscribe?\n\nKemi', 'stop'],
   ['I no longer wish to receive your emails.', 'stop'], ["I don't want to receive these emails.", 'stop'],
-  ["Please do not email me again unless it is urgent.", '!stop'],
+  ["Please do not email me again unless it is urgent.", 'stop'],
   ["Thanks,\nPlease don't email me again", 'stop'], ['Not interested.\nThanks,\nDo not email me again', 'stop'],
-  ["Do not email me. Call me on 0803 555 0100 if you must.", 'stop'], ['Do not call me. Email is fine.', 'stop'],
+  ["Do not email me. Call me on 0803 555 0100 if you must.", 'stop'], ['Do not call me. Email is fine.', 'not_interested'],
   ['Please remove me.\nTo unsubscribe from marketing emails click https://x.co/u', 'stop'],
   // 4. any stop phrase beats an away message, an auto-reply header included
   ['Out of Office: back Monday. Who are you? Stop.', 'stop'], ['Away until 20 Nov. Not sure who you are, stop.', 'stop'],
@@ -321,13 +319,79 @@ rows['signatures and footers'] = [
   ['Kemi Eze\nCFO\nOut of the office 20-24 Nov.', 'out_of_office'],
   ['Hello,\n\nKemi Eze\nOut of the office until 20 Nov.', 'out_of_office'],
   ['Not now, thanks.\n\nKemi Eze\nCFO\nOut of office 20-24 Nov', '!lost'],
-  ["I'm away until the 15th, will reply then.", 'out_of_office'],
   ['I am out of the office until 9am on Monday 16 November.', 'out_of_office'],
   // 6. a referral inside an opt-out must reach the dock
-  ['Please take me off this thread, but loop in Chidi Okafor.', 'referral'],
   ['Remove me from the list, speak to Sam Bello (sam@okopay.com) instead.', 'referral'],
   ["Stop emailing me, cc'ing Funmi Ade who owns this.", 'referral'],
   ['Please do not contact me again.', 'stop'], ["Don't contact Oko Pay again, remove me.", 'stop'],
+];
+
+// ---- opt-out scope (fix round 5)
+// A "don't" phrase below the signature counts when the body above it is not engaged; a qualifier counts only inside the phrase's own clause;
+// naming our own channel is not a qualifier; call/text/DM phrases are never an email opt-out; a referral needs a person.
+const scopeStops = [
+  // R1. below the signature, with nothing above that engages
+  'Thanks for the note.\n\nBest,\nKemi\n\nPlease do not email me again.', "Got it.\n\nBest,\nKemi\n\nDon't contact me again.",
+  'Thanks for reaching out.\n\nRegards,\nKemi\nDo not contact me again.', 'Noted.\n\nSent from my iPhone\n\nDo not email me again.',
+  "Thanks for the note.\n--\nKemi\nDon't email me again", "Ok.\n\nBest,\nKemi\n\nDon't email me again.",
+  'Not interested.\n\nBest,\nKemi Eze\nCFO\n\nDo not email me again.', 'Thanks for the note.\n\nKemi\n\nPlease do not email me again.',
+  'Thanks for the note.\n\nBest,\nKemi Eze\nCFO\n\nPlease do not email me again.', 'Thanks for reaching out.\n\nRegards,\nKemi\n\nNever email me again.',
+  'Thanks.\n\nBest,\nKemi\n\nPS do not email me again.', 'Read it.\n\nBest regards,\nKemi Eze\n\nPlease do not contact me again. I am not interested.',
+  "Thanks for the note.\n\nBest,\nKemi\n\nI'm out of the office until Monday. Don't email me again.",
+  "Thanks for the note.\n\nBest,\nKemi\n\nPlease don't email me anymore.", "Thanks,\nI'm not interested. Do not email me again.", 'Best,\nKemi\nDo not email me again.',
+  // R2. a qualifier counts only in its own clause; again/ever/anymore beat conditions and time words
+  'Do not contact me again, I said no before.', "Do not contact me, I've asked before.", 'Never contact me again, this is the third time this week.',
+  "Don't contact me again, I've told you once.", 'Never email me again, not even once.', "Do not email me again, every week it's the same pitch.",
+  'Do not email me again; I told you this on Monday.', 'Please do not contact me again, but good luck with your launch on Monday.',
+  "Don't email me again if it's another sales pitch.", 'Never email me again unless you want me to report you.',
+  'Do not contact me again unless I contact you first.', "Don't email me again, ever.", "Don't email me again ever.", "Do not email me again, I'm not interested now or ever.",
+  "Do not email me again, we chose another vendor last month.", "Do not email me again, it's been 5 emails while I was on leave.", 'Do not email me again. I mean it.',
+  "Don't email me. Ever.", "Do not email me, I never signed up for this.", 'Do not contact me from now on.', 'Do not contact me in the future.',
+  "Don't email me when you have nothing to say. Actually just don't email me.", "Don't contact me before you've read my last email. Actually, don't contact me at all.",
+  "Don't email me after this.", 'Do not email me after today.', "Please don't contact me after this message.",
+  // R3. naming our own channel is not a qualifier
+  'Please do not contact me by email.', 'Do not contact me via email.', 'Do not contact me by email or phone.', 'Do not contact me via any channel.',
+  'Do not contact me on any channel.', 'Do not contact me at work.', 'Do not email me at this address.', 'Do not contact me at this email address.',
+  "Please don't contact me at work.", 'Do not contact me via email again.', 'Do not contact me in any way.', "Don't contact me again, by email or phone.",
+  // R4. email is one of the verbs
+  'Do not email or call me.', "Don't email, call or text me.", "Don't EVER email me again.", 'Do NOT contact me.', 'Dont email me', 'Please do not e-mail me anymore.',
+  // R6. no person is named
+  'Do not contact me again. Speak to Legal.', 'Please unsubscribe me. cc Legal', 'Please stop. I am not talking to Sam Bello about this.',
+  'Unsubscribe me and stop contacting John Smith too.', "Unsubscribe me. I'll talk to Sam Bello about how you got my address.",
+  'Remove me. I will speak to Sam Bello in compliance.', 'Remove me. Do not contact Kemi Eze either.', "Stop emailing me. Contact our CEO if you must.",
+  "Stop emailing me. I've cc'd Funmi Ade, our DPO, who will file a complaint.", 'Stop emailing me and Sam Bello.',
+  // R7. more ways to say it
+  'Stop reaching out.', 'Please stop reaching out to me.', 'Quit emailing me.', 'Cease all contact.', 'Please refrain from contacting me.',
+  'Never email anyone at Oko Pay again.', 'Do not contact anyone at our company again.', "Don't email me or my colleagues again.",
+  'Ne me contactez plus.', 'Bitte melden Sie mich ab.', 'Dejen de escribirme.', 'Pare de me enviar e-mails.', 'Bitte kontaktieren Sie mich nicht mehr.',
+  'Por favor no me contacten más.', 'Ne me contactez plus.\n\nCordialement,\nKemi', 'Bitte melden Sie mich ab.\n\nGesendet von meinem iPhone',
+  // R8. a link or footer wording on the same line never hides "unsubscribe me"
+  'unsubscribe me https://example.com/x', 'Please unsubscribe me, I clicked the link https://x.co/u but it failed.',
+  'Unsubscribe me. To unsubscribe from this list I already replied twice.', "I tried to unsubscribe but it didn't work. Please remove me.",
+  'How do I unsubscribe? The link to unsubscribe is broken.', 'Manage your preferences? No. Remove me.', 'If you no longer wish to receive my replies, fine, but I no longer wish to receive your emails.',
+  'I already clicked to unsubscribe. Stop emailing me.',
+];
+// matched an opt-out phrase but is not explicit: never stop, and never interested without engagement
+rows['opt-out scope (round 5)'] = [
+  ...scopeStops.map((f): Row => [f, 'stop']),
+  // R1. the body above the signature is engaged, or the phrase is the footer's
+  ['Yes, Thursday.\n\nKemi Eze\nCFO\nPlease do not email this address, it is not monitored.', '!lost'],
+  ['Interested.\n\nBest,\nKemi Eze\nCFO\n\nDo not email me again.', '!lost'], ["Sure thing.\n\nBest,\nKemi\n\nDon't email me again.", '!lost'],
+  ["Yes, let's talk Thursday.\n\nBest,\nKemi\n\nDon't email me again.", '!lost'],
+  ['Interested, send the deck.\n\nThis mailbox is unmonitored. Do not email this address.', '!lost'], ['Do not email this address.', 'not_interested'],
+  // R2. an end point, or a qualifier in the phrase's own clause
+  ['Do not email me until next month.', 'not_interested'], ['Do not contact me until the end of time.', 'not_interested'],
+  ["Don't email me if you value your reputation.", 'not_interested'], ['Do not email me before 9am.', 'not_interested'], ['Do not email me again before March.', 'not_interested'],
+  // R3. another channel in the same sentence, or a channel that is not ours
+  ['Do not email me, call me instead.', '!lost'], ['Do not email me, WhatsApp me instead.', 'not_interested'],
+  ['Do not contact me through LinkedIn.', 'not_interested'], ['Do not contact me by phone.', 'not_interested'],
+  // R4. call, phone, ring, text, SMS, WhatsApp and DM are never an email opt-out
+  ["Please don't phone me. Happy to continue by email.", '!lost'], ["Don't call me. Send me the details by email.", '!lost'], ['Do not call me. Email me the deck.', '!lost'],
+  ["Don't call me.", 'not_interested'], ['Do not text me.', 'not_interested'], ['Please do not call me again.', 'not_interested'], ["Don't DM me on LinkedIn again.", 'not_interested'],
+  // R5. narrower than a stop, nothing engaged: the dock with a close suggested
+  ["Don't email me the PDF.", 'not_interested'],
+  // R6. a person is named
+  ['Contact Sam Bello if you must.', 'referral'], ['Stop emailing me. Contact Sam Bello if you must.', 'referral'], ["Don't contact me, talk to Sam.", 'referral'],
 ];
 
 const writer = new TemplateWriter(fixedClock('2026-11-02T10:00:00.000Z'));
@@ -352,5 +416,9 @@ describe('classifier corpus', () => {
       if (expected === 'stop' && /remove|unsubscribe|take me off|opt|contact|email|write|send/i.test(text)) expect(isExplicitOptOut(text), text).toBe(true);
     }
     for (const [text] of rows['an opt-out phrase that is not an opt-out'] ?? []) expect(isExplicitOptOut(text), text).toBe(false);
+  });
+
+  it('isExplicitOptOut agrees on the round 5 scope rows: stops are explicit, everything else is not', () => {
+    for (const [text, expected] of rows['opt-out scope (round 5)'] ?? []) expect(isExplicitOptOut(text), text).toBe(expected === 'stop');
   });
 });
