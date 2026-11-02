@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Callum v4, a new project</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1D2140}a:hover{color:#3F52D9}
+button,input,textarea{font-family:inherit}
+button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid #3F52D9;outline-offset:3px}
+input:focus,textarea:focus{outline:none}
+input::placeholder,textarea::placeholder{color:#646B85}
+.ask-pill:focus-within{box-shadow:0 0 0 2px #3F52D9,0 24px 60px -24px rgba(29,33,64,.32)!important}
+.offer-line{transition:background-color .2s ease,box-shadow .2s ease}
+.offer-line:hover{background:#ECEEF5!important}
+.offer-line:focus{box-shadow:0 0 0 2px #3F52D9;background:#FFFFFF!important}
+.soft-field:focus{box-shadow:0 0 0 2px #3F52D9!important}
+.bubble-edit:focus{box-shadow:0 0 0 3px rgba(63,82,217,.5)}
+.way{transition:transform .25s ease}
+.way:hover{transform:translateY(-3px)}
+.way-disc{transition:background-color .35s ease,box-shadow .35s ease}
+.drop{transition:background-color .25s ease,border-color .25s ease}
+.drop:hover{background:#F4F5F9!important;border-color:#8A92A8!important}
+.peek{transition:transform .2s ease,box-shadow .25s ease,opacity .4s ease}
+.peek:hover{transform:translateY(-3px) scale(1.08)}
+.grow{transition:background-color .2s ease}
+.grow:hover{background:#F4F5F9!important}
+.start{transition:transform .2s ease,box-shadow .2s ease}
+.start:hover{transform:translateY(-2px);box-shadow:0 26px 48px -20px rgba(29,33,64,.75)!important}
+.pencil:hover{background:#E7E9F0!important}
+.pour{animation:pour .7s cubic-bezier(.2,.7,.2,1) backwards}
+@keyframes pour{from{opacity:0;transform:translateY(-14px) scale(.5)}}
+.step-a{animation:step-a .5s cubic-bezier(.2,.8,.2,1) backwards}
+.step-b{animation:step-b .5s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes step-a{from{opacity:0;transform:translateY(16px)}}
+@keyframes step-b{from{opacity:0;transform:translateY(16px)}}
+.fade-in{animation:fade-in .45s ease backwards}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}}
+.pop-in{animation:pop-in .45s cubic-bezier(.2,.8,.2,1.4) backwards}
+@keyframes pop-in{from{opacity:0;transform:scale(.3)}}
+.bubble-a{animation:bubble-a .45s cubic-bezier(.2,.8,.2,1) backwards}
+.bubble-b{animation:bubble-b .45s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes bubble-a{from{opacity:0;transform:translateY(8px)}}
+@keyframes bubble-b{from{opacity:0;transform:translateY(8px)}}
+.pulse{animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(.55);opacity:.45}}
+.ring-draw{animation:ring-draw 2.2s cubic-bezier(.45,0,.25,1) forwards}
+@keyframes ring-draw{to{stroke-dashoffset:0}}
+.ring-glow{animation:ring-glow 1.6s ease-in-out infinite}
+@keyframes ring-glow{50%{transform:scale(1.12);opacity:.5}}
+.current{stroke-dasharray:1 22;animation:flow 2.4s linear infinite}
+.current-slow{animation-duration:3.8s}
+@keyframes flow{to{stroke-dashoffset:-23}}
+.face{position:absolute;border:2px solid #FFFFFF;border-radius:50%;box-sizing:border-box;animation:face-in .9s cubic-bezier(.2,.7,.2,1) backwards}
+@keyframes face-in{from{opacity:0;transform:translateX(-48px) scale(.4)}}
+.river-wrap{transition:opacity 1s ease}
+.toast-a{animation:toast-a .4s cubic-bezier(.2,.8,.2,1) backwards}
+.toast-b{animation:toast-b .4s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes toast-a{from{opacity:0;transform:translateY(-10px)}}
+@keyframes toast-b{from{opacity:0;transform:translateY(-10px)}}
+@media (max-width: 760px){
+.np-root{padding:18px 16px 24px!important}
+.q-title{font-size:32px!important}
+.ways{flex-wrap:wrap!important;gap:18px!important}
+.preview{flex-direction:column!important}
+.skip-col{flex:1 1 auto!important;width:100%!important}
+.river{height:110px!important}
+.lane-names{display:none!important}
+.hdr-extra{display:none!important}
+}
+@media (prefers-reduced-motion: reduce){
+.way,.way-disc,.drop,.peek,.grow,.start,.offer-line,.river-wrap{transition:none!important}
+.pour,.step-a,.step-b,.fade-in,.pop-in,.bubble-a,.bubble-b,.face,.toast-a,.toast-b{animation:none!important}
+.current,.pulse,.ring-glow{animation:none}
+.ring-draw{animation:none;stroke-dashoffset:0}
+}
+</style>
+</helmet>
+<div class="np-root" style="position: relative; min-height: 900px; background: #FFFFFF; color: #1D2140; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums; padding: 22px 32px 20px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden">
+
+<p aria-live="polite" style="position: absolute; left: 0; right: 0; top: 78px; z-index: 40; margin: 0; display: flex; justify-content: center; pointer-events: none">
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{false}}"><span class="{{toastCls}}" style="display: inline-flex; align-items: center; gap: 11px; background: #1D2140; color: #FFFFFF; border-radius: 24px; min-height: 46px; box-sizing: border-box; padding: 5px 18px 5px 16px; font-size: 15px; font-weight: 500; box-shadow: 0 18px 40px -18px rgba(29,33,64,0.55); pointer-events: auto"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #FFB020"></span>{{toast}}</span></sc-if>
+</p>
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px">
+<a href="V4Projects.dc.html" style="display: inline-flex; align-items: center; gap: 9px; font-size: 22px; font-weight: 700; letter-spacing: -0.03em; text-decoration: none; color: #1D2140"><span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 50%; background: #FFB020"></span>callum</a>
+<div style="display: flex; align-items: center; gap: 14px">
+<sc-if value="{{hasDots}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; align-items: center; gap: 6px; height: 10px">
+<sc-for list="{{dots}}" as="d" hint-placeholder-count="3"><span aria-hidden="true" style="height: 8px; border-radius: 4px; transition: width .3s ease, background-color .3s ease; {{d.style}}"></span></sc-for>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{stepText}}</span>
+</div>
+</sc-if>
+<span class="hdr-extra" style="display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: 18px; background: #F4F5F9; font-size: 14px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #22B07D"></span>Reconciliation keeps going</span>
+<a href="V4Projects.dc.html" aria-label="Back to Reconciliation" style="width: 44px; height: 44px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="#1D2140" stroke-width="2" stroke-linecap="round"></path></svg></a>
+</div>
+</header>
+
+<main style="flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 0 8px">
+
+<sc-if value="{{isStep0}}" hint-placeholder-val="{{true}}">
+<section class="{{stepCls}}" aria-labelledby="q0" style="width: 100%; max-width: 760px; display: flex; flex-direction: column; align-items: center; gap: 22px">
+<h1 id="q0" class="q-title" style="margin: 0; font-size: 46px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.08; text-align: center">What do you offer?</h1>
+<div style="width: 100%; display: flex; flex-direction: column; gap: 12px">
+<label for="offer" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">What you offer, in one line</label>
+<textarea id="offer" class="offer-line" value="{{offer}}" onChange="{{onOffer}}" rows="2" placeholder="One line, in your words" style="width: 100%; box-sizing: border-box; resize: none; border: none; border-radius: 26px; background: #F4F5F9; padding: 20px 24px; font-size: 26px; font-weight: 500; line-height: 1.32; letter-spacing: -0.015em; color: #1D2140; height: 112px"></textarea>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-height: 46px; padding-left: 6px">
+<sc-if value="{{nameShown}}" hint-placeholder-val="{{true}}">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; background: #FFB020"></span>
+<span style="font-size: 16px; color: #646B85">Callum will call this</span>
+<sc-if value="{{nameStatic}}" hint-placeholder-val="{{true}}">
+<span class="{{nameCls}}" style="font-size: 19px; font-weight: 600; letter-spacing: -0.01em">{{projName}}</span>
+<button type="button" class="pencil" onClick="{{startRename}}" aria-label="Rename this project" style="width: 40px; height: 40px; border-radius: 50%; border: none; background: #F4F5F9; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background-color .2s ease"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10z"></path></svg></button>
+</sc-if>
+<sc-if value="{{nameEditing}}" hint-placeholder-val="{{false}}">
+<label for="pname" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Project name</label>
+<input id="pname" class="soft-field" type="text" value="{{nameDraft}}" onChange="{{onNameDraft}}" onKeyDown="{{onNameKey}}" style="flex: 0 1 240px; min-width: 0; height: 46px; border: none; border-radius: 23px; background: #F4F5F9; padding: 0 18px; font-size: 17px; font-weight: 600; color: #1D2140; box-sizing: border-box; {{nameFieldStyle}}">
+<button type="button" onClick="{{saveName}}" style="min-height: 46px; padding: 0 20px; border-radius: 23px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Save</button>
+<button type="button" onClick="{{cancelName}}" style="min-height: 46px; padding: 0 16px; border-radius: 23px; border: none; background: transparent; color: #646B85; font-size: 15px; font-weight: 600; cursor: pointer">Cancel</button>
+</sc-if>
+</sc-if>
+<sc-if value="{{nameNone}}" hint-placeholder-val="{{false}}">
+<span style="font-size: 15px; color: #646B85">Callum suggests a short name as you type.</span>
+<button type="button" onClick="{{useExample}}" style="min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">Try the Payroll example</button>
+</sc-if>
+</div>
+<sc-if value="{{nameErr}}" hint-placeholder-val="{{false}}">
+<p class="fade-in" role="alert" style="margin: 0; display: flex; align-items: flex-start; gap: 10px; background: #FFF1EC; border-radius: 18px; padding: 12px 16px; font-size: 15px; line-height: 1.4"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D9480F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="flex: 0 0 auto; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5M12 16.6v.01"></path></svg>{{nameErrText}}</p>
+</sc-if>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 16px">
+<button type="button" onClick="{{toStep1}}" aria-disabled="{{next0Off}}" style="min-height: 52px; padding: 0 32px; border-radius: 26px; border: none; font-size: 16px; font-weight: 600; {{next0Style}}">Next</button>
+<sc-if value="{{next0Why}}" hint-placeholder-val="{{false}}"><span style="font-size: 14px; color: #646B85">{{next0WhyText}}</span></sc-if>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{isStep1}}" hint-placeholder-val="{{false}}">
+<section class="{{stepCls}}" aria-labelledby="q1" style="width: 100%; max-width: 920px; display: flex; flex-direction: column; align-items: center; gap: 14px">
+<h1 id="q1" class="q-title" style="margin: 0; font-size: 40px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.08; text-align: center">Who should Callum meet?</h1>
+<div class="ways" role="tablist" aria-label="Ways to add people" style="display: flex; justify-content: center; gap: 20px">
+<sc-for list="{{ways}}" as="w" hint-placeholder-count="4">
+<button type="button" role="tab" class="way" onClick="{{w.pick}}" aria-selected="{{w.on}}" style="width: 150px; border: none; background: transparent; padding: 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; color: #1D2140">
+<span aria-hidden="true" class="way-disc" style="width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; {{w.disc}}">
+<sc-if value="{{w.isDescribe}}" hint-placeholder-val="{{true}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{w.ink}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4 4"></path></svg></sc-if>
+<sc-if value="{{w.isCsv}}" hint-placeholder-val="{{false}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{w.ink}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"></path></svg></sc-if>
+<sc-if value="{{w.isPaste}}" hint-placeholder-val="{{false}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{w.ink}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16" rx="2.5"></rect><path d="M9 9.5h6M9 13h6M9 16.5h3.5"></path></svg></sc-if>
+<sc-if value="{{w.isLink}}" hint-placeholder-val="{{false}}"><span style="font-size: 17px; font-weight: 700; color: {{w.ink}}">in</span></sc-if>
+</span>
+<span style="font-size: 14px; {{w.labelStyle}}">{{w.label}}</span>
+</button>
+</sc-for>
+</div>
+
+<div aria-live="polite" style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; min-height: 60px">
+
+<sc-if value="{{isDescribe}}" hint-placeholder-val="{{true}}">
+<div class="ask-pill" style="width: 100%; max-width: 760px; display: flex; align-items: center; gap: 12px; background: #FFFFFF; border-radius: 30px; padding: 6px 6px 6px 22px; box-sizing: border-box; box-shadow: 0 18px 44px -24px rgba(29,33,64,0.3), 0 0 0 1px rgba(29,33,64,0.07)">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; background: #FFB020"></span>
+<label for="desc" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Describe who you want to meet</label>
+<input id="desc" type="text" value="{{descText}}" onChange="{{onDesc}}" onKeyDown="{{onDescKey}}" placeholder="Describe who you want to meet" style="flex: 1 1 auto; min-width: 0; height: 50px; border: none; background: transparent; font-size: 17px; color: #1D2140">
+<button type="button" onClick="{{look}}" aria-label="Look" style="flex: 0 0 auto; width: 50px; height: 50px; border-radius: 50%; border: none; background: #1D2140; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+</div>
+<sc-if value="{{descChipsOn}}" hint-placeholder-val="{{true}}"><div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px"><sc-for list="{{descChips}}" as="dc" hint-placeholder-count="3"><button type="button" onClick="{{dc.pick}}" style="min-height: 42px; padding: 0 16px; border-radius: 21px; border: none; background: #FFFFFF; box-shadow: 0 0 0 1.5px #E7E9F0; color: #1D2140; font-size: 15px; font-weight: 500; cursor: pointer">{{dc.text}}</button></sc-for></div></sc-if>
+</sc-if>
+
+<sc-if value="{{isCsv}}" hint-placeholder-val="{{false}}">
+<sc-if value="{{csvIdle}}" hint-placeholder-val="{{true}}">
+<button type="button" class="drop" onClick="{{chooseFile}}" style="width: 100%; max-width: 760px; min-height: 130px; border-radius: 30px; border: 2px dashed #C5CAD6; background: #FFFFFF; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #1D2140; padding: 18px; box-sizing: border-box">
+<span style="font-size: 19px; font-weight: 600">Drop a CSV here, or choose one</span>
+<span style="font-size: 14px; color: #646B85">A name and an email, a LinkedIn link or an X handle on each row.</span>
+</button>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{isPaste}}" hint-placeholder-val="{{false}}">
+<div style="width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 10px">
+<label for="paste" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Names, one per line</label>
+<textarea id="paste" class="soft-field" value="{{pasteText}}" onChange="{{onPaste}}" placeholder="Yaw Mensah, yaw@kumasifoods.com&#10;Efua Boateng, linkedin.com/in/efuaboateng" style="width: 100%; min-height: 100px; resize: none; border: none; border-radius: 24px; background: #F4F5F9; padding: 16px 20px; font-size: 16px; line-height: 1.5; color: #1D2140; box-sizing: border-box"></textarea>
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px">
+<span style="font-size: 14px; color: #646B85">{{pasteNote}}</span>
+<button type="button" onClick="{{readPaste}}" aria-disabled="{{pasteOff}}" style="min-height: 46px; padding: 0 22px; border-radius: 23px; border: none; font-size: 15px; font-weight: 600; {{pasteBtn}}">Read the names</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isLink}}" hint-placeholder-val="{{false}}">
+<div class="ask-pill" style="width: 100%; max-width: 760px; display: flex; align-items: center; gap: 12px; background: #FFFFFF; border-radius: 30px; padding: 6px 6px 6px 22px; box-sizing: border-box; box-shadow: 0 18px 44px -24px rgba(29,33,64,0.3), 0 0 0 1px rgba(29,33,64,0.07)">
+<label for="link" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">LinkedIn search link</label>
+<input id="link" type="url" value="{{linkText}}" onChange="{{onLink}}" onKeyDown="{{onLinkKey}}" placeholder="Paste a LinkedIn people search link" style="flex: 1 1 auto; min-width: 0; height: 50px; border: none; background: transparent; font-size: 17px; color: #1D2140">
+<button type="button" onClick="{{readLink}}" style="flex: 0 0 auto; min-height: 50px; padding: 0 22px; border-radius: 25px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Read it</button>
+</div>
+<sc-if value="{{linkBad}}" hint-placeholder-val="{{false}}"><p class="fade-in" role="alert" style="margin: 0; display: flex; align-items: flex-start; gap: 8px; background: #FFF1EC; border-radius: 16px; padding: 10px 14px; font-size: 14px; line-height: 1.4; max-width: 760px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D9480F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="flex: 0 0 auto; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5M12 16.6v.01"></path></svg>That isn't a LinkedIn people search, so Callum read nothing. Paste a link that starts with linkedin.com/search/results/people.</p></sc-if>
+<sc-if value="{{linkIdle}}" hint-placeholder-val="{{true}}"><button type="button" onClick="{{sampleLink}}" style="min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">Try a sample search</button></sc-if>
+</sc-if>
+
+<sc-if value="{{looking}}" hint-placeholder-val="{{false}}"><div class="fade-in" style="display: flex; align-items: center; gap: 12px; font-size: 17px; color: #646B85; min-height: 56px"><span style="display: inline-flex; gap: 6px"><span class="pulse" style="width: 10px; height: 10px; border-radius: 50%; background: #FFB020"></span><span class="pulse" style="width: 10px; height: 10px; border-radius: 50%; background: #FFB020; animation-delay: .15s"></span><span class="pulse" style="width: 10px; height: 10px; border-radius: 50%; background: #FFB020; animation-delay: .3s"></span></span>{{lookText}}</div></sc-if>
+
+<sc-if value="{{hasPreview}}" hint-placeholder-val="{{false}}">
+<div class="preview fade-in" style="width: 100%; display: flex; gap: 26px; align-items: flex-start; margin-top: 2px">
+<div style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 10px; min-width: 0">
+<p style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em">{{prev.title}}</p>
+<div role="list" aria-label="{{prev.title}}" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 92px; overflow: hidden; padding: 4px 4px 0">
+<sc-for list="{{prev.faces}}" as="pf" hint-placeholder-count="24"><button type="button" role="listitem" class="peek pour" onClick="{{pf.pick}}" aria-label="{{pf.label}}" aria-pressed="{{pf.on}}" style="width: 36px; height: 36px; padding: 0; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; cursor: pointer; {{pf.style}}"></button></sc-for>
+</div>
+<sc-if value="{{hasPeek}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; align-items: center; gap: 12px; background: #F4F5F9; border-radius: 22px; padding: 8px 8px 8px 12px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; {{peek.avatar}}"></span>
+<span style="flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0"><span style="font-size: 15px; font-weight: 600">{{peek.name}}</span><span style="font-size: 13px; color: #646B85">{{peek.sub}}</span></span>
+<button type="button" onClick="{{notFit}}" style="min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #FFFFFF; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">Not a fit</button>
+</div>
+</sc-if>
+<sc-if value="{{noPeek}}" hint-placeholder-val="{{true}}"><p style="margin: 0; font-size: 14px; color: #646B85">Tap a face to see who it is, or to leave someone out.</p></sc-if>
+</div>
+<div class="skip-col" style="flex: 0 0 360px; display: flex; flex-direction: column; gap: 4px">
+<p style="margin: 0 0 2px; font-size: 16px; font-weight: 600">{{prev.skipTitle}}</p>
+<sc-for list="{{prev.groups}}" as="g" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column">
+<button type="button" class="grow" onClick="{{g.toggle}}" aria-expanded="{{g.open}}" style="display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 12px; border: none; border-radius: 16px; background: transparent; cursor: pointer; color: #1D2140; font-size: 15px; text-align: left">
+<span aria-hidden="true" style="flex: 0 0 auto; min-width: 26px; height: 26px; padding: 0 7px; box-sizing: border-box; border-radius: 13px; background: #F4F5F9; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center">{{g.n}}</span>
+<span style="flex: 1 1 auto">{{g.reason}}</span>
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transition: transform .25s ease; {{g.chev}}"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<sc-if value="{{g.isOpen}}" hint-placeholder-val="{{false}}"><p class="fade-in" style="margin: 2px 12px 8px 48px; font-size: 14px; line-height: 1.5; color: #646B85">{{g.detail}}</p></sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 14px; margin-top: 2px">
+<button type="button" onClick="{{back}}" style="min-height: 52px; padding: 0 24px; border-radius: 26px; border: none; background: #F4F5F9; color: #1D2140; font-size: 16px; font-weight: 600; cursor: pointer">Back</button>
+<button type="button" onClick="{{toStep2}}" aria-disabled="{{next1Off}}" style="min-height: 52px; padding: 0 32px; border-radius: 26px; border: none; font-size: 16px; font-weight: 600; {{next1Style}}">{{next1Label}}</button>
+<sc-if value="{{next1Why}}" hint-placeholder-val="{{false}}"><span style="font-size: 14px; color: #646B85">{{next1WhyText}}</span></sc-if>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{isStep2}}" hint-placeholder-val="{{false}}">
+<section class="{{stepCls}}" aria-labelledby="q2" style="width: 100%; max-width: 700px; display: flex; flex-direction: column; align-items: center; gap: 20px">
+<h1 id="q2" class="q-title" style="margin: 0; font-size: 46px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.08; text-align: center">How should you sound?</h1>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+<div role="group" aria-label="Tone" style="display: flex; gap: 4px; padding: 5px; background: #F4F5F9; border-radius: 28px">
+<sc-for list="{{tones}}" as="t" hint-placeholder-count="3"><button type="button" onClick="{{t.pick}}" aria-pressed="{{t.on}}" style="min-height: 44px; padding: 0 22px; border-radius: 22px; border: none; font-size: 15px; font-weight: 600; cursor: pointer; transition: background-color .25s ease, color .25s ease, box-shadow .25s ease; {{t.style}}">{{t.name}}</button></sc-for>
+</div>
+<span style="font-size: 14px; color: #646B85">Reconciliation sounds Warm. Each project has its own voice.</span>
+</div>
+<div style="width: 100%; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #D5D9E4; filter: grayscale(1) brightness(1.12); {{sample.avatar}}"></span>
+<span style="font-size: 14px; color: #646B85">A first hello to Yaw Mensah at Kumasi Foods, by email</span>
+</div>
+<label for="draft" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">First message to Yaw</label>
+<textarea id="draft" class="bubble-edit {{bubbleCls}}" value="{{message}}" onChange="{{onDraft}}" rows="3" style="margin-left: 44px; width: calc(100% - 44px); box-sizing: border-box; resize: none; border: none; background: #1D2140; color: #FFFFFF; caret-color: #FFFFFF; border-radius: 8px 28px 28px 28px; padding: 18px 24px; font-size: 19px; line-height: 1.45; height: 120px"></textarea>
+<span style="margin-left: 44px; font-size: 14px; color: #646B85">{{draftHint}}</span>
+</div>
+<div style="width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 14px; background: #F4F5F9; border-radius: 24px; padding: 12px 18px 12px 14px">
+<span aria-hidden="true" style="display: flex; gap: 6px; flex: 0 0 auto">
+<span style="width: 34px; height: 34px; border-radius: 50%; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M4 7.5l8 6 8-6"></path></svg></span>
+<span style="width: 34px; height: 34px; border-radius: 50%; background: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; letter-spacing: -0.04em">in</span>
+<span style="width: 34px; height: 34px; border-radius: 50%; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.6" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"></path></svg></span>
+</span>
+<span style="font-size: 15px; line-height: 1.4">Uses your mailbox, LinkedIn and X. Their daily limits are shared with Reconciliation.</span>
+</div>
+<div style="display: flex; gap: 10px; align-items: center">
+<button type="button" onClick="{{back}}" style="min-height: 56px; padding: 0 24px; border-radius: 28px; border: none; background: #F4F5F9; color: #1D2140; font-size: 16px; font-weight: 600; cursor: pointer">Back</button>
+<button type="button" class="start" onClick="{{startProject}}" style="display: inline-flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 30px 0 24px; border-radius: 28px; border: none; background: #1D2140; color: #FFFFFF; font-size: 17px; font-weight: 600; cursor: pointer; box-shadow: 0 20px 40px -20px rgba(29,33,64,0.7)"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #FFB020"></span>{{startLabel}}</button>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{isStarting}}" hint-placeholder-val="{{false}}">
+<section class="step-a" aria-labelledby="qs" style="display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center">
+<span style="position: relative; width: 132px; height: 132px; display: flex; align-items: center; justify-content: center">
+<span aria-hidden="true" class="ring-glow" style="position: absolute; inset: 22px; border-radius: 50%; background: #FFF3D6"></span>
+<svg aria-hidden="true" viewBox="0 0 132 132" style="position: absolute; inset: 0; width: 132px; height: 132px"><circle cx="66" cy="66" r="60" fill="none" stroke="#E7E9F0" stroke-width="5"></circle><circle class="ring-draw" cx="66" cy="66" r="60" fill="none" stroke="#3F52D9" stroke-width="5" stroke-linecap="round" transform="rotate(-90 66 66)" style="stroke-dasharray: 377; stroke-dashoffset: 377"></circle></svg>
+<span aria-hidden="true" style="position: relative; width: 28px; height: 28px; border-radius: 50%; background: #FFB020"></span>
+</span>
+<h1 id="qs" style="margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -0.03em">Setting up {{projName}}</h1>
+<p style="margin: 0; font-size: 16px; color: #646B85">Your mailbox, LinkedIn and X are already connected.</p>
+</section>
+</sc-if>
+
+<sc-if value="{{isReady}}" hint-placeholder-val="{{false}}">
+<section class="step-a" aria-labelledby="qr" style="width: 100%; max-width: 640px; display: flex; flex-direction: column; align-items: center; gap: 20px; text-align: center">
+<span aria-hidden="true" style="width: 72px; height: 72px; border-radius: 50%; background: #1D2140; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 14px #F4F5F9"><svg class="pop-in" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
+<div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px">
+<h1 id="qr" style="margin: 0; font-size: 44px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.1">{{projName}} is ready</h1>
+<p style="margin: 0; font-size: 19px; line-height: 1.45; color: #646B85">You'll OK the first 10 hellos tomorrow from 9:00.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center">
+<a class="start" href="V4Projects.dc.html" style="display: inline-flex; align-items: center; gap: 10px; min-height: 54px; padding: 0 26px; border-radius: 27px; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; box-shadow: 0 20px 40px -20px rgba(29,33,64,0.7)">See {{projName}} at home<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
+<button type="button" onClick="{{again}}" style="min-height: 54px; padding: 0 22px; border-radius: 27px; border: none; background: #F4F5F9; color: #1D2140; font-size: 16px; font-weight: 600; cursor: pointer">Start another project</button>
+</div>
+</section>
+</sc-if>
+
+</main>
+
+<div class="river-wrap" style="display: flex; flex-direction: column; gap: 6px; padding-top: 10px; {{riverWrap}}">
+<div class="river" style="position: relative; height: 128px">
+<svg aria-hidden="true" viewBox="0 0 1000 300" preserveAspectRatio="none" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible">
+<defs>
+<linearGradient id="v4-new-bed" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#EEF0F6" stop-opacity="0"></stop>
+<stop offset="0.07" stop-color="#EEF0F6" stop-opacity="1"></stop>
+<stop offset="0.5" stop-color="#ECEFFB" stop-opacity="1"></stop>
+<stop offset="0.82" stop-color="#FFF4DD" stop-opacity="1"></stop>
+<stop offset="1" stop-color="#FFEBC2" stop-opacity="1"></stop>
+</linearGradient>
+</defs>
+<path d="M0,50 C160,25 320,70 500,45 C680,20 840,65 1000,35 L1000,262 C840,285 680,240 500,262 C320,284 160,245 0,258 Z" fill="url(#v4-new-bed)"></path>
+<path class="current" d="M0,105 C180,82 340,130 500,104 C660,80 820,124 1000,96" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+<path class="current current-slow" d="M0,155 C170,136 330,180 500,154 C670,130 830,174 1000,146" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+<path class="current" d="M0,205 C180,192 340,228 500,204 C660,184 820,222 1000,196" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+</svg>
+<sc-for list="{{riverFaces}}" as="rf" hint-placeholder-count="24"><span aria-hidden="true" class="face" style="{{rf.style}}"></span></sc-for>
+</div>
+<div class="lane-names" style="position: relative; height: 44px">
+<sc-for list="{{lanes}}" as="z" hint-placeholder-count="4">
+<div style="position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; {{z.pos}}">
+<span style="font-size: 22px; font-weight: 600; letter-spacing: -0.03em; line-height: 1">{{z.n}}</span>
+<span style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; color: #646B85; white-space: nowrap"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; {{z.dot}}"></span>{{z.name}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      step: 0, phase: 'flow', stepKey: 0, created: [],
+      offer: "You help growing teams in Lagos and Accra run payroll without spreadsheets.", nameOverride: null, nameEditing: false, nameDraft: '', nameErr: '', nameKey: 0,
+      way: 'describe', desc: '', looking: false, lookText: '', found: false, removed: {}, peek: -1, openGroup: -1,
+      pasteText: '', link: '', linkBad: false,
+      tone: 'warm', toneKey: 0, drafts: {},
+      toast: '', toastKey: 0
+    };
+    this._to = [];
+    this._tk = 0;
+  }
+
+  componentWillUnmount() { this._to.forEach(function (h) { clearTimeout(h); }); }
+
+  later(fn, ms) { this._to.push(setTimeout(fn, ms)); }
+
+  d() {
+    if (this._d) return this._d;
+    function hash(n) { var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+    var PAL = ['#FF7A59', '#FFC145', '#4CB5F5', '#7BC67E', '#8C6CFF', '#F26CA7', '#2EC4B6', '#FF9F1C'];
+    function marble(n) {
+      var a = PAL[n % 8], b = PAL[(n * 3 + 2) % 8], c = PAL[(n * 5 + 5) % 8];
+      if (b === a) b = PAL[(n + 3) % 8];
+      if (c === a || c === b) c = PAL[(n + 6) % 8];
+      var ax = Math.round(18 + hash(n * 1.7) * 44), ay = Math.round(14 + hash(n * 2.3) * 44);
+      return 'background: radial-gradient(circle at ' + ax + '% ' + ay + '%, ' + b + ' 0 20%, transparent 58%), radial-gradient(circle at ' + (100 - ax) + '% ' + (100 - ay) + '%, ' + c + ' 0 16%, transparent 54%), ' + a + ';';
+    }
+    var NAMES = [
+      ['Yaw', 'Mensah', 'Head of People', 'Kumasi Foods'], ['Efua', 'Boateng', 'HR Manager', 'Osu Health'], ['Kwame', 'Asante', 'COO', 'Tema Cables'], ['Halima', 'Garba', 'Operations Head', 'Abuja Freight'],
+      ['Dayo', 'Adewale', 'Founder', 'Yaba Studio'], ['Ama', 'Ofori', 'Head of People', 'Takoradi Freight'], ['Kofi', 'Annor', 'Finance Lead', 'Accra Bakes'], ['Ifeoma', 'Madu', 'HR Lead', 'Ikeja Retail'],
+      ['Musa', 'Danladi', 'COO', 'Surulere Textiles'], ['Bukola', 'Salami', 'Head of People', 'Lekki Clinics'], ['Akosua', 'Frimpong', 'HR Manager', 'Cantonments Print'], ['Tobi', 'Fashola', 'Founder', 'Ikoyi Roasters'],
+      ['Nana', 'Agyei', 'Finance Lead', 'Madina Foods'], ['Chioma', 'Eze', 'Head of People', 'Oniru Homes'], ['Esi', 'Quaye', 'HR Lead', 'Teshie Logistics'], ['Gbenga', 'Ola', 'COO', 'Apapa Freight'],
+      ['Abena', 'Tetteh', 'Founder', 'Osu Studio'], ['Femi', 'Ladipo', 'Finance Lead', 'Ajah Fitness'], ['Adwoa', 'Sarpong', 'Head of People', 'Labone Clinics'], ['Uche', 'Nnadi', 'HR Manager', 'Yaba Labs'],
+      ['Kojo', 'Bonsu', 'COO', 'Dansoman Print'], ['Sade', 'Ajibola', 'Founder', 'Lekki Bakes'], ['Yetunde', 'Lawal', 'HR Lead', 'Ketu Retail'], ['Kwabena', 'Owusu', 'Finance Lead', 'Ridge Foods']
+    ];
+    var PEOPLE = NAMES.map(function (r, i) { return { first: r[0], last: r[1], role: r[2], co: r[3], avatar: marble(611 + i) }; });
+    var ZONES = [
+      { name: 'strangers', ring: '#D5D9E4', x0: 4, x1: 26 }, { name: 'said hello', ring: '#A9B8F5' }, { name: 'following up', ring: '#6E86F2' }, { name: 'talking', ring: '#3F52D9' }
+    ];
+    this._d = {
+      hash: hash, marble: marble, PEOPLE: PEOPLE, ZONES: ZONES,
+      EXISTING: ['Reconciliation'],
+      EXAMPLE: 'You help growing teams in Lagos and Accra run payroll without spreadsheets.',
+      TONES: [
+        { key: 'warm', name: 'Warm', text: "Hi Yaw, I've been following what Kumasi Foods is building. I help growing teams in Lagos and Accra run payroll without spreadsheets. Would a quick chat be useful?" },
+        { key: 'direct', name: 'Direct', text: 'Hi Yaw, I help growing teams like Kumasi Foods run payroll without spreadsheets. Worth fifteen minutes this week?' },
+        { key: 'playful', name: 'Playful', text: 'Hi Yaw, quick question: who at Kumasi Foods dreads the last Friday of the month? I might be able to take the spreadsheet off their hands.' }
+      ],
+      GROUPS: [
+        { n: 3, reason: 'are already in Reconciliation', detail: 'Kemi Eze, Tunde Bello and Ada Nwosu are in Reconciliation. Each person belongs to one project, so they stay there.' },
+        { n: 1, reason: 'asked not to be contacted', detail: 'Ruth Adeleke asked to stop on Thursday. Callum never writes to her again, in any project.' },
+        { n: 2, reason: 'have no email or LinkedIn', detail: 'Rows 12 and 27 have a name and nothing else. Add an email or a profile link and bring the list again.' }
+      ],
+      KEYS: [['payroll', 'Payroll'], ['reconcil', 'Reconciliation'], ['invoic', 'Invoicing'], ['recruit', 'Recruiting'], ['hiring', 'Hiring'], ['onboard', 'Onboarding'], ['complian', 'Compliance'], ['expense', 'Expenses'], ['billing', 'Billing'], ['benefit', 'Benefits'], ['treasury', 'Treasury'], ['security', 'Security'], ['analytic', 'Analytics'], ['accounting', 'Accounting'], ['insur', 'Insurance'], ['procure', 'Procurement'], ['tax', 'Tax']],
+      STOP: ['that', 'with', 'their', 'teams', 'team', 'help', 'helps', 'without', 'growing', 'companies', 'lagos', 'accra', 'which', 'about', 'people', 'plate', 'take', 'from', 'your', 'every']
+    };
+    return this._d;
+  }
+
+  suggest(offer) {
+    var D = this.d(), low = (offer || '').toLowerCase(), best = -1, name = '';
+    D.KEYS.forEach(function (k) { var i = low.indexOf(k[0]); if (i >= 0 && (best < 0 || i < best)) { best = i; name = k[1]; } });
+    if (name) return name;
+    var words = low.replace(/[^a-z ]/g, ' ').split(/\s+/).filter(function (w) { return w.length > 5 && D.STOP.indexOf(w) < 0; });
+    if (!words.length) return '';
+    var w = words[0];
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }
+
+  nameOf(s) { return s.nameOverride !== null ? s.nameOverride : this.suggest(s.offer); }
+
+  existing(s) { return this.d().EXISTING.concat(s.created); }
+
+  dupOf(s, name) {
+    var n = (name || '').trim().toLowerCase();
+    if (!n) return '';
+    var hit = this.existing(s).filter(function (e) { return e.toLowerCase() === n; })[0];
+    return hit || '';
+  }
+
+  showToast(text) {
+    var self = this;
+    this._tk += 1;
+    var key = this._tk;
+    this.setState({ toast: text, toastKey: key });
+    this.later(function () { if (self.state.toastKey === key) self.setState({ toast: '' }); }, 3200);
+  }
+
+  go(step) { this.setState(function (s) { return { step: step, stepKey: s.stepKey + 1 }; }); }
+
+  runFind(source, text) {
+    var self = this;
+    this.setState({ way: source, looking: true, found: false, lookText: text, removed: {}, peek: -1, openGroup: -1, linkBad: false });
+    this._look = setTimeout(function () { self.setState({ looking: false, found: true }); }, 1400);
+    this._to.push(this._look);
+  }
+
+  saveName() {
+    var s = this.state, v = (s.nameDraft || '').trim();
+    if (!v) { this.setState({ nameErr: 'A project needs a name. Callum kept "' + this.nameOf(s) + '". Type a name to save.' }); return; }
+    var dup = this.dupOf(s, v);
+    if (dup) { this.setState({ nameErr: 'You already have a project called ' + dup + '. Nothing has started yet. Pick another name.', nameOverride: v }); return; }
+    this.setState({ nameOverride: v, nameEditing: false, nameErr: '', nameKey: s.nameKey + 1 });
+  }
+
+  startProject() {
+    var self = this, s = this.state;
+    var name = this.nameOf(s);
+    this.setState({ phase: 'starting' });
+    this.later(function () {
+      self.setState(function (s2) { return { phase: 'ready', created: s2.created.concat([name]), stepKey: s2.stepKey + 1 }; });
+    }, 2400);
+  }
+
+  renderVals() {
+    var self = this, D = this.d(), s = this.state;
+    var name = this.nameOf(s);
+    var dupHit = this.dupOf(s, name);
+    var hasOffer = !!(s.offer || '').trim();
+    var errText = s.nameErr || (dupHit ? 'You already have a project called ' + dupHit + '. Nothing has started yet. Pick another name.' : '');
+    var nameBlocked = !hasOffer || !name || !!dupHit;
+
+    var removedCount = Object.keys(s.removed).length;
+    var count = D.PEOPLE.length - removedCount;
+    var skipN = D.GROUPS.reduce(function (a, g) { return a + g.n; }, 0);
+
+    var ways = [['describe', 'Describe who'], ['csv', 'Drop a CSV'], ['paste', 'Paste names'], ['link', 'LinkedIn search link']].map(function (w) {
+      var on = s.way === w[0];
+      return {
+        label: w[1], on: on ? 'true' : 'false', isDescribe: w[0] === 'describe', isCsv: w[0] === 'csv', isPaste: w[0] === 'paste', isLink: w[0] === 'link',
+        disc: on ? 'background: #1D2140;' : 'background: #F4F5F9;', ink: on ? '#FFFFFF' : '#1D2140',
+        labelStyle: on ? 'font-weight: 600;' : 'font-weight: 500; color: #646B85;',
+        pick: function () { self.setState({ way: w[0], looking: false, found: false, linkBad: false, peek: -1 }); }
+      };
+    });
+
+    var faces = D.PEOPLE.map(function (p, i) {
+      return { p: p, i: i };
+    }).filter(function (o) { return !s.removed[o.i]; }).map(function (o) {
+      var on = s.peek === o.i;
+      return {
+        label: o.p.first + ' ' + o.p.last + ', ' + o.p.role + ' at ' + o.p.co, on: on ? 'true' : 'false',
+        style: o.p.avatar + ' filter: grayscale(1) brightness(1.12); opacity: ' + (on ? 1 : 0.8) + '; box-shadow: 0 0 0 ' + (on ? 2.5 : 1.5) + 'px ' + (on ? '#3F52D9' : '#D5D9E4') + '; animation-delay: ' + (o.i * 22) + 'ms;',
+        pick: function () { self.setState(function (s2) { return { peek: s2.peek === o.i ? -1 : o.i }; }); }
+      };
+    });
+    var peekP = s.peek >= 0 ? D.PEOPLE[s.peek] : null;
+    var groups = D.GROUPS.map(function (g, gi) {
+      var open = s.openGroup === gi;
+      return { n: String(g.n), reason: g.reason, detail: g.detail, open: open ? 'true' : 'false', isOpen: open, chev: open ? 'transform: rotate(180deg);' : '', toggle: function () { self.setState(function (st) { return { openGroup: st.openGroup === gi ? -1 : gi }; }); } };
+    });
+    var prev = {
+      title: count + ' people join ' + (name || 'this project'), faces: faces,
+      skipTitle: skipN + ' skipped', groups: groups
+    };
+
+    var tone = D.TONES.filter(function (t) { return t.key === s.tone; })[0];
+    var edited = s.drafts[s.tone] !== undefined;
+    var tones = D.TONES.map(function (t) {
+      var on = s.tone === t.key;
+      return {
+        name: t.name, on: on ? 'true' : 'false',
+        style: on ? 'background: #FFFFFF; color: #1D2140; box-shadow: 0 6px 16px -8px rgba(29,33,64,0.35);' : 'background: transparent; color: #646B85;',
+        pick: function () { if (self.state.tone !== t.key) self.setState(function (s2) { return { tone: t.key, toneKey: s2.toneKey + 1 }; }); }
+      };
+    });
+
+    var isReady = s.phase === 'ready';
+    var inFlow = s.phase === 'flow';
+    var riverFaces = [];
+    if (isReady) {
+      var cols = 8;
+      D.PEOPLE.forEach(function (p, i) {
+        var col = i % cols, row = Math.floor(i / cols);
+        var x = 4.6 + col * 2.75 + (D.hash(i * 3.1) - 0.5) * 0.5;
+        var yf = 0.3 + row * 0.24 + (col % 2) * 0.05 + (D.hash(i * 5.7) - 0.5) * 0.03;
+        riverFaces.push({ style: 'left: ' + x.toFixed(2) + '%; top: ' + (yf * 100).toFixed(1) + '%; width: 20px; height: 20px; margin: -10px 0 0 -10px; ' + p.avatar + ' filter: grayscale(1) brightness(1.12); opacity: 0.72; box-shadow: 0 0 0 1.5px #D5D9E4; animation-delay: ' + (400 + i * 45) + 'ms;' });
+      });
+    }
+    var centers = [14.5, 38, 62, 84.5];
+    var lanes = D.ZONES.map(function (z, i) {
+      return { n: isReady ? String(i === 0 ? D.PEOPLE.length : 0) : '\u00a0', name: z.name, pos: 'left: ' + centers[i] + '%;', dot: 'background: #FFFFFF; border: 3px solid ' + z.ring + ';' };
+    });
+
+    var previewReady = s.found && s.way === (s.way);
+    var lookText = s.lookText;
+    var stepIdx = s.step;
+    var dots = [0, 1, 2].map(function (i) {
+      return { style: i === stepIdx ? 'width: 24px; background: #1D2140;' : (i < stepIdx ? 'width: 8px; background: #1D2140; opacity: 0.35;' : 'width: 8px; background: #DADDE6;') };
+    });
+
+    var csvIdle = s.way === 'csv' && !s.looking && !s.found;
+    var pasteHas = (s.pasteText || '').trim().length > 0;
+    var showName = hasOffer && !!name;
+
+    return {
+      hasToast: !!s.toast, toast: s.toast, toastCls: s.toastKey % 2 ? 'toast-a' : 'toast-b',
+      hasDots: inFlow, dots: dots, stepText: 'Step ' + (stepIdx + 1) + ' of 3',
+      stepCls: s.stepKey % 2 ? 'step-a' : 'step-b',
+      isStep0: inFlow && s.step === 0, isStep1: inFlow && s.step === 1, isStep2: inFlow && s.step === 2, isStarting: s.phase === 'starting', isReady: isReady,
+      riverWrap: isReady ? 'opacity: 1;' : 'opacity: 0.45;',
+      offer: s.offer,
+      onOffer: function (e) { self.setState({ offer: e.target.value, nameErr: '' }); },
+      nameShown: showName, nameNone: !showName,
+      nameStatic: showName && !s.nameEditing, nameEditing: showName && s.nameEditing,
+      projName: name, nameCls: s.nameKey % 2 ? 'bubble-a' : 'bubble-b',
+      nameDraft: s.nameDraft, nameFieldStyle: s.nameEditing && errText ? 'box-shadow: 0 0 0 2px #D9480F; background: #FFF1EC;' : '',
+      startRename: function () { self.setState({ nameEditing: true, nameDraft: self.nameOf(self.state), nameErr: '' }); },
+      onNameDraft: function (e) { self.setState({ nameDraft: e.target.value, nameErr: '' }); },
+      onNameKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.saveName(); } },
+      saveName: function () { self.saveName(); },
+      cancelName: function () { self.setState({ nameEditing: false, nameErr: '', nameOverride: self.state.nameOverride !== null && self.dupOf(self.state, self.state.nameOverride) ? null : self.state.nameOverride }); },
+      nameErr: showName && !!errText, nameErrText: errText,
+      useExample: function () { self.setState({ offer: D.EXAMPLE, nameOverride: null, nameErr: '' }); },
+      next0Off: nameBlocked ? 'true' : 'false',
+      next0Style: nameBlocked ? 'background: #DADDE6; color: #646B85; cursor: not-allowed;' : 'background: #1D2140; color: #FFFFFF; cursor: pointer;',
+      next0Why: nameBlocked, next0WhyText: !hasOffer ? 'Write one line about what you offer first.' : (dupOf_() ? 'Pick another name to continue.' : 'Callum needs a name to continue.'),
+      toStep1: function () { if (!nameBlocked) self.go(1); },
+      ways: ways,
+      isDescribe: s.way === 'describe', isCsv: s.way === 'csv', isPaste: s.way === 'paste', isLink: s.way === 'link',
+      descText: s.desc,
+      onDesc: function (e) { self.setState({ desc: e.target.value }); },
+      onDescKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.runFind('describe', 'Callum is looking'); } },
+      look: function () { self.runFind('describe', 'Callum is looking'); },
+      descChipsOn: !s.looking && !s.found,
+      descChips: ['Heads of people at growing teams in Lagos', 'HR heads in Accra', 'Finance heads at companies with 50 to 300 people'].map(function (t) {
+        return { text: t, pick: function () { self.setState({ desc: t }); self.runFind('describe', 'Callum is looking'); } };
+      }),
+      csvIdle: csvIdle, chooseFile: function () { self.runFind('csv', 'Reading payroll-people.csv'); },
+      pasteText: s.pasteText, onPaste: function (e) { self.setState({ pasteText: e.target.value }); },
+      pasteOff: pasteHas ? 'false' : 'true',
+      pasteBtn: pasteHas ? 'background: #1D2140; color: #FFFFFF; cursor: pointer;' : 'background: #DADDE6; color: #646B85; cursor: not-allowed;',
+      pasteNote: pasteHas ? 'One person per line. Callum checks every name before anyone joins.' : 'Paste at least one name to read. One person per line.',
+      readPaste: function () { if ((self.state.pasteText || '').trim()) self.runFind('paste', 'Callum is reading your names'); },
+      linkText: s.link, linkBad: s.linkBad && s.way === 'link',
+      linkIdle: s.way === 'link' && !s.looking && !s.found,
+      onLink: function (e) { self.setState({ link: e.target.value, linkBad: false }); },
+      onLinkKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.readLinkNow(); } },
+      readLink: function () { self.readLinkNow(); },
+      sampleLink: function () { self.setState({ link: 'linkedin.com/search/results/people/?keywords=head%20of%20people%20accra' }); self.runFind('link', 'Callum is reading the search on this computer'); },
+      looking: s.looking, lookText: lookText,
+      hasPreview: s.found, prev: prev,
+      hasPeek: !!peekP, noPeek: !peekP,
+      peek: peekP ? { avatar: peekP.avatar + ' filter: grayscale(1) brightness(1.12); box-shadow: 0 0 0 1.5px #D5D9E4;', name: peekP.first + ' ' + peekP.last, sub: peekP.role + ' at ' + peekP.co } : { avatar: '', name: '', sub: '' },
+      notFit: function () {
+        var i = self.state.peek;
+        if (i < 0) return;
+        self.setState(function (s2) { var r = Object.assign({}, s2.removed); r[i] = true; return { removed: r, peek: -1 }; });
+        self.showToast(D.PEOPLE[i].first + ' stays out of ' + (name || 'this project'));
+      },
+      next1Off: s.found && count > 0 ? 'false' : 'true',
+      next1Style: s.found && count > 0 ? 'background: #1D2140; color: #FFFFFF; cursor: pointer;' : 'background: #DADDE6; color: #646B85; cursor: not-allowed;',
+      next1Label: s.found && count > 0 ? 'These ' + count + ' look right' : 'Next',
+      next1Why: !(s.found && count > 0), next1WhyText: s.looking ? 'Callum is still looking.' : (s.found ? 'Everyone was left out. Bring someone back.' : 'Describe someone, or bring a list, to continue.'),
+      toStep2: function () { if (self.state.found && count > 0) self.go(2); },
+      back: function () { if (self.state.step > 0) self.go(self.state.step - 1); },
+      tones: tones, sample: { avatar: D.PEOPLE[0].avatar },
+      message: edited ? s.drafts[s.tone] : tone.text,
+      bubbleCls: s.toneKey % 2 ? 'bubble-a' : 'bubble-b',
+      onDraft: function (e) { var v = e.target.value; self.setState(function (s2) { var d2 = Object.assign({}, s2.drafts); d2[s2.tone] = v; return { drafts: d2 }; }); },
+      draftHint: edited ? 'Nice. Callum learns from every edit you make.' : 'Click the message to change any words.',
+      startLabel: 'Start ' + name,
+      startProject: function () { self.startProject(); },
+      again: function () { self.setState(function (s2) { return { step: 0, phase: 'flow', stepKey: s2.stepKey + 1, offer: '', nameOverride: null, nameEditing: false, nameErr: '', found: false, looking: false, removed: {}, peek: -1, desc: '', pasteText: '', link: '', way: 'describe', tone: 'warm', drafts: {} }; }); },
+      riverFaces: riverFaces, lanes: lanes
+    };
+    function dupOf_() { return !!dupHit; }
+  }
+
+  readLinkNow() {
+    var v = (this.state.link || '').trim();
+    if (!/linkedin\.com\/search\/results\/people/i.test(v)) { this.setState({ linkBad: true }); return; }
+    this.runFind('link', 'Callum is reading the search on this computer');
+  }
+}
+</script>
+</body>
+</html>

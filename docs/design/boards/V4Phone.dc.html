@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Projects on phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1D2140}
+button,textarea,input{font-family:inherit}
+button:focus-visible,textarea:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid #3F52D9;outline-offset:3px}
+.current{stroke-dasharray:1 14;animation:flow 2.4s linear infinite}
+.current-slow{animation-duration:3.8s}
+.still .current{animation:none}
+@keyframes flow{to{stroke-dashoffset:-15}}
+.pface{position:absolute;border:2px solid #FFFFFF;border-radius:50%;box-sizing:border-box;transition:opacity .7s ease,filter .7s ease,transform .5s ease}
+.toast-a{animation:toast-a .4s cubic-bezier(.2,.8,.2,1) backwards}
+.toast-b{animation:toast-b .4s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes toast-a{from{opacity:0;transform:translateY(12px)}}
+@keyframes toast-b{from{opacity:0;transform:translateY(12px)}}
+.fade-in{animation:fade-in .4s ease backwards}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}}
+.swap-a{animation:swap-a .5s ease backwards}
+.swap-b{animation:swap-b .5s ease backwards}
+@keyframes swap-a{from{opacity:0}}
+@keyframes swap-b{from{opacity:0}}
+.sheet-a{animation:sheet-a .45s cubic-bezier(.2,.8,.2,1) backwards}
+.sheet-b{animation:sheet-b .45s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes sheet-a{from{transform:translateY(100%)}}
+@keyframes sheet-b{from{transform:translateY(100%)}}
+.veil-in{animation:veil-in .3s ease backwards}
+@keyframes veil-in{from{opacity:0}}
+.card-a{animation:card-a .45s cubic-bezier(.2,.8,.2,1) backwards}
+.card-b{animation:card-b .45s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes card-a{from{opacity:0;transform:translateY(24px) scale(.96)}}
+@keyframes card-b{from{opacity:0;transform:translateY(24px) scale(.96)}}
+.row,.tabbtn,.pill{transition:background-color .2s ease,color .2s ease,opacity .2s ease}
+.row:hover{background:#F4F5F9!important}
+.scroll{scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.draft{transition:box-shadow .2s ease}
+.draft:focus{box-shadow:0 0 0 2px #3F52D9;outline:none}
+@media (max-width: 760px){
+.phone{width:100%!important;max-width:390px}
+}
+@media (prefers-reduced-motion: reduce){
+.pface,.row,.tabbtn,.pill,.draft{transition:none!important}
+.toast-a,.toast-b,.fade-in,.swap-a,.swap-b,.sheet-a,.sheet-b,.veil-in,.card-a,.card-b{animation:none!important}
+.current{animation:none}
+}
+</style>
+</helmet>
+<div class="phone" style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #FFFFFF; color: #1D2140; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums">
+
+<header style="position: absolute; left: 12px; right: 12px; top: 14px; height: 44px; display: flex; align-items: center; justify-content: space-between; z-index: 5">
+<button type="button" onClick="{{openProjects}}" aria-haspopup="dialog" aria-label="Switch project, now {{projName}}" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 8px 0 8px; border: none; border-radius: 22px; background: transparent; cursor: pointer; color: #1D2140">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 700; letter-spacing: -0.03em"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #FFB020"></span>callum</span>
+<span aria-hidden="true" style="font-size: 20px; color: #C5CAD6">·</span>
+<span class="{{swapCls}}" style="font-size: 18px; font-weight: 600; letter-spacing: -0.02em">{{projName}}</span>
+<span aria-hidden="true" style="width: 24px; height: 24px; border-radius: 50%; background: #F4F5F9; display: inline-flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></span>
+</button>
+<a href="V4ProjectSettings.dc.html" aria-label="Your Callum" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center"><span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #E7E9F0; background: radial-gradient(circle at 30% 30%, #8C6CFF 0 22%, transparent 58%), radial-gradient(circle at 70% 70%, #4CB5F5 0 18%, transparent 54%), #FFC145"></span></a>
+</header>
+
+<!-- RIVER TAB -->
+<sc-if value="{{isRiver}}" hint-placeholder-val="{{true}}">
+<div class="fade-in" style="position: absolute; left: 0; right: 0; top: 64px; bottom: 76px">
+
+<p class="{{swapCls}}" style="position: absolute; left: 20px; right: 20px; top: 6px; margin: 0; font-size: 15px; line-height: 1.38; color: #646B85">{{offer}}</p>
+
+<div class="{{swapCls}}" style="position: absolute; left: 16px; right: 16px; top: 56px; min-height: 60px; display: flex; align-items: center; gap: 8px">
+<sc-if value="{{showInfo}}" hint-placeholder-val="{{true}}">
+<span style="display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 16px; background: #F4F5F9; font-size: 14px; font-weight: 500">{{infoLine}}</span>
+<span style="display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 16px; background: #F4F5F9; font-size: 14px; font-weight: 500">{{nextLine}}</span>
+</sc-if>
+<sc-if value="{{showDayOne}}" hint-placeholder-val="{{false}}">
+<div style="flex: 1 1 auto; display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 0 8px 0 16px; border-radius: 30px; background: #F4F5F9">
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 14px; font-weight: 600; line-height: 1.2">{{dayOneLine}}</span>
+<span aria-hidden="true" style="display: flex; gap: 3px"><sc-for list="{{segs}}" as="sg" hint-placeholder-count="10"><span style="width: 14px; height: 5px; border-radius: 3px; transition: background-color .3s ease; {{sg.style}}"></span></sc-for></span></span>
+<button type="button" onClick="{{openHellos}}" style="flex: 0 0 auto; min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #1D2140; color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">OK the hellos</button>
+</div>
+</sc-if>
+<sc-if value="{{showDayDone}}" hint-placeholder-val="{{false}}">
+<span style="display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: 18px; background: #F4F5F9; font-size: 14px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #22B07D"></span>{{dayDoneLine}}</span>
+</sc-if>
+<sc-if value="{{showPaused}}" hint-placeholder-val="{{false}}">
+<div style="flex: 1 1 auto; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 8px 0 14px; border-radius: 28px; background: #F4F5F9">
+<span style="flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 500; line-height: 1.3">{{pausedLine}}</span>
+<button type="button" onClick="{{resumeCurrent}}" style="flex: 0 0 auto; min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #1D2140; color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">Resume</button>
+</div>
+</sc-if>
+</div>
+
+<section aria-label="{{projName}} river" class="{{riverCls}}" style="position: absolute; left: 0; right: 0; top: 124px; height: 236px">
+<svg aria-hidden="true" viewBox="0 0 390 236" preserveAspectRatio="none" style="position: absolute; left: 0; top: 0; width: 100%; height: 236px; overflow: visible">
+<defs>
+<linearGradient id="v4-phone-bed" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#EEF0F6" stop-opacity="0"></stop>
+<stop offset="0.07" stop-color="#EEF0F6" stop-opacity="1"></stop>
+<stop offset="0.5" stop-color="#ECEFFB" stop-opacity="1"></stop>
+<stop offset="0.82" stop-color="#FFF4DD" stop-opacity="1"></stop>
+<stop offset="1" stop-color="#FFEBC2" stop-opacity="1"></stop>
+</linearGradient>
+</defs>
+<path d="M0,26 C62,14 125,36 195,24 C265,12 328,34 390,20 L390,206 C328,222 265,198 195,210 C125,222 62,200 0,212 Z" fill="url(#v4-phone-bed)"></path>
+<path class="current" d="M0,72 C70,62 132,84 195,72 C257,60 320,82 390,66" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"></path>
+<path class="current current-slow" d="M0,118 C66,108 128,130 195,118 C261,106 324,128 390,112" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"></path>
+<path class="current" d="M0,164 C70,154 132,176 195,164 C257,152 320,174 390,158" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"></path>
+</svg>
+<sc-for list="{{faces}}" as="f" hint-placeholder-count="28"><span role="img" aria-label="{{f.label}}" class="pface" style="{{f.style}}"></span></sc-for>
+</section>
+
+<div aria-hidden="true" class="{{swapCls}}" style="position: absolute; left: 0; right: 0; top: 364px; height: 18px">
+<sc-for list="{{zones}}" as="zn" hint-placeholder-count="4"><span style="position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; font-size: 12px; font-weight: 500; color: #646B85; {{zn.style}}">{{zn.text}}</span></sc-for>
+</div>
+
+<section aria-labelledby="dock-title" style="position: absolute; left: 16px; right: 16px; top: 404px">
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px 10px">
+<h2 id="dock-title" style="margin: 0; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #FFB020"></span>{{dockTitle}}</h2>
+<span style="font-size: 13px; color: #646B85">Both projects</span>
+</div>
+<div style="display: flex; gap: 8px; min-height: 124px">
+<sc-for list="{{dock}}" as="dk" hint-placeholder-count="3"><button type="button" class="row" onClick="{{dk.open}}" aria-label="{{dk.label}}" style="flex: 1 1 0; min-width: 0; padding: 10px 4px 10px; border: none; border-radius: 22px; background: transparent; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #1D2140">
+<span aria-hidden="true" style="width: 60px; height: 60px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 3.5px #FFB020, 0 12px 24px -12px rgba(255,176,32,0.8); margin-bottom: 4px; {{dk.avatar}}"></span>
+<span style="font-size: 15px; font-weight: 600">{{dk.first}}</span>
+<span style="display: inline-flex; align-items: center; min-height: 22px; padding: 0 9px; border-radius: 11px; background: #F4F5F9; font-size: 12px; font-weight: 500; color: #646B85">{{dk.tag}}</span>
+</button></sc-for>
+<sc-if value="{{dockEmpty}}" hint-placeholder-val="{{false}}"><p style="margin: 0; flex: 1 1 auto; align-self: center; text-align: center; font-size: 15px; color: #646B85">Callum keeps the river moving. You get a tap when someone replies.</p></sc-if>
+</div>
+</section>
+
+<section aria-label="Next hellos" class="{{swapCls}}" style="position: absolute; left: 20px; right: 20px; top: 616px; display: flex; align-items: center; gap: 12px">
+<span aria-hidden="true" style="display: flex; padding-left: 8px"><sc-for list="{{nextFaces}}" as="nf" hint-placeholder-count="5"><span style="width: 34px; height: 34px; margin-left: -8px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #D5D9E4; filter: grayscale(1) brightness(1.12); {{nf.style}}"></span></sc-for></span>
+<span style="font-size: 14px; color: #646B85; line-height: 1.3">{{nextText}}</span>
+</section>
+
+</div>
+</sc-if>
+
+<!-- REPLIES TAB -->
+<sc-if value="{{isReplies}}" hint-placeholder-val="{{false}}">
+<div class="fade-in scroll" style="position: absolute; left: 0; right: 0; top: 64px; bottom: 76px; overflow-y: auto; padding: 0 0 12px">
+<h1 style="margin: 0; padding: 4px 20px 4px; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1">Replies</h1>
+<p style="margin: 0; padding: 0 20px 10px; font-size: 14px; color: #646B85">From both projects. Callum keeps the others going.</p>
+<sc-for list="{{items}}" as="it" hint-placeholder-count="7">
+<sc-if value="{{it.isHead}}" hint-placeholder-val="{{false}}"><div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 6px; font-size: 14px; font-weight: 600"><span style="display: inline-flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; {{it.dot}}"></span>{{it.title}}</span><span style="color: #646B85; font-weight: 500">{{it.count}}</span></div></sc-if>
+<sc-if value="{{it.isRow}}" hint-placeholder-val="{{true}}"><button type="button" class="row" onClick="{{it.open}}" style="width: 100%; display: flex; align-items: center; gap: 14px; padding: 10px 20px; border: none; background: transparent; text-align: left; cursor: pointer; color: #1D2140">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; {{it.ring}} {{it.avatar}}"></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="display: flex; align-items: center; gap: 8px"><span style="flex: 1 1 auto; min-width: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{it.name}}</span><span style="flex: 0 0 auto; font-size: 13px; color: #646B85">{{it.when}}</span></span>
+<span style="display: flex; align-items: center; gap: 8px; min-width: 0"><span style="flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 20px; padding: 0 8px; border-radius: 10px; background: #F4F5F9; font-size: 12px; font-weight: 500; color: #646B85">{{it.tag}}</span><span style="flex: 1 1 auto; min-width: 0; font-size: 14px; color: #646B85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{it.sub}}</span></span>
+</span>
+</button></sc-if>
+</sc-for>
+</div>
+</sc-if>
+
+<!-- ASK TAB -->
+<sc-if value="{{isAsk}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="position: absolute; left: 0; right: 0; top: 64px; bottom: 76px; padding: 0 20px">
+<h1 style="margin: 0; padding: 4px 0 14px; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1">Ask Callum</h1>
+<label for="ask-in" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{askPlaceholder}}</label>
+<input id="ask-in" type="text" placeholder="{{askPlaceholder}}" value="{{askText}}" onChange="{{onAsk}}" style="width: 100%; box-sizing: border-box; min-height: 52px; border: none; border-radius: 26px; background: #F4F5F9; padding: 0 20px; font-size: 16px; color: #1D2140">
+<div style="display: flex; flex-wrap: wrap; gap: 8px; padding-top: 14px">
+<sc-for list="{{chips}}" as="ch" hint-placeholder-count="2"><button type="button" class="pill" onClick="{{ch.pick}}" style="min-height: 40px; padding: 0 16px; border-radius: 20px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">{{ch.text}}</button></sc-for>
+</div>
+<sc-if value="{{hasAnswer}}" hint-placeholder-val="{{false}}">
+<div class="{{answerCls}}" style="margin-top: 22px; display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0; background: #FFF3D6; border-radius: 22px 22px 22px 6px; padding: 14px 16px; font-size: 16px; line-height: 1.4; font-weight: 500">{{answer}}</p>
+<sc-if value="{{canAdd}}" hint-placeholder-val="{{false}}"><span style="display: flex; flex-wrap: wrap; gap: 8px"><button type="button" onClick="{{addFound}}" style="min-height: 44px; padding: 0 20px; border-radius: 22px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">{{addLabel}}</button><button type="button" onClick="{{clearAnswer}}" style="min-height: 44px; padding: 0 16px; border-radius: 22px; border: none; background: transparent; color: #646B85; font-size: 15px; font-weight: 600; cursor: pointer">Not now</button></span></sc-if>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<nav aria-label="Callum" style="position: absolute; left: 0; right: 0; bottom: 0; height: 76px; border-top: 1px solid #E7E9F0; background: #FFFFFF; display: flex; z-index: 4">
+<sc-for list="{{tabs}}" as="tb" hint-placeholder-count="3"><button type="button" class="tabbtn" onClick="{{tb.pick}}" aria-current="{{tb.current}}" style="flex: 1 1 0; border: none; background: transparent; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 0 0 8px; color: #1D2140; {{tb.style}}">
+<span aria-hidden="true" style="position: relative; display: inline-flex">
+<sc-if value="{{tb.isRiver}}" hint-placeholder-val="{{true}}"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9c3-3 5 3 9 0s6-3 9 0M3 15c3-3 5 3 9 0s6-3 9 0"></path></svg></sc-if>
+<sc-if value="{{tb.isReplies}}" hint-placeholder-val="{{false}}"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 3.5V16A2.5 2.5 0 0 1 4 13.5z"></path></svg></sc-if>
+<sc-if value="{{tb.isAsk}}" hint-placeholder-val="{{false}}"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"></circle></svg></sc-if>
+<sc-if value="{{tb.hasBadge}}" hint-placeholder-val="{{false}}"><span style="position: absolute; right: -8px; top: -6px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: #FFB020; color: #1D2140; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center">{{tb.badge}}</span></sc-if>
+</span>
+<span style="font-size: 12px; font-weight: 600">{{tb.name}}</span>
+</button></sc-for>
+</nav>
+
+<p aria-live="polite" style="position: absolute; left: 16px; right: 16px; bottom: 92px; margin: 0; display: flex; justify-content: center; pointer-events: none; z-index: 40">
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{false}}"><span class="{{toastCls}}" style="display: inline-flex; align-items: center; gap: 10px; background: #1D2140; color: #FFFFFF; border-radius: 24px; min-height: 46px; box-sizing: border-box; padding: 5px 18px 5px 14px; font-size: 14px; font-weight: 500; box-shadow: 0 18px 40px -18px rgba(29,33,64,0.55); pointer-events: auto"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #22B07D"></span>{{toast}}</span></sc-if>
+</p>
+
+<!-- SHEETS -->
+<sc-if value="{{hasSheet}}" hint-placeholder-val="{{false}}">
+<div class="veil-in" onClick="{{closeSheet}}" aria-hidden="true" style="position: absolute; inset: 0; background: rgba(29,33,64,0.28); z-index: 20"></div>
+</sc-if>
+
+<sc-if value="{{isProjSheet}}" hint-placeholder-val="{{false}}">
+<div role="dialog" aria-label="Your projects" class="{{sheetCls}}" style="position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; background: #FFFFFF; border-radius: 28px 28px 0 0; box-shadow: 0 -20px 50px -24px rgba(29,33,64,0.45); padding: 10px 14px 22px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+<span aria-hidden="true" style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: #E7E9F0; margin-bottom: 8px"></span>
+
+<div style="display: flex; align-items: center; gap: 4px; border-radius: 22px; {{rec.rowBg}}">
+<button type="button" class="row" onClick="{{rec.pick}}" aria-label="{{rec.label}}" style="flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 14px; padding: 12px 8px 12px 12px; border: none; border-radius: 22px; background: transparent; cursor: pointer; text-align: left; color: #1D2140; min-height: 76px">
+<span aria-hidden="true" style="flex: 0 0 auto; display: flex; padding-left: 10px; width: 112px"><sc-for list="{{rec.strip}}" as="sfrec" hint-placeholder-count="5"><span style="width: 32px; height: 32px; margin-left: -10px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; flex: 0 0 auto; {{sfrec.style}}"></span></sc-for></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 17px; font-weight: 600; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px">{{rec.name}}<sc-if value="{{rec.current}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22B07D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></sc-if></span><span style="font-size: 14px; color: #646B85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{rec.line}}</span></span>
+</button>
+<button type="button" class="pill" onClick="{{rec.togglePause}}" style="flex: 0 0 auto; min-height: 40px; padding: 0 14px; margin-right: 8px; border-radius: 20px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">{{rec.pauseLabel}}</button>
+</div>
+
+<div style="display: flex; align-items: center; gap: 4px; border-radius: 22px; {{pay.rowBg}}">
+<button type="button" class="row" onClick="{{pay.pick}}" aria-label="{{pay.label}}" style="flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 14px; padding: 12px 8px 12px 12px; border: none; border-radius: 22px; background: transparent; cursor: pointer; text-align: left; color: #1D2140; min-height: 76px">
+<span aria-hidden="true" style="flex: 0 0 auto; display: flex; padding-left: 10px; width: 112px"><sc-for list="{{pay.strip}}" as="sfpay" hint-placeholder-count="5"><span style="width: 32px; height: 32px; margin-left: -10px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; flex: 0 0 auto; {{sfpay.style}}"></span></sc-for></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 17px; font-weight: 600; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px">{{pay.name}}<sc-if value="{{pay.current}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22B07D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></sc-if></span><span style="font-size: 14px; color: #646B85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{pay.line}}</span></span>
+</button>
+<button type="button" class="pill" onClick="{{pay.togglePause}}" style="flex: 0 0 auto; min-height: 40px; padding: 0 14px; margin-right: 8px; border-radius: 20px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">{{pay.pauseLabel}}</button>
+</div>
+
+<a href="V4NewProject.dc.html" class="row" style="display: flex; align-items: center; gap: 14px; padding: 8px 12px; min-height: 64px; border-radius: 22px; text-decoration: none; color: #1D2140">
+<span aria-hidden="true" style="width: 48px; height: 48px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px #E7E9F0; display: inline-flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span>
+<span style="font-size: 17px; font-weight: 600">New project</span>
+</a>
+</div>
+</sc-if>
+
+<sc-if value="{{isReplySheet}}" hint-placeholder-val="{{false}}">
+<div role="dialog" aria-label="Reply to {{who.name}}" class="{{sheetCls}}" style="position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; background: #FFFFFF; border-radius: 28px 28px 0 0; box-shadow: 0 -20px 50px -24px rgba(29,33,64,0.45); padding: 10px 18px 22px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+<span aria-hidden="true" style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: #E7E9F0; margin-bottom: 2px"></span>
+<div style="display: flex; align-items: center; gap: 12px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 3.5px #FFB020, 0 12px 26px -12px rgba(255,176,32,0.8); {{who.avatar}}"></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column"><span style="font-size: 18px; font-weight: 600; letter-spacing: -0.01em">{{who.name}}</span><span style="font-size: 13px; color: #646B85">{{who.role}}</span></span>
+<span style="flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 3px"><span style="display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; border-radius: 12px; background: #F4F5F9; font-size: 12px; font-weight: 600">{{who.tag}}</span><span style="font-size: 12px; color: #646B85">{{who.whenFull}}</span></span>
+</div>
+<p style="margin: 0; background: #FFF3D6; border-radius: 22px 22px 22px 6px; padding: 12px 15px; font-size: 16px; line-height: 1.38; font-weight: 500">{{who.quote}}</p>
+<label for="pdraft" style="display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #FFB020"></span>{{who.draftLabel}}</label>
+<textarea id="pdraft" class="draft" rows="3" value="{{draft}}" onChange="{{onDraft}}" style="min-height: 92px; resize: none; border: none; border-radius: 18px; background: #F4F5F9; padding: 12px 14px; font-size: 15px; line-height: 1.45; color: #1D2140; box-sizing: border-box"></textarea>
+<button type="button" onClick="{{sendReply}}" style="min-height: 50px; border-radius: 25px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer">Send to {{who.first}}</button>
+<div style="display: flex; gap: 8px">
+<button type="button" onClick="{{snoozeReply}}" style="flex: 1 1 0; min-height: 44px; border-radius: 22px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">Snooze</button>
+<button type="button" onClick="{{bookReply}}" style="flex: 1 1 0; min-height: 44px; border-radius: 22px; border: none; background: #FFF3D6; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">Book a call</button>
+<button type="button" onClick="{{closeSheet}}" style="flex: 1 1 0; min-height: 44px; border-radius: 22px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">Close</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isHelloSheet}}" hint-placeholder-val="{{false}}">
+<div role="dialog" aria-label="Hellos to OK in Payroll" class="{{sheetCls}}" style="position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; background: #FFFFFF; border-radius: 28px 28px 0 0; box-shadow: 0 -20px 50px -24px rgba(29,33,64,0.45); padding: 10px 18px 22px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; min-height: 470px">
+<span aria-hidden="true" style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: #E7E9F0; margin-bottom: 2px"></span>
+<sc-if value="{{hasHello}}" hint-placeholder-val="{{true}}">
+<div class="{{helloCls}}" style="display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto">
+<div style="display: flex; align-items: center; justify-content: space-between"><span style="font-size: 14px; font-weight: 600">{{helloCount}}</span><span style="display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; border-radius: 12px; background: #F4F5F9; font-size: 12px; font-weight: 600">Payroll</span></div>
+<div style="display: flex; align-items: center; gap: 12px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 56px; height: 56px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #D5D9E4; filter: grayscale(1) brightness(1.12); {{hello.avatar}}"></span>
+<span style="display: flex; flex-direction: column"><span style="font-size: 18px; font-weight: 600">{{hello.name}}</span><span style="font-size: 14px; color: #646B85">{{hello.role}}</span></span>
+</div>
+<p style="margin: 0; background: #FFF3D6; border-radius: 22px 22px 22px 6px; padding: 14px 16px; font-size: 16px; line-height: 1.42; font-weight: 500">{{hello.text}}</p>
+<span style="font-size: 13px; color: #646B85">In your Direct voice. Goes out tomorrow from 9:00.</span>
+<span style="flex: 1 1 auto"></span>
+<button type="button" onClick="{{okHello}}" style="min-height: 52px; border-radius: 26px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer">OK this hello</button>
+<button type="button" onClick="{{skipHello}}" style="min-height: 44px; border-radius: 22px; border: none; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer">Don't contact {{hello.first}}</button>
+</div>
+</sc-if>
+<sc-if value="{{helloDone}}" hint-placeholder-val="{{false}}">
+<div class="card-a" style="flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 12px; padding: 24px 12px">
+<span aria-hidden="true" style="width: 64px; height: 64px; border-radius: 50%; background: #22B07D; display: inline-flex; align-items: center; justify-content: center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
+<h2 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em">{{doneTitle}}</h2>
+<p style="margin: 0; font-size: 15px; line-height: 1.45; color: #646B85">{{doneText}}</p>
+<button type="button" onClick="{{closeSheet}}" style="margin-top: 8px; min-height: 48px; padding: 0 28px; border-radius: 24px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Back to Payroll</button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'river', proj: 'rec', swapKey: 0, sheet: '', sheetKey: 0, who: '', sent: {}, snoozed: {}, drafts: {}, paused: { rec: false, pay: false }, okDone: 0, okIdx: 0, skipped: {}, helloKey: 0, helloDone: false, askText: '', answer: '', answerKind: '', answerKey: 0, found: false, toast: '', toastKey: 0 };
+    this._to = [];
+    this._tk = 0;
+  }
+
+  componentWillUnmount() { this._to.forEach(function (h) { clearTimeout(h); }); }
+
+  later(fn, ms) { this._to.push(setTimeout(fn, ms)); }
+
+  d() {
+    if (this._d) return this._d;
+    function hash(n) { var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+    var PAL = ['#FF7A59', '#FFC145', '#4CB5F5', '#7BC67E', '#8C6CFF', '#F26CA7', '#2EC4B6', '#FF9F1C'];
+    function marble(n) {
+      var a = PAL[n % 8], b = PAL[(n * 3 + 2) % 8], c = PAL[(n * 5 + 5) % 8];
+      if (b === a) b = PAL[(n + 3) % 8];
+      if (c === a || c === b) c = PAL[(n + 6) % 8];
+      var ax = Math.round(18 + hash(n * 1.7) * 44), ay = Math.round(14 + hash(n * 2.3) * 44);
+      return 'background: radial-gradient(circle at ' + ax + '% ' + ay + '%, ' + b + ' 0 20%, transparent 58%), radial-gradient(circle at ' + (100 - ax) + '% ' + (100 - ay) + '%, ' + c + ' 0 16%, transparent 54%), ' + a + ';';
+    }
+    var ZN = [
+      { name: 'strangers', x0: 4, x1: 27, size: 24, ring: '#D5D9E4', filter: 'grayscale(1) brightness(1.12)', op: 0.7 },
+      { name: 'said hello', x0: 30, x1: 53, size: 28, ring: '#A9B8F5', filter: 'grayscale(0.62)', op: 0.92 },
+      { name: 'following up', x0: 55, x1: 73, size: 32, ring: '#6E86F2', filter: 'grayscale(0.28)', op: 1 },
+      { name: 'talking', x0: 75, x1: 96, size: 38, ring: '#3F52D9', filter: 'none', op: 1 }
+    ];
+    // people per project and zone: seeds
+    var PEOPLE = {
+      rec: [[300, 301, 302, 303, 304, 305], [310, 311, 312, 313, 314], [320, 321, 322], [330, 331]],
+      pay: [[611, 612, 613, 614, 615, 616, 617], [], [], [618, 619]]
+    };
+    var H = 236, faces = [];
+    ['rec', 'pay'].forEach(function (pk) {
+      PEOPLE[pk].forEach(function (ids, zi) {
+        var z = ZN[zi], n = ids.length;
+        if (!n) return;
+        var rows = n <= 2 ? n : 3, cols = Math.ceil(n / rows), cw = (z.x1 - z.x0) / cols;
+        var ys = rows === 1 ? [0.5] : rows === 2 ? [0.36, 0.64] : [0.22, 0.5, 0.78];
+        ids.forEach(function (id, k) {
+          var col = Math.floor(k / rows), row = k % rows;
+          faces.push({ id: id, pk: pk, zi: zi, key: pk + ':' + zi + ':' + k, x: z.x0 + (col + 0.5) * cw + (hash(id * 3.1 + 1) - 0.5) * cw * 0.2, y: H * ys[row] + (col % 2) * 7 + (hash(id * 5.7) - 0.5) * 6, z: z, avatar: marble(id) });
+        });
+      });
+    });
+    var PRO = {
+      rec: { name: 'Reconciliation', offer: "You help fintech teams take reconciliation off their ops team's plate.", people: 18, talking: 3, strip: [300, 301, 302, 310, 330], tone: 'Warm', hellosTomorrow: 'Tomás, Mei and 3 more say hello tomorrow at 9:00', next: [306, 307, 308, 309, 315], nextBase: 'Next hellos, tomorrow at 9:00', other: 'Payroll' },
+      pay: { name: 'Payroll', offer: 'You help growing teams in Lagos and Accra run payroll without spreadsheets.', people: 10, talking: 2, strip: [611, 612, 613, 614, 618], tone: 'Direct', other: 'Reconciliation' }
+    };
+    var HELLOS = [
+      { first: 'Halima', name: 'Halima Garba', role: 'Head of people at Abuja Freight', co: 'Abuja Freight', av: marble(612) },
+      { first: 'Dayo', name: 'Dayo Bello', role: 'Founder at Yaba Studio', co: 'Yaba Studio', av: marble(613) },
+      { first: 'Ama', name: 'Ama Owusu', role: 'Head of operations at Tema Logistics', co: 'Tema Logistics', av: marble(614) },
+      { first: 'Kofi', name: 'Kofi Mensah', role: 'Founder at Takoradi Marine', co: 'Takoradi Marine', av: marble(615) },
+      { first: 'Ifeoma', name: 'Ifeoma Obi', role: 'Head of people at Ikeja Retail', co: 'Ikeja Retail', av: marble(616) },
+      { first: 'Musa', name: 'Musa Danjuma', role: 'Head of finance at Kano Grains', co: 'Kano Grains', av: marble(617) },
+      { first: 'Bukola', name: 'Bukola Ade', role: 'Founder at Lekki Schools', co: 'Lekki Schools', av: marble(619) }
+    ];
+    var PPL = {
+      kemi: { first: 'Kemi', name: 'Kemi Eze', role: 'Founder at Oko Pay', proj: 'rec', tag: 'Reconciliation', when: '7:40', whenFull: 'Today at 7:40', av: marble(300), quote: "This is timely. We're rebuilding our month-end close in December. Could you send a short deck before Monday?", draft: "Thanks Kemi, glad the timing works. I'll send a short deck tonight, and I'm happy to walk you through it on Monday.", voice: 'Warm', after: 'Replied just now' },
+      yaw: { first: 'Yaw', name: 'Yaw Mensah', role: 'Head of people at Kumasi Foods', proj: 'pay', tag: 'Payroll', when: '8:05', whenFull: 'Today at 8:05', av: marble(611), quote: 'Happy to look. We run 140 people on a spreadsheet today.', draft: 'Thanks Yaw. 140 people on a spreadsheet is where I help most. Thursday at 10:00 for fifteen minutes?', voice: 'Direct', after: 'Replied just now' },
+      femi: { first: 'Femi', name: 'Femi Adeyemi', role: 'Founder at Eko Wallet', proj: 'rec', tag: 'Reconciliation', when: 'Yesterday', whenFull: 'Yesterday at 16:20', av: marble(303), quote: 'What does pricing look like for a team of six?', draft: "Hi Femi, pricing depends on your volume, so I'd rather give you an exact number on a short call. Does Thursday at 14:00 work?", voice: 'Warm', after: 'Replied just now' }
+    };
+    var TALKING = [
+      { key: 'tunde', name: 'Tunde Bello', tag: 'Reconciliation', av: marble(331), sub: 'Call on Friday at 11:00', when: 'Friday' },
+      { key: 'efua', name: 'Efua Asante', tag: 'Payroll', av: marble(618), sub: 'Call on Thursday at 14:00', when: 'Monday' }
+    ];
+    this._d = { marble: marble, ZN: ZN, faces: faces, PRO: PRO, HELLOS: HELLOS, PPL: PPL, TALKING: TALKING, order: ['kemi', 'yaw', 'femi'] };
+    return this._d;
+  }
+
+  showToast(text, ms) {
+    var self = this;
+    this._tk += 1;
+    var key = this._tk;
+    this.setState({ toast: text, toastKey: key });
+    this.later(function () { if (self.state.toastKey === key) self.setState({ toast: '' }); }, ms || 2600);
+  }
+
+  open(sheet, who) { this.setState(function (s) { return { sheet: sheet, who: who || s.who, sheetKey: s.sheetKey + 1 }; }); }
+
+  setProj(k) {
+    if (this.state.proj === k) { this.setState({ sheet: '' }); return; }
+    this.setState(function (s) { return { proj: k, swapKey: s.swapKey + 1, sheet: '' }; });
+  }
+
+  leftToOk(s) {
+    var H = this.d().HELLOS, n = 0;
+    H.forEach(function (h, i) { if (i >= s.okDone && !s.skipped[h.first]) n += 1; });
+    return n;
+  }
+
+  renderVals() {
+    var self = this, D = this.d(), s = this.state, P = D.PRO[s.proj];
+    var curPaused = s.paused[s.proj];
+    var waiting = D.order.filter(function (id) { return !s.sent[id] && !s.snoozed[id]; });
+    var left = this.leftToOk(s);
+    var isPay = s.proj === 'pay';
+
+    // faces
+    var faces = D.faces.map(function (f) {
+      var on = f.pk === s.proj;
+      var hid = false;
+      var look = 'filter: ' + f.z.filter + '; opacity: ' + (on ? f.z.op : 0) + '; box-shadow: 0 0 0 1.5px ' + f.z.ring + ';';
+      if (on && curPaused) look = 'filter: grayscale(1) brightness(1.08); opacity: ' + (f.z.op * 0.6).toFixed(2) + '; box-shadow: 0 0 0 1.5px #D5D9E4;';
+      var hz = f.z.size / 2;
+      return { label: (f.pk === 'rec' ? 'Reconciliation' : 'Payroll') + ' person, ' + f.z.name, style: 'left: ' + f.x.toFixed(2) + '%; top: ' + f.y.toFixed(1) + 'px; width: ' + f.z.size + 'px; height: ' + f.z.size + 'px; margin: -' + hz + 'px 0 0 -' + hz + 'px; ' + f.avatar + ' ' + look + (on ? '' : ' pointer-events: none;') };
+    });
+    var zones = D.ZN.map(function (z, zi) {
+      return { text: z.name, style: 'left: ' + ((z.x0 + z.x1) / 2) + '%; opacity: ' + (isPay && (zi === 1 || zi === 2) ? 0 : 1) + ';' };
+    });
+
+    // info slot
+    var showInfo = !curPaused && !isPay;
+    var showDayOne = !curPaused && isPay && left > 0;
+    var showDayDone = !curPaused && isPay && left === 0;
+    var okedCount = D.HELLOS.filter(function (h, i) { return i < s.okDone && !s.skipped[h.first]; }).length;
+    var seg10 = [];
+    for (var i = 0; i < 10; i++) seg10.push({ style: i < 3 + okedCount ? 'background: #1D2140;' : 'background: #D5D9E4;' });
+    var dayOneLine = left + ' of 10 hellos left to OK in Payroll';
+    var infoLine = P.people + ' people, ' + P.talking + ' talking';
+
+    // dock
+    var dock = waiting.map(function (id) {
+      var p = D.PPL[id];
+      return { first: p.first, tag: p.tag, avatar: p.av, label: p.name + ', ' + p.tag + ', wants to talk', open: function () { self.open('reply', id); } };
+    });
+
+    // next faces
+    var nextFaces = (isPay ? D.HELLOS.slice(Math.min(s.okDone, 4), Math.min(s.okDone, 4) + 5) : P.next.map(function (n) { return { av: D.marble(n) }; })).map(function (h) { return { style: h.av }; });
+    var nextText = isPay ? (left > 0 ? 'Hellos wait for your OK. They go out tomorrow from 9:00.' : 'Hellos go out tomorrow from 9:00.') : 'Next hellos, tomorrow at 9:00';
+    if (curPaused) nextText = P.name + ' is paused. No hellos go out.';
+
+    // items for replies tab
+    var items = [];
+    items.push({ isHead: true, isRow: false, title: 'Want to talk', count: waiting.length + '', dot: 'background: #FFB020;' });
+    waiting.forEach(function (id) {
+      var p = D.PPL[id];
+      items.push({ isHead: false, isRow: true, name: p.name, tag: p.tag, when: p.when, sub: p.quote, avatar: p.av, ring: 'box-shadow: 0 0 0 3px #FFB020;', open: function () { self.open('reply', id); } });
+    });
+    var talkRows = [];
+    D.order.forEach(function (id) { if (s.sent[id] === 'reply' || s.sent[id] === 'book') { var p = D.PPL[id]; talkRows.push({ name: p.name, tag: p.tag, when: 'Just now', sub: s.sent[id] === 'book' ? 'Calendar link sent' : p.after, av: p.av, key: id }); } });
+    D.TALKING.forEach(function (t) { talkRows.push({ name: t.name, tag: t.tag, when: t.when, sub: t.sub, av: t.av, key: t.key }); });
+    items.push({ isHead: true, isRow: false, title: 'Talking', count: talkRows.length + '', dot: 'border: 2.5px solid #3F52D9;' });
+    talkRows.forEach(function (t) {
+      items.push({ isHead: false, isRow: true, name: t.name, tag: t.tag, when: t.when, sub: t.sub, avatar: t.av, ring: 'box-shadow: 0 0 0 2px #3F52D9;', open: function () { self.showToast(t.name + ' is talking with you. Open the thread on your computer.'); } });
+    });
+    var restRows = D.order.filter(function (id) { return s.snoozed[id]; });
+    if (restRows.length) {
+      items.push({ isHead: true, isRow: false, title: 'Resting', count: restRows.length + '', dot: 'border: 2.5px solid #D5D9E4;' });
+      restRows.forEach(function (id) { var p = D.PPL[id]; items.push({ isHead: false, isRow: true, name: p.name, tag: p.tag, when: 'Thursday', sub: 'Comes back on Thursday at 9:00', avatar: p.av + ' filter: grayscale(1) brightness(1.1);', ring: 'box-shadow: 0 0 0 2px #D5D9E4;', open: function () { self.showToast(p.first + ' comes back on Thursday at 9:00.'); } }); });
+    }
+
+    var BLANK = { isHead: false, isRow: false, title: '', count: '', dot: '', name: '', tag: '', when: '', sub: '', avatar: '', ring: '', open: function () {} };
+    items = items.map(function (it) { return Object.assign({}, BLANK, it); });
+
+    // who sheet
+    var wp = D.PPL[s.who] || D.PPL.kemi;
+    var dk = s.drafts[s.who] !== undefined ? s.drafts[s.who] : wp.draft;
+    var who = { first: wp.first, name: wp.name, role: wp.role, tag: wp.tag, whenFull: wp.whenFull, avatar: wp.av, quote: '“' + wp.quote + '”', draftLabel: 'Callum’s draft, in your ' + wp.voice + ' voice' };
+
+    // project sheet
+    function projFor(k) {
+      var p = D.PRO[k], pz = s.paused[k], on = s.proj === k;
+      var cnt = k === 'rec' ? p.people : p.people;
+      return {
+        rowBg: on ? 'background: #F4F5F9;' : 'background: transparent;',
+        label: 'Switch to ' + p.name,
+        strip: p.strip.map(function (n) { return { style: D.marble(n) + (pz ? ' filter: grayscale(1); opacity: 0.6;' : '') }; }),
+        name: p.name, current: on,
+        line: pz ? 'Paused until Monday at 9:00' : p.people + ' people, ' + p.talking + ' talking',
+        pick: function () { self.setProj(k); },
+        pauseLabel: pz ? 'Resume' : 'Pause',
+        togglePause: function () {
+          var was = self.state.paused[k];
+          self.setState(function (s2) { var pp = Object.assign({}, s2.paused); pp[k] = !was; return { paused: pp }; });
+          self.showToast(was ? p.name + ' is running again.' : p.name + ' is paused. ' + p.other + ' keeps going.');
+        }
+      };
+    }
+
+    // hellos sheet
+    var hi = Math.min(s.okIdx, D.HELLOS.length - 1);
+    var hel = D.HELLOS[hi];
+    var hello = { first: hel.first, name: hel.name, role: hel.role, avatar: hel.av, text: 'Hi ' + hel.first + ', I help growing teams like ' + hel.co + ' run payroll without spreadsheets. Worth fifteen minutes this week?' };
+    var posN = Math.min(s.okIdx + 1, D.HELLOS.length);
+    var skippedN = Object.keys(s.skipped).length;
+
+    // ask
+    var chips = [
+      { text: 'Find 20 more like ' + (isPay ? 'Yaw' : 'Kemi'), pick: function () { self.setState(function (s2) { return { answer: 'Callum found 20 more people like ' + (isPay ? 'Yaw' : 'Kemi') + '. They would join ' + P.name + ' as strangers, and nobody already in another project.', answerKind: 'find', answerKey: s2.answerKey + 1, found: false }; }); } },
+      { text: curPaused ? 'Resume ' + P.name : 'Pause ' + P.name, pick: function () { var k = s.proj; self.setState(function (s2) { var pp = Object.assign({}, s2.paused); pp[k] = !curPaused; return { paused: pp, answer: curPaused ? P.name + ' is running again.' : P.name + ' is paused. ' + P.other + ' keeps going.', answerKind: 'pause', answerKey: s2.answerKey + 1 }; }); } }
+    ];
+
+    var tk = s.tab;
+    function tab(key, name, extra) { return Object.assign({ name: name, isRiver: key === 'river', isReplies: key === 'replies', isAsk: key === 'ask', current: tk === key ? 'page' : 'false', style: tk === key ? '' : 'opacity: 0.55;', pick: function () { self.setState(function (s2) { return { tab: key, sheet: '' }; }); }, hasBadge: false, badge: '' }, extra || {}); }
+
+    return {
+      projName: P.name, offer: P.offer, swapCls: s.swapKey % 2 ? 'swap-a' : 'swap-b',
+      isRiver: tk === 'river', isReplies: tk === 'replies', isAsk: tk === 'ask',
+      tabs: [tab('river', 'River'), tab('replies', 'Replies', { hasBadge: waiting.length > 0, badge: waiting.length + '' }), tab('ask', 'Ask')],
+      openProjects: function () { self.open('proj'); },
+      showInfo: showInfo, infoLine: infoLine, nextLine: 'Ada accepted',
+      showDayOne: showDayOne, dayOneLine: dayOneLine, segs: seg10, openHellos: function () { self.setState(function (s2) { return { sheet: 'hello', sheetKey: s2.sheetKey + 1, helloDone: s2.okIdx >= 7 }; }); },
+      showDayDone: showDayDone, dayDoneLine: 'Payroll is ready. Hellos go out tomorrow from 9:00.',
+      showPaused: curPaused, pausedLine: P.name + ' is paused. ' + P.other + ' keeps going.',
+      resumeCurrent: function () { var k = s.proj; self.setState(function (s2) { var pp = Object.assign({}, s2.paused); pp[k] = false; return { paused: pp }; }); self.showToast(P.name + ' is running again.'); },
+      riverCls: curPaused ? 'still' : '', faces: faces, zones: zones,
+      dockTitle: waiting.length ? (waiting.length === 1 ? '1 person wants to talk' : waiting.length + ' people want to talk') : 'Nobody is waiting on you',
+      dock: dock, dockEmpty: dock.length === 0,
+      nextFaces: nextFaces, nextText: nextText,
+      items: items,
+      askPlaceholder: 'Ask Callum about ' + P.name, askText: s.askText, onAsk: function (e) { self.setState({ askText: e.target.value }); },
+      chips: chips, hasAnswer: !!s.answer, answer: s.answer, answerCls: s.answerKey % 2 ? 'card-a' : 'card-b',
+      canAdd: s.answerKind === 'find' && !s.found, addLabel: 'Add them to ' + P.name,
+      addFound: function () { self.setState({ found: true, answer: '20 people are in ' + P.name + ' now. Callum says hello to the first of them tomorrow at 9:00.', answerKind: 'done' }); self.showToast('20 people added to ' + P.name + '.'); },
+      clearAnswer: function () { self.setState({ answer: '', answerKind: '' }); },
+      hasToast: !!s.toast, toast: s.toast, toastCls: s.toastKey % 2 ? 'toast-a' : 'toast-b',
+      hasSheet: !!s.sheet, sheetCls: s.sheetKey % 2 ? 'sheet-a' : 'sheet-b',
+      isProjSheet: s.sheet === 'proj', isReplySheet: s.sheet === 'reply', isHelloSheet: s.sheet === 'hello',
+      closeSheet: function () { self.setState({ sheet: '' }); },
+      rec: projFor('rec'), pay: projFor('pay'),
+      who: who, draft: dk,
+      onDraft: function (e) { var v = e.target.value, id = s.who; self.setState(function (s2) { var d2 = Object.assign({}, s2.drafts); d2[id] = v; return { drafts: d2 }; }); },
+      sendReply: function () { var id = s.who; self.setState(function (s2) { var se = Object.assign({}, s2.sent); se[id] = 'reply'; return { sent: se, sheet: '' }; }); self.showToast('Sent to ' + wp.first + ', in your ' + wp.voice + ' voice.'); },
+      bookReply: function () { var id = s.who; self.setState(function (s2) { var se = Object.assign({}, s2.sent); se[id] = 'book'; return { sent: se, sheet: '' }; }); self.showToast('Calendar link sent to ' + wp.first + '.'); },
+      snoozeReply: function () { var id = s.who; self.setState(function (s2) { var sz = Object.assign({}, s2.snoozed); sz[id] = true; return { snoozed: sz, sheet: '' }; }); self.showToast(wp.first + ' rests until Thursday at 9:00.'); },
+      hasHello: !s.helloDone && s.okIdx < 7, helloDone: s.helloDone || s.okIdx >= 7,
+      helloCount: 'Hello ' + posN + ' of 7', helloCls: s.helloKey % 2 ? 'card-a' : 'card-b', hello: hello,
+      okHello: function () { self.stepHello(false); }, skipHello: function () { self.stepHello(true); },
+      doneTitle: 'That is all 7', doneText: skippedN ? (7 - skippedN) + ' hellos go out tomorrow from 9:00. ' + skippedN + ' ' + (skippedN === 1 ? 'person was' : 'people were') + ' left alone.' : 'The hellos go out tomorrow from 9:00.'
+    };
+  }
+
+  stepHello(skip) {
+    var D = this.d(), s = this.state;
+    if (s.okIdx >= 7) return;
+    var h = D.HELLOS[s.okIdx];
+    this.setState(function (s2) {
+      var sk = Object.assign({}, s2.skipped);
+      if (skip) sk[h.first] = true;
+      var n = s2.okIdx + 1;
+      return { okIdx: n, okDone: n, skipped: sk, helloKey: s2.helloKey + 1, helloDone: n >= 7 };
+    });
+  }
+}
+</script>
+</body>
+</html>
