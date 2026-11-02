@@ -127,6 +127,24 @@ describe('AskBar', () => {
     expect(mocks.ask).not.toHaveBeenCalled();
   });
 
+  it('acts on the project the question was asked in, even if the screen has moved to another one', async () => {
+    mocks.ask.mockResolvedValue({
+      text: 'Callum found 20 more people like Kemi.',
+      personIds: [],
+      action: { kind: 'add_people', label: 'Add them', args: { query: 'like Kemi' } },
+    });
+    mocks.act.mockResolvedValue({ text: 'Added.', personIds: [], action: null });
+    const user = userEvent.setup();
+    const other: Project = { ...project, id: 9, name: 'Payroll' };
+    const { rerender } = render(<AskBar project={project} people={[]} />);
+    await user.type(screen.getByRole('textbox', { name: 'Ask Callum' }), 'find more{Enter}');
+    expect(mocks.ask).toHaveBeenCalledWith('find more', 7);
+    await screen.findByText('Callum found 20 more people like Kemi.');
+    rerender(<AskBar project={other} people={[]} />);
+    await user.click(screen.getByRole('button', { name: 'Add them' }));
+    expect(mocks.act).toHaveBeenCalledWith(expect.objectContaining({ kind: 'add_people' }), 7);
+  });
+
   it('drops the result of an action when a newer question has replaced the answer', async () => {
     let finish: (a: unknown) => void = () => {};
     mocks.ask

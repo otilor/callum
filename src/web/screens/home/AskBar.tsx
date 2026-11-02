@@ -26,7 +26,7 @@ export interface AskBarProps {
   caret?: boolean;
 }
 
-interface Turn { asked: string; answer: AskAnswer | null; result: AskAnswer | null; error: string; working: boolean }
+interface Turn { asked: string; projectId: number | undefined; answer: AskAnswer | null; result: AskAnswer | null; error: string; working: boolean }
 
 function errorText(e: unknown): string {
   return e instanceof Error && e.message ? e.message : 'Something went wrong. Callum kept everything as it was.';
@@ -63,12 +63,13 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
     const ticket = ++asking.current;
     setText('');
     setChips(false);
-    setTurn({ asked: question, answer: null, result: null, error: '', working: true });
+    setTurn({ asked: question, projectId: project?.id, answer: null, result: null, error: '', working: true });
+    const projectId = project?.id;
     try {
-      const answer = await api.ask(question, project?.id);
-      if (ticket === asking.current) setTurn({ asked: question, answer, result: null, error: '', working: false });
+      const answer = await api.ask(question, projectId);
+      if (ticket === asking.current) setTurn({ asked: question, projectId, answer, result: null, error: '', working: false });
     } catch (e) {
-      if (ticket === asking.current) setTurn({ asked: question, answer: null, result: null, error: errorText(e), working: false });
+      if (ticket === asking.current) setTurn({ asked: question, projectId, answer: null, result: null, error: errorText(e), working: false });
     }
   }
 
@@ -79,7 +80,8 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
     const ticket = asking.current;
     setActing(true);
     try {
-      const result = await api.act(action, project?.id);
+      // The answer was written for the project it was asked in, so it acts there even if the screen has moved on.
+      const result = await api.act(action, turn.projectId);
       if (ticket === asking.current) setTurn((t) => (t ? { ...t, result, error: '' } : t));
       await onChanged?.();
     } catch (e) {

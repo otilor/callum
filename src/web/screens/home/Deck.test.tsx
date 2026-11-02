@@ -132,6 +132,40 @@ describe('Deck', () => {
     expect(screen.queryByRole('article', { name: 'Reply from Kemi Eze' })).not.toBeInTheDocument();
   });
 
+  it('says what went too late in the words of the action: a calendar link, a thanks', async () => {
+    mocks.undo.mockRejectedValue(new Error('Already sent'));
+    const user = userEvent.setup();
+    const { unmount } = render(<Harness people={[waiting(1, 'Kemi Eze', { suggested: 'book' })]} projects={[project({ calendarUrl: 'https://cal.com/gabriel' })]} />);
+    await user.click(screen.getByRole('button', { name: 'Book a call' }));
+    await user.click(await screen.findByRole('button', { name: 'Undo' }));
+    expect(await screen.findByText('Too late. Your calendar link already went to Kemi.')).toBeInTheDocument();
+    unmount();
+    render(<Harness people={[kemi()]} />);
+    await user.click(screen.getByRole('button', { name: 'Close politely' }));
+    await user.click(await screen.findByRole('button', { name: 'Undo' }));
+    expect(await screen.findByText('Too late. Your thanks already went to Kemi.')).toBeInTheDocument();
+  });
+
+  it("runs the Undo ring for the window the server gave, by the server's own clock", async () => {
+    mocks.reply.mockResolvedValue(sent(50, { updatedAt: NOW.toISOString(), undoUntil: new Date(NOW.getTime() + 6000).toISOString() }));
+    const user = userEvent.setup();
+    render(<Harness people={[kemi()]} />);
+    await user.click(screen.getByRole('button', { name: 'Reply' }));
+    await screen.findByText('Sending your reply to Kemi');
+    const ms = parseFloat(document.querySelector<SVGCircleElement>('.undo-ring')!.style.animationDuration);
+    expect(ms).toBeLessThanOrEqual(6000);
+    expect(ms).toBeGreaterThan(4500);
+  });
+
+  it('says the reply went when the Undo window is already shut by the time the answer arrives', async () => {
+    mocks.reply.mockResolvedValue(sent(50, { undoUntil: NOW.toISOString() }));
+    const user = userEvent.setup();
+    render(<Harness people={[kemi()]} />);
+    await user.click(screen.getByRole('button', { name: 'Reply' }));
+    expect(await screen.findByText('Sent to Kemi')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+  });
+
   it('puts the cursor on the name when a card arrives, and on the next card after an answer', async () => {
     const user = userEvent.setup();
     render(<Harness people={[kemi(), femi()]} />);

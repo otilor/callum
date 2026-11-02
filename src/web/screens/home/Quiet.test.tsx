@@ -138,6 +138,20 @@ describe('Quiet: group used up', () => {
     expect(onChanged).toHaveBeenCalled();
   });
 
+  it('adds the people to the project the answer was written for, even if the screen moved on', async () => {
+    mocks.ask.mockResolvedValue({
+      text: 'Callum can look for 20 more like Kemi.', personIds: [],
+      action: { kind: 'find_more', label: 'Find 20 more like Kemi', args: { likePersonId: 1, query: null, count: 20 } },
+    });
+    mocks.act.mockResolvedValue({ text: 'Added 20 people.', personIds: [], action: null });
+    const { rerender, props } = view({ quiet: snapshot({ used }) });
+    await userEvent.click(screen.getByRole('button', { name: 'Find more like the people who replied' }));
+    await screen.findByText(/Callum can look for 20 more/);
+    rerender(<Quiet {...props} project={{ id: 2, name: 'Payroll', audience: null } as Project} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Find 20 more like Kemi' }));
+    expect(mocks.act).toHaveBeenCalledWith(expect.objectContaining({ kind: 'find_more' }), 1);
+  });
+
   it('says why when Callum cannot look for more', async () => {
     mocks.ask.mockRejectedValue(new ApiError(422, 'Callum needs a list for that.'));
     view({ quiet: snapshot({ used }) });

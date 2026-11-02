@@ -7,7 +7,7 @@ import { marbleBackground } from '../../ui/Marble.js';
 import { dayName, formatWhen } from '../../ui/when.js';
 import { prefersReducedMotion } from '../firstrun/motion.js';
 import { channelName, channelPhrase } from './dock.js';
-import { UNDO_MS, type UndoToasts } from './UndoToast.js';
+import { undoMsLeft, type UndoToasts } from './UndoToast.js';
 import './Deck.css';
 
 type Act = 'reply' | 'book' | 'snooze' | 'close';
@@ -166,6 +166,7 @@ export function Deck({ people, projects, tz, now, startAt, toasts, refresh, onCl
     const first = target.firstName;
     setError('');
     setLeaving({ id: target.id, act: kind });
+    const startedAt = performance.now();
     try {
       const call =
         kind === 'reply' ? api.reply(target.id, draft)
@@ -179,23 +180,27 @@ export function Deck({ people, projects, tz, now, startAt, toasts, refresh, onCl
         toasts.info(`${first} comes back on ${until ? dayName(until, tz, clock()) : 'Monday'}`);
       } else {
         const item = result as OutboxItem;
-        const ms = item.undoUntil ? Math.min(UNDO_MS, Math.max(1000, Date.parse(item.undoUntil) - clock().getTime())) : UNDO_MS;
-        toasts.pending({
-          text: kind === 'reply' ? `Sending your reply to ${first}` : kind === 'book' ? `Sending ${first} your calendar link` : `Thanking ${first}. No more follow-ups.`,
-          doneText: kind === 'reply' ? `Sent to ${first}` : kind === 'book' ? `Calendar link sent to ${first}` : `Sent. Callum won't follow up with ${first} again.`,
-          ms,
-          failText: `Too late. Your reply already went to ${first}.`,
-          onUndo: async () => {
-            await api.undo(item.id);
-            setHandled((h) => {
-              const next = new Set(h);
-              next.delete(target.id);
-              return next;
-            });
-            await refresh();
-            return kind === 'reply' ? `Not sent. Your reply to ${first} is back.` : `Not sent. ${first} is back with you.`;
-          },
-        });
+        const doneText = kind === 'reply' ? `Sent to ${first}` : kind === 'book' ? `Calendar link sent to ${first}` : `Sent. Callum won't follow up with ${first} again.`;
+        const ms = undoMsLeft(item, startedAt);
+        if (ms <= 0) toasts.info(doneText);
+        else {
+          toasts.pending({
+            text: kind === 'reply' ? `Sending your reply to ${first}` : kind === 'book' ? `Sending ${first} your calendar link` : `Thanking ${first}. No more follow-ups.`,
+            doneText,
+            ms,
+            failText: kind === 'reply' ? `Too late. Your reply already went to ${first}.` : kind === 'book' ? `Too late. Your calendar link already went to ${first}.` : `Too late. Your thanks already went to ${first}.`,
+            onUndo: async () => {
+              await api.undo(item.id);
+              setHandled((h) => {
+                const next = new Set(h);
+                next.delete(target.id);
+                return next;
+              });
+              await refresh();
+              return kind === 'reply' ? `Not sent. Your reply to ${first} is back.` : `Not sent. ${first} is back with you.`;
+            },
+          });
+        }
       }
       await refresh();
     } catch (e) {
