@@ -41,14 +41,14 @@ describe('without Chrome or Edge', () => {
   const NEEDS_BROWSER = 'LinkedIn needs Google Chrome or Microsoft Edge on this computer. Install one, then try again.';
 
   it('says what to install when connecting', async () => {
-    const adapter = createLinkedinAdapter(null, { dataDir: '/nonexistent/callum', findBrowser: async () => null });
+    const adapter = createLinkedinAdapter(null, { dataDir: '/proc/callum-no-such-dir', findBrowser: async () => null });
     const failure = await adapter.connect({ liAt: 'abc' }).catch((err: unknown) => err);
     expect(failure).toBeInstanceOf(ConnectError);
     expect((failure as ConnectError).message).toBe(NEEDS_BROWSER);
   });
 
   it('says it too when sending, as a problem that clears itself', async () => {
-    const adapter = createLinkedinAdapter({ liAt: 'abc' }, { dataDir: '/nonexistent/callum', findBrowser: async () => null });
+    const adapter = createLinkedinAdapter({ liAt: 'abc' }, { dataDir: '/proc/callum-no-such-dir', findBrowser: async () => null });
     const result = await adapter.send({ kind: 'invite', to: { name: 'Kemi Eze', email: null, linkedinUrl: 'https://www.linkedin.com/in/kemi', xHandle: null }, subject: null, body: 'Hi Kemi', inReplyTo: null });
     expect(result).toMatchObject({ ok: false, error: { code: 'temporary', message: NEEDS_BROWSER } });
   });

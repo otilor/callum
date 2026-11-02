@@ -183,10 +183,11 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
 
   /** Opens the profile in the chosen browser; if it still says "HeadlessChrome", reopens it with a plain Chrome user agent. */
   async function openContext(wantHeadless: boolean): Promise<BrowserContext> {
-    await mkdir(profileDir, { recursive: true });
-    const forced = forcedAgent.get(wantHeadless);
+    // Without Chrome or Edge nothing else matters, so say that first, before touching the profile folder.
     browser ??= await chooseBrowser();
     if (!browser) throw new ConnectError(NO_BROWSER_MESSAGE);
+    await mkdir(profileDir, { recursive: true });
+    const forced = forcedAgent.get(wantHeadless);
     const chosen = browser;
     const opts = (userAgent?: string) => launchOptions({ headless: wantHeadless, browser: chosen, ...(userAgent ? { userAgent } : {}) });
     let opened = await launch(profileDir, opts(forced ?? undefined));
