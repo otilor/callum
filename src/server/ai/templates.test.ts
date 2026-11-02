@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { findPlaceholders } from '../engine/guard.js';
 import { fixedClock } from '../engine/clock.js';
-import { findDate, nameFromOffer, offerSentence, stripQuoted, TemplateWriter } from './templates.js';
-import { outbound, testCtx, testPerson, testProject } from './testing.js';
+import { findDate, inlineOffer, isExplicitOptOut, nameFromOffer, offerSentence, stripQuoted, TemplateWriter } from './templates.js';
+import { inbound, outbound, testCtx, testPerson, testProject } from './testing.test-helpers.js';
 import type { OutKind } from '../../shared/types.js';
 
 const writer = new TemplateWriter(fixedClock('2026-11-02T10:00:00.000Z'));
@@ -284,5 +284,161 @@ describe('offerLine and projectName', () => {
     expect(await writer.projectName('You help clinics with patient scheduling and billing.')).toBe('Patient Scheduling');
     expect(await writer.projectName('Hello')).toBe('My project');
     expect(nameFromOffer('')).toBe('My project');
+  });
+});
+
+describe('classify: ordinary replies that look like a stop, an insult or an auto-reply', () => {
+  const classify = (text: string, ctx = testCtx()) => writer.classify(text, ctx);
+  const kindOf = async (text: string) => (await classify(text)).kind;
+
+  it.each([
+    ["We've been non-stop since launch. Can we talk next month?", 'not_now'],
+    ["We're a one-stop shop for payments, how is this different?", 'question'],
+    ['We are a nonstop operation right now. Interested though.', 'interested'],
+    ['Please don\'t stop, keen to hear more.', 'interested'],
+    ["I can't stop thinking about the reconciliation problem. Tell me more.", 'question'],
+    ["Full stop, we're happy with our current setup.", 'not_interested'],
+    ['Stop by our office on Thursday?', 'interested'],
+    ['Sorry for the stupid delay. Yes, let\'s talk.', 'interested'],
+    ['My idiot filter caught your note. Happy to chat.', 'interested'],
+    ['We got hit by a payment scam last year. How do you handle fraud?', 'question'],
+    ['Holy shit, this is exactly what we need.', 'interested'],
+    ['Wtf, that is a great idea. Call me.', 'interested'],
+  ])('%s -> %s', async (text, kind) => {
+    expect(await kindOf(text)).toBe(kind);
+  });
+
+  it.each([
+    'Stop', 'Stop.', 'Please stop.', 'STOP!', 'stop emailing me', 'Stop it', 'No thanks. Stop.',
+    'Unsubscribe', 'Remove me from your list', "Don't email me again", 'Please opt out', 'take me off',
+  ])('still stops: %s', async (text) => {
+    expect(await kindOf(text)).toBe('stop');
+  });
+  it.each([
+    'This is spam', 'Spam.', 'You are a scammer', "It's a scam", 'Fuck off', 'f*** off', 'Go to hell', 'Piss off',
+    'What a scam', 'Stop spamming me', 'Leave me alone', 'This is bullshit',
+  ])('still hostile: %s', async (text) => {
+    expect(await kindOf(text)).toBe('hostile');
+  });
+  it('knows which replies are explicit opt-outs', () => {
+    expect(isExplicitOptOut('Please take me off your list')).toBe(true);
+    expect(isExplicitOptOut('STOP')).toBe(true);
+    expect(isExplicitOptOut('Stop it, this is spam')).toBe(false);
+    expect(isExplicitOptOut("Full stop, we're happy")).toBe(false);
+  });
+
+  it.each([
+    ["We're currently out of budget for this. Maybe next year.", 'not_now'],
+    ["Let's circle back on Monday.", 'interested'],
+    ['Can we get back on Thursday to discuss?', 'interested'],
+    ["I'm away from my desk but yes, interested.", 'interested'],
+    ["I'm currently away from my laptop, call me on 0803 555 0100.", 'interested'],
+    ['I will be back on the project in January, happy to talk then.', 'interested'],
+  ])('not an auto-reply: %s -> %s', async (text, kind) => {
+    expect(await kindOf(text)).toBe(kind);
+  });
+  it('"let\'s circle back on Monday" is offered as a booking, not parked', async () => {
+    expect(await classify("Let's circle back on Monday.")).toMatchObject({ kind: 'interested', suggested: 'book', returnDate: null });
+  });
+  it('reads "out sick, back tomorrow" as out of office, back the next day', async () => {
+    expect(await classify("I'm out sick today, back tomorrow.")).toMatchObject({ kind: 'out_of_office', suggested: 'snooze', returnDate: '2026-11-03' });
+  });
+  it.each([
+    ['Automatic reply: limited access to email until 9 November', 'out_of_office'],
+    ['I am on holiday until 14 December', 'out_of_office'],
+    ['On parental leave, back 2 February 2027', 'out_of_office'],
+  ])('auto-reply wording: %s', async (text, kind) => {
+    expect(await kindOf(text)).toBe(kind);
+  });
+});
+
+describe('classify: the date of the message', () => {
+  it('resolves "until 20 November" against the inbound message date, not the clock', async () => {
+    const late = new TemplateWriter(fixedClock('2026-12-15T10:00:00.000Z'));
+    const ctx = testCtx({ history: [outbound(), inbound({ at: '2026-11-02T08:30:00.000Z' })] });
+    expect((await late.classify("I'm out of the office until 20 November", ctx)).returnDate).toBe('2026-11-20');
+    // without the history the clock decides
+    expect((await late.classify("I'm out of the office until 20 November", testCtx())).returnDate).toBe('2027-11-20');
+  });
+  it('uses the latest inbound message when there are several', async () => {
+    const ctx = testCtx({ history: [inbound({ id: 1, at: '2026-01-05T08:00:00.000Z' }), outbound({ id: 2 }), inbound({ id: 3, at: '2026-11-02T08:00:00.000Z' })] });
+    expect((await writer.classify('away until 20 November', ctx)).returnDate).toBe('2026-11-20');
+  });
+});
+
+describe('classify: referrals', () => {
+  const classify = (text: string, ctx = testCtx()) => writer.classify(text, ctx);
+
+  it('catches "contact my assistant Jane Doe"', async () => {
+    const c = await classify('Please contact my assistant Jane Doe (jane@okopay.com) to set this up.');
+    expect(c).toMatchObject({ kind: 'referral', referral: { name: 'Jane Doe', email: 'jane@okopay.com' } });
+  });
+  it('catches "try our CFO, Sam Bello"', async () => {
+    const c = await classify('Try our CFO, Sam Bello.');
+    expect(c).toMatchObject({ kind: 'referral', referral: { name: 'Sam Bello', email: null } });
+  });
+  it('catches "talk to our head of finance Sam Bello"', async () => {
+    expect((await classify('You want our head of finance Sam Bello.')).kind).not.toBe('referral'); // no referral verb
+    expect((await classify('Best to talk to our head of finance Sam Bello.')).referral?.name).toBe('Sam Bello');
+  });
+  it('does not invent a person from "Kemi\'s team" or a role mailbox', async () => {
+    for (const text of ["email Kemi's team at ops@okopay.com", 'Please email ops@okopay.com', 'contact finance@okopay.com for this']) {
+      const c = await classify(text);
+      expect(c.kind).not.toBe('referral');
+      expect(c.referral).toBeNull();
+    }
+  });
+  it('still takes a mailbox that looks like a person', async () => {
+    expect((await classify('Please email sam.bello@okopay.com')).referral).toMatchObject({ name: 'Sam Bello', email: 'sam.bello@okopay.com' });
+  });
+  it('never returns the sender or the replier as the referral', async () => {
+    const ctx = testCtx();
+    expect((await classify('Happy to talk to Ada, call me.', ctx)).kind).not.toBe('referral');
+    expect((await classify('Happy to talk to Ada Obi.', ctx)).kind).not.toBe('referral');
+    expect((await classify('Please contact Kemi Eze for this.', ctx)).kind).not.toBe('referral');
+    expect((await classify('Contact Kemi, she handles it.', ctx)).kind).not.toBe('referral');
+    expect((await classify('Contact ada@example.com for details', ctx)).kind).not.toBe('referral');
+    expect((await classify('Talk to Ada Obi. Or talk to Sam Bello.', ctx)).referral?.name).toBe('Sam Bello');
+  });
+});
+
+describe('parseAsk with people who share a first name', () => {
+  const people = [
+    { id: 1, name: 'Kemi Eze' },
+    { id: 2, name: 'Kemi Adeyemi' },
+    { id: 3, name: 'Temi Alade' },
+  ];
+  it('prefers the exact full name', async () => {
+    expect(await writer.parseAsk('switch Kemi Adeyemi to email', people)).toEqual({ intent: 'switch', personIds: [2], channel: 'email' });
+    expect(await writer.parseAsk('switch Kemi Eze and Temi to linkedin', people)).toEqual({ intent: 'switch', personIds: [1, 3], channel: 'linkedin' });
+    expect(await writer.parseAsk('find 10 more like Kemi Adeyemi', people)).toEqual({ intent: 'find', likePersonId: 2, query: null, count: 10 });
+  });
+  it('does not act on both when it is ambiguous', async () => {
+    expect(await writer.parseAsk('switch Kemi to email', people)).toEqual({ intent: 'unknown' });
+    expect(await writer.parseAsk('switch Kemi and Temi to email', people)).toEqual({ intent: 'unknown' });
+    expect(await writer.parseAsk('find more like Kemi', people)).toEqual({ intent: 'unknown' });
+  });
+});
+
+describe('projectName rules', () => {
+  it('does not take "easy" from "make it easy"', async () => {
+    expect(await writer.projectName('You make it easy to pay contractors abroad.')).toBe('Contractors');
+    expect(await writer.projectName('You make it easy to pay contractors abroad.')).not.toBe('Easy');
+  });
+});
+
+describe('an offer that is not written as "You ..."', () => {
+  const run = (offer: string, tone: 'warm' | 'direct' | 'playful') => writer.write('hello', testCtx({ project: testProject({ offer, tone }) }));
+
+  it('reads as correct English after "Hi Kemi, "', async () => {
+    expect((await run('We help fintech teams reconcile faster', 'direct')).body).toBe('Hi Kemi, we help fintech teams reconcile faster. Worth 15 minutes next week?');
+    expect((await run('We help fintech teams reconcile faster', 'warm')).body).toBe("Hi Kemi, I've been following what Oko Pay is building. We help fintech teams reconcile faster. Would a quick chat be useful?");
+    expect((await writer.write('invite', testCtx({ channel: 'linkedin', project: testProject({ offer: 'We help fintech teams reconcile faster' }) }))).body).toBe('Hi Kemi, we help fintech teams reconcile faster. Would love to connect.');
+  });
+  it('keeps the capital of acronyms, product words and proper nouns', async () => {
+    expect((await run('AI-powered reconciliation for fintech teams', 'direct')).body).toBe('Hi Kemi, AI-powered reconciliation for fintech teams. Worth 15 minutes next week?');
+    expect((await run('Oko Pay builds payroll for Lagos teams', 'direct')).body).toContain('Hi Kemi, Oko Pay builds');
+    expect(inlineOffer('I help teams.')).toBe('I help teams.');
+    expect(inlineOffer("I'm a bookkeeper.")).toBe("I'm a bookkeeper.");
   });
 });

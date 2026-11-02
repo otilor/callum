@@ -39,3 +39,10 @@ export function outbound(overrides: Partial<Message> = {}): Message {
     body: 'Hi Kemi, hello.', at: '2026-11-01T10:00:00.000Z', externalId: null, ...overrides,
   };
 }
+
+export function inbound(overrides: Partial<Message> = {}): Message {
+  return {
+    id: 2, personId: 1, channel: 'email', direction: 'in', kind: 'inbound', subject: 'Re: Quick question, Kemi',
+    body: 'Thanks.', at: '2026-11-02T08:00:00.000Z', externalId: null, ...overrides,
+  };
+}

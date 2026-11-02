@@ -4,7 +4,7 @@ import type { Settings } from '../../shared/types.js';
 import { openDb } from './db.js';
 import { migrate } from './migrations.js';
 import { DuplicateProjectName, Repo } from './repo.js';
-import { makeProject } from './testing.js';
+import { makeProject } from './testing.test-helpers.js';
 
 let repo: Repo;
 let tick: number;

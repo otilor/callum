@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { systemClock } from '../engine/clock.js';
 import { ClaudeWriter } from './claude.js';
-import { outbound, testCtx } from './testing.js';
+import { outbound, testCtx } from './testing.test-helpers.js';
 import { TemplateWriter } from './templates.js';
 import { DEFAULT_MODEL } from './writer.js';
 

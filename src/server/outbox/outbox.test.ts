@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Bus } from '../bus.js';
 import { openDb } from '../db/db.js';
 import { Repo } from '../db/repo.js';
-import { makeProject } from '../db/testing.js';
+import { makeProject } from '../db/testing.test-helpers.js';
 import { fixedClock } from '../engine/clock.js';
 import { Outbox, PlaceholderError, UNDO_MS, UndoError } from './outbox.js';
 import type { Scope } from '../../shared/types.js';

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from './db.js';
 import { Repo } from './repo.js';
-import { makeProject } from './testing.js';
+import { makeProject } from './testing.test-helpers.js';
 
 let repo: Repo;
 let tick: number;

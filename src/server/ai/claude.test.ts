@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { fixedClock } from '../engine/clock.js';
 import { ClaudeWriter } from './claude.js';
-import { outbound, testCtx, testProject } from './testing.js';
+import { inbound, outbound, testCtx, testProject } from './testing.test-helpers.js';
 import { TemplateWriter } from './templates.js';
 import { createWriter } from './writer.js';
 
@@ -150,6 +150,71 @@ describe('ClaudeWriter results', () => {
     expect(await run({ intent: 'switch', personIds: [12, 99, 12], channel: 'email' })).toEqual({ intent: 'switch', personIds: [12], channel: 'email' });
     expect(await run({ intent: 'find', likePersonId: 99 })).toEqual({ intent: 'unknown' });
     expect(await run({ intent: 'pause' })).toEqual({ intent: 'unknown' });
+  });
+});
+
+describe('ClaudeWriter.classify guards', () => {
+  const classified = (kind: string, suggested: string, extra: object = {}) => ({ kind, suggested, returnDate: null, referral: null, language: 'en', ...extra });
+
+  it('sends the reply without its quoted history', async () => {
+    const { writer, parse } = writerWith({ parsed_output: classified('interested', 'reply') });
+    await writer.classify("Yes, let's talk.\n\nOn Mon, 2 Nov 2026 at 09:00, Ada Obi <ada@example.com> wrote:\n> If this isn't for you, just reply stop and I won't write again.", testCtx());
+    const content = requestOf(parse).messages[0]!.content;
+    expect(content).toContain("Yes, let's talk.");
+    expect(content).not.toContain('just reply stop');
+    expect(content).not.toContain('wrote:');
+  });
+  it.each([
+    ['stop', 'reply', 'close'],
+    ['hostile', 'book', 'close'],
+    ['not_interested', 'reply', 'close'],
+    ['out_of_office', 'reply', 'snooze'],
+    ['not_now', 'book', 'snooze'],
+    ['question', 'book', 'reply'],
+    ['referral', 'snooze', 'reply'],
+    ['interested', 'snooze', 'reply'],
+    ['interested', 'book', 'book'],
+    ['interested', 'reply', 'reply'],
+  ])('%s with suggested %s becomes %s', async (kind, suggested, expected) => {
+    const referral = kind === 'referral' ? { name: 'Sam Bello', email: null, context: 'ask Sam' } : null;
+    const out = await writerWith({ parsed_output: classified(kind, suggested, { referral }) }).writer.classify('Anything', testCtx());
+    expect(out.kind).toBe(kind);
+    expect(out.suggested).toBe(expected);
+  });
+  it('keeps an explicit opt-out even if Claude reads it softly', async () => {
+    for (const text of ['Please take me off your list.', 'unsubscribe', 'STOP', "Don't email me again."]) {
+      const out = await writerWith({ parsed_output: classified('interested', 'reply') }).writer.classify(text, testCtx());
+      expect(out.kind).toBe('stop');
+    }
+  });
+  it('lets Claude correct the template when the template only guessed', async () => {
+    const out = await writerWith({ parsed_output: classified('interested', 'reply') }).writer.classify("Stop it, you're onto something. Call me Thursday.", testCtx());
+    expect(out.kind).toBe('interested');
+    const hostile = await writerWith({ parsed_output: classified('interested', 'book') }).writer.classify('This is a scam? No, kidding. Call me.', testCtx());
+    expect(hostile.kind).toBe('interested');
+  });
+  it('resolves the date against the inbound message date', async () => {
+    const ctx = testCtx({ history: [outbound(), inbound({ at: '2026-11-02T08:30:00.000Z' })] });
+    const { writer, parse } = writerWith({ parsed_output: classified('out_of_office', 'snooze', { returnDate: '2026-11-20' }) });
+    const out = await writer.classify('away', ctx);
+    expect(out.returnDate).toBe('2026-11-20');
+    expect(requestOf(parse).system).toContain('Monday, 2 November 2026');
+  });
+});
+
+describe('ClaudeWriter.write length and punctuation', () => {
+  const words = (n: number) => `Hi Kemi, ${Array.from({ length: n }, (_, i) => `word${i}`).join(' ')}`;
+  it('accepts a hello up to 120 words and a reply up to 160, and falls back beyond', async () => {
+    const ctx = testCtx();
+    expect((await writerWith({ parsed_output: { body: words(100) } }).writer.write('hello', ctx)).body).toBe(words(100));
+    expect((await writerWith({ parsed_output: { body: words(130) } }).writer.write('hello', ctx)).body).toBe((await template.write('hello', ctx)).body);
+    expect((await writerWith({ parsed_output: { body: words(130) } }).writer.write('follow_up', ctx)).body).toBe((await template.write('follow_up', ctx)).body);
+    expect((await writerWith({ parsed_output: { body: words(150) } }).writer.write('reply', ctx)).body).toBe(words(150));
+    expect((await writerWith({ parsed_output: { body: words(170) } }).writer.write('reply', ctx)).body).toBe((await template.write('reply', ctx)).body);
+  });
+  it('removes "!" and the Spanish opening "¡"', async () => {
+    const out = await writerWith({ parsed_output: { body: '¡Hola Kemi! Gracias por tu respuesta. ¡Qué bien!' } }).writer.write('reply', testCtx());
+    expect(out.body).toBe('Hola Kemi. Gracias por tu respuesta. Qué bien.');
   });
 });
 

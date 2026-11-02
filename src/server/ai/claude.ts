@@ -5,11 +5,14 @@ import type { Channel, Message, OutKind, Tone } from '../../shared/types.js';
 import { clampNote } from '../channels/linkedin-detect.js';
 import { type Clock, systemClock } from '../engine/clock.js';
 import { findPlaceholders } from '../engine/guard.js';
-import { OFFER_PLACEHOLDER } from './templates.js';
+import { OFFER_PLACEHOLDER, isExplicitOptOut, messageDate, stripQuoted } from './templates.js';
 import type { AskIntent, Classification, Writer, WriteContext } from './writer.js';
 
 const MAX_TOKENS = 4000;
 const CHANNELS = ['email', 'linkedin', 'x'] as const;
+
+/** The prompt asks for under 90 words; this is the limit the code enforces, with room to spare. */
+const MAX_WORDS: Record<OutKind, number> = { hello: 120, invite: 60, thanks: 120, follow_up: 120, reply: 160, booking: 120, close: 120 };
 
 const COPY_RULES = [
   'You write for Callum, a calm outreach assistant, on behalf of one person (the sender).',
@@ -65,6 +68,16 @@ function isoDate(s: string | null | undefined): string | null {
   if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
   const d = new Date(`${s}T00:00:00Z`);
   return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s ? null : s;
+}
+
+/** Claude's suggested action, kept only where it fits the kind. */
+function suggestedFor(kind: Classification['kind'], suggested: Classification['suggested']): Classification['suggested'] {
+  switch (kind) {
+    case 'stop': case 'hostile': case 'not_interested': return 'close';
+    case 'out_of_office': case 'not_now': return 'snooze';
+    case 'question': case 'referral': return 'reply';
+    case 'interested': return suggested === 'book' ? 'book' : 'reply';
+  }
 }
 
 function transcript(history: Message[]): string {
@@ -148,21 +161,23 @@ export class ClaudeWriter implements Writer {
 
     const out = await this.ask(writeSchema, system, user);
     if (!out) return template;
-    let body = out.body.trim().replace(/!/g, '.');
+    let body = out.body.trim().replace(/!/g, '.').replace(/\u00A1/g, '');
     if (kind === 'invite') body = clampNote(body);
     const badMergeField = findPlaceholders(body).some((p) => !p.startsWith('['));
-    if (!body || body.length > 1500 || badMergeField) return template;
+    const words = body.split(/\s+/).filter(Boolean).length;
+    if (!body || words > MAX_WORDS[kind] || body.length > 1500 || badMergeField) return template;
     return { subject: template.subject, body };
   }
 
   async classify(text: string, ctx: WriteContext): Promise<Classification> {
     const template = await this.fallback.classify(text, ctx);
+    const reply = stripQuoted(text) || text.trim();
     const system = [
       'You read one reply to an outreach message and say what it means. Answer only with the structured fields.',
       'kind: interested (wants to talk or hear more), question (asks something before deciding), not_now (maybe later), not_interested (a clear no), stop (asks not to be contacted again, unsubscribes), hostile (angry, abusive, calls it spam), out_of_office (automatic or personal away reply), referral (points to someone else to talk to).',
       'suggested: reply (write back), book (offer a time or calendar link), snooze (leave them alone until later), close (stop writing, thank them).',
       'Rules: stop and hostile always suggest close. not_interested suggests close. not_now and out_of_office suggest snooze. If they propose a call or ask for a time, kind is interested and suggested is book.',
-      `returnDate: the date they said they are back or ready, as YYYY-MM-DD, resolved to the next such date on or after today (${dayName(this.clock.now())}); null when no date is given. Never guess a date.`,
+      `returnDate: the date they said they are back or ready, as YYYY-MM-DD, resolved to the next such date on or after today (${dayName(messageDate(ctx, this.clock))}); null when no date is given. Never guess a date.`,
       'referral: only for kind referral. name and email of the person they point to (email null if not given), and context: the sentence that says why, in their words.',
       'language: the ISO 639-1 code of the language of their message ("en", "fr", ...).',
       'Ignore quoted earlier messages and the opt-out line "If this isn\'t for you, just reply stop"; judge only what they wrote now.',
@@ -171,20 +186,21 @@ export class ClaudeWriter implements Writer {
     const user = [
       `Sender's offer: ${ctx.project.offer ?? '(not given)'}`,
       last ? `The message they are replying to:\n${last.body}` : '',
-      `Their reply:\n${text}`,
+      `Their reply:\n${reply}`,
     ].filter(Boolean).join('\n\n');
 
     const out = await this.ask(classifySchema, system, user);
     if (!out) return template;
-    // An opt-out the phrase rules caught is never overridden by a softer reading.
-    if (template.kind === 'stop' && out.kind !== 'stop' && out.kind !== 'hostile') return template;
+    // An explicit opt-out ("unsubscribe", "take me off", "don't email me") is never overridden by a softer reading.
+    // Any other template guess (a bare "stop", a hostile word) yields to Claude.
+    if (template.kind === 'stop' && isExplicitOptOut(text) && out.kind !== 'stop' && out.kind !== 'hostile') return template;
     const referral = out.kind === 'referral' && out.referral && out.referral.name.trim()
       ? { name: out.referral.name.trim(), email: out.referral.email?.trim() || null, context: out.referral.context.trim() }
       : null;
     if (out.kind === 'referral' && !referral) return template;
     return {
       kind: out.kind,
-      suggested: out.suggested,
+      suggested: suggestedFor(out.kind, out.suggested),
       returnDate: out.kind === 'out_of_office' || out.kind === 'not_now' ? isoDate(out.returnDate) : null,
       referral,
       language: out.language.trim().toLowerCase().slice(0, 12) || 'en',

@@ -18,6 +18,18 @@ export function offerSentence(offer: string | null | undefined): string {
   return /[.?]$/.test(firstPerson) ? firstPerson : `${firstPerson}.`;
 }
 
+const LEADING_FUNCTION_WORDS = new Set(['we', 'our', 'my', 'the', 'a', 'an', 'this', 'helping', 'providing', 'offering', 'building', 'making']);
+
+/**
+ * The offer where it follows "Hi Kemi, " on the same sentence. An offer that opens with a plain
+ * function word ("We help ...") starts in lower case; a proper noun, acronym or product word ("Oko Pay builds",
+ * "AI-powered", "Payroll for ...") keeps its capital.
+ */
+export function inlineOffer(offer: string): string {
+  const first = /^([A-Z][a-z]*)(?![A-Za-z'\u2019-])/.exec(offer)?.[1];
+  return first && LEADING_FUNCTION_WORDS.has(first.toLowerCase()) ? first.toLowerCase() + offer.slice(first.length) : offer;
+}
+
 const MONTH_NAMES = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
 const MONTH_RE = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -68,6 +80,7 @@ export function findDate(text: string, today: Date): string | null {
 function findRelativeReturn(text: string, today: Date): string | null {
   const t0 = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
   const weekday = new RegExp(`\\b(?:until|till|back(?:\\s+(?:on|by|in the office on|at work on))?|return(?:ing|s)?(?:\\s+on)?)\\s+(?:next\\s+)?(${WEEKDAYS.join('|')})\\b`, 'i').exec(text);
+  if (/\b(?:back|until|till|return(?:ing)?)\s+tomorrow\b/i.test(text)) return iso(new Date(t0 + DAY_MS));
   const nextWeek = /\b(?:back|until|till|return(?:ing)?)\s+(?:the\s+)?(?:start of\s+|beginning of\s+)?next week\b/i.exec(text);
   const dayWord = weekday?.[1];
   if (dayWord && (!nextWeek || weekday.index < nextWeek.index)) {
@@ -95,22 +108,39 @@ export function stripQuoted(text: string): string {
   return kept.join('\n').replace(OPT_OUT_QUOTE, ' ').replace(/[‘’]/g, "'").trim();
 }
 
+/** Explicit opt-out phrases: these win over any softer reading, including Claude's. */
 const STOP_RE = /\b(?:unsubscribe|opt(?:ing)?[ -]?out|remove me|take me off|do not (?:contact|email|e-mail|message|write)|don'?t (?:contact|email|e-mail|message|write)|stop (?:emailing|e-mailing|messaging|writing|contacting|sending|following up))\b/i;
-/** A bare "stop" is a request to stop, unless it is "stop by" / "stop in". */
-const STOP_WORD_RE = /\bstop\b(?!\s+(?:by|in|over|off|at)\b)/i;
-const HOSTILE_RE = /\b(?:spam(?:mer|ming)?|scam(?:mer|ming)?|go away|leave me alone|harass(?:ing|ment)?|report(?:ing|ed)? you|fuck\w*|shit\w*|bullshit|asshole|bastard|idiot|moron|piss(?:ed)? off|f\*+k|wtf|stupid)\b/i;
-const OOO_RE = new RegExp(
+/** "Stop." as the whole message. */
+const BARE_STOP_WHOLE_RE = /^[\s"'*_>-]*(?:please\s+)?stop[\s.!,"'*_-]*$/i;
+/** "Stop it", "please stop." at the start or as the last sentence; never "non-stop", "don't stop", "full stop", "stop by". */
+const BARE_STOP_IMPERATIVE_RE = /(?:^|[.!?]\s+)[\s"'*_>-]*(?:please\s+)?stop(?:\s+(?:it|this|now|please|all of this|the (?:e-?mails?|messages?|notes?))\b|[\s.!,]*$)/i;
+const HOSTILE_RE = new RegExp(
   [
-    '\\booo\\b', 'out of (?:the )?office', 'out-of-office',
-    'on (?:annual |maternity |paternity |parental |medical |sick |extended )?leave',
-    'on (?:vacation|holiday|sabbatical|a break)', 'currently (?:out|away|travell?ing)',
-    'away (?:until|till|from|on)', 'auto-?\\s?reply', 'automatic reply', 'automated (?:reply|response)',
-    'back (?:in the office|at work|at my desk)', 'back (?:on|by) (?:\\d|monday|tuesday|wednesday|thursday|friday|saturday|sunday|' + MONTH_RE + ')',
-    'back next week', 'returning (?:on|to the office)',
+    'go away', 'leave me alone', 'go to hell', 'piss off', 'screw you',
+    '(?:fuck|fck|f\\*+k?) (?:off|you)', 'asshole', 'bastard',
+    'harass(?:ing|ment)', 'report(?:ing|ed)? you',
+    // aimed at the sender or the message, not incidental
+    '(?:this|that|it)(?:\'s| is| was) (?:just |pure |total |complete |utter |a |an |nothing but )*(?:spam|scam|bullshit|rubbish|garbage)',
+    '(?:you(?:\'re| are)|you\'ve been) (?:just |a |an |nothing but )*(?:spam|scam|spammers?|scammers?|spamming|harassing)',
+    'what an? (?:spam|scam)', 'stop spamming', '(?:spammers?|scammers?)',
+    '(?:your|the|this) (?:e-?mails?|messages?|notes?) (?:is|are) (?:just |pure )?(?:spam|a scam)',
+    '(?:^|[.!?]\\s+)(?:spam|scam)[\\s.!]*$',
   ].join('|'),
   'i',
 );
-const NOT_INTERESTED_RE = /\b(?:not interested|no,? thank(?:s| you)|not (?:a )?(?:good )?fit|no need|not (?:looking|in the market)|not for (?:us|me)|we(?:'re| are) (?:all )?set|already (?:have|use|work with)|not a priority|(?:don'?t|do not|no) (?:have )?(?:the )?time for|not relevant|no interest|i'?ll pass|we'?ll pass|pass on this)\b/i;
+/** Unambiguous out-of-office wording. "Back on Monday" or "away" alone is not enough; those only give the date. */
+const OOO_RE = new RegExp(
+  [
+    '\\booo\\b', 'out of (?:the )?office', 'out-of-office',
+    'on (?:annual |maternity |paternity |parental |medical |sick |extended |study )?leave\\b',
+    'on (?:vacation|holiday|sabbatical)(?=\\s+(?:until|till|through|from|and|now|this|next|for)\\b|\\s*[.,;]|\\s*$)',
+    'away (?:until|till)\\b', 'away from (?:the )?office\\b',
+    'auto-?\\s?reply', 'automatic reply', 'automated (?:reply|response)',
+    'out sick', 'limited access to (?:my )?(?:e-?mail|messages)',
+  ].join('|'),
+  'i',
+);
+const NOT_INTERESTED_RE = /\b(?:not interested|no,? thank(?:s| you)|not (?:a )?(?:good )?fit|no need|not (?:looking|in the market)|not for (?:us|me)|we(?:'re| are) (?:all )?set|already (?:have|use|work with)|not a priority|(?:don'?t|do not|no) (?:have )?(?:the )?time for|not relevant|no interest|(?:we(?:'re| are)|i(?:'m| am)) (?:very |perfectly |quite |really )?happy with (?:our|what|the|my)|i'?ll pass|we'?ll pass|pass on this)\b/i;
 const NOT_NOW_RE = /\b(?:not (?:right |just )?now|not (?:at the moment|this (?:week|month|quarter|year))|not until|bad timing|next (?:month|quarter|year|week)|circle back|(?:reach|get|come|check) back (?:to me |in )|later this|in (?:a |a few |a couple of |few |couple of |\d+ )?(?:weeks?|months?)|after (?:the )?(?:holidays?|summer|new year|q[1-4]|our (?:launch|audit|fundraise)|christmas)|try (?:me )?again|ping me (?:in|again|next)|touch base (?:in|next)|busy (?:right now|at the moment|with))\b/i;
 const BOOK_RE = /\b(?:calls?|chat|meet(?:ing)?|time|calendar|demo|catch up|zoom|google meet|schedule|let'?s (?:talk|speak|connect)|(?:talk|speak) (?:soon|more|then)|tomorrow|(?:mon|tues|wednes|thurs|fri|satur|sun)day)\b/i;
 const QUESTION_RE = /(?:\?|(?:^|[.!]\s+|\n)(?:how|what|what'?s|why|who|which|when|where|can you|could you|do you|does it|does this|is it|is this|are you|are there|would you|tell me (?:more|about)|i'?d like to know|send me (?:the )?(?:pricing|price|details|more info|info))\b)/i;
@@ -121,7 +151,8 @@ const NOT_NAMES = new Set([
   'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'Mr', 'Mrs', 'Ms', 'Dr',
 ]);
 const REFERRAL_VERB_RE = /\b(?:talk(?:ing)? to|speak(?:ing)? (?:to|with)|reach(?:ing)? out to|get in touch with|(?:please )?contact|loop(?:ed|ing)? in|cc'?(?:ing|d)|introduc(?:e|ing) you to|point(?:ing)? you to|connect(?:ing)? you (?:with|to)|forward(?:ed|ing)? (?:this |it |your (?:note|email|message) )?to|pass(?:ed|ing)? (?:this |it )?(?:on )?to|(?:right|best) person (?:is|would be|to (?:talk|speak) to is)|try(?:ing)?|ask(?:ing)?|e-?mail(?:ing)?|write to)\b/gi;
-const NAME_RE = /^[ \t,:-]*((?:[A-Z][a-z]+(?:['-][A-Za-z]+)*)(?:[ \t]+[A-Z][a-z]+(?:['-][A-Za-z]+)*){0,2})/;
+const NAME_RE = /^[ \t,:-]*(?:(?:my|our|the|his|her)[ \t]+(?:[a-z]+|[A-Z]{2,5})(?:[ \t]+(?:of[ \t]+)?(?:[a-z]+|[A-Z]{2,5})){0,2}[ \t]*[,:]?[ \t]+)?((?:[A-Z][a-z]+(?:['-][A-Za-z]+)*)(?:[ \t]+[A-Z][a-z]+(?:['-][A-Za-z]+)*){0,2})/;
+const ROLE_MAILBOXES = new Set(['ops', 'info', 'finance', 'sales', 'support', 'hello', 'hi', 'team', 'admin', 'accounts', 'accounting', 'billing', 'contact', 'office', 'hr', 'mail', 'help', 'enquiries', 'inquiries', 'marketing', 'operations', 'procurement', 'payments', 'payroll', 'legal', 'press', 'careers', 'jobs', 'noreply', 'reception', 'general', 'service', 'services']);
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
 
 function titleCase(word: string): string {
@@ -142,28 +173,38 @@ function sentenceAround(text: string, index: number): string {
   return text.slice(start, end).replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
-function findReferral(text: string, ownEmail: string | null): Classification['referral'] {
-  const ignore = (email: string): boolean => email.toLowerCase() === (ownEmail ?? '').toLowerCase() || /^(?:no-?reply|donotreply)@/i.test(email);
+function findReferral(text: string, exclude: { emails: (string | null)[]; names: (string | null)[] }): Classification['referral'] {
+  const skipEmail = (email: string): boolean =>
+    exclude.emails.some((e) => e && e.toLowerCase() === email.toLowerCase()) || /^(?:no-?reply|donotreply)@/i.test(email);
+  const excludedTokens = exclude.names.filter((n): n is string => !!n).map((n) => n.toLowerCase().split(/\s+/).filter(Boolean));
+  const isExcludedName = (name: string): boolean => {
+    const tokens = name.toLowerCase().split(/\s+/);
+    return excludedTokens.some((set) => tokens.every((t) => set.includes(t)));
+  };
   for (const verb of text.matchAll(REFERRAL_VERB_RE)) {
     const from = verb.index + verb[0].length;
     const rest = text.slice(from);
-    const nameWords = NAME_RE.exec(rest)?.[1]?.split(/[ \t]+/) ?? [];
+    const m = NAME_RE.exec(rest);
     const clean: string[] = [];
-    for (const w of nameWords) {
-      if (NOT_NAMES.has(w)) break;
+    for (const w of m?.[1]?.split(/[ \t]+/) ?? []) {
+      if (NOT_NAMES.has(w) || /['’]s$/i.test(w)) break;
       clean.push(w);
     }
     if (clean.length > 0) {
       const name = clean.join(' ');
-      const after = rest.slice((NAME_RE.exec(rest)?.[0] ?? '').length);
+      if (isExcludedName(name)) continue;
+      const after = rest.slice(m?.[0].length ?? 0);
       const near = EMAIL_RE.exec(after.slice(0, 80))?.[0] ?? EMAIL_RE.exec(text)?.[0] ?? null;
-      return { name, email: near && !ignore(near) ? near : null, context: sentenceAround(text, verb.index) };
+      return { name, email: near && !skipEmail(near) ? near : null, context: sentenceAround(text, verb.index) };
     }
     const direct = /^[\s,:]*[<(]?([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/.exec(rest)?.[1];
-    if (direct && !ignore(direct)) {
-      const local = direct.split('@')[0] ?? direct;
-      const name = local.split(/[._+-]+/).filter((p) => /^[a-z]{2,}$/i.test(p)).slice(0, 2).map(titleCase).join(' ');
-      if (name) return { name, email: direct, context: sentenceAround(text, verb.index) };
+    if (direct && !skipEmail(direct)) {
+      const parts = (direct.split('@')[0] ?? direct).split(/[._+-]+/).filter((p) => /^[a-z]{2,}$/i.test(p));
+      // only a mailbox that looks like a person ("sam.bello", "sam"), never "ops" or "finance"
+      if (parts.length > 0 && parts.length <= 2 && !parts.some((p) => ROLE_MAILBOXES.has(p.toLowerCase()))) {
+        const name = parts.map(titleCase).join(' ');
+        if (!isExcludedName(name)) return { name, email: direct, context: sentenceAround(text, verb.index) };
+      }
     }
   }
   return null;
@@ -177,18 +218,34 @@ function result(kind: ReplyKind, extra: Partial<Classification> = {}, suggested:
   return { kind, suggested, returnDate: null, referral: null, language: 'en', ...extra };
 }
 
-/** Deterministic reply reading: ordered phrase rules, the same ones every time. */
-export function classifyReply(rawText: string, today: Date, ownEmail: string | null = null): Classification {
+const BACK_DAY_RE = '(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow)';
+
+/** True when the reply says, in so many words, to stop writing. */
+export function isExplicitOptOut(rawText: string): boolean {
+  const text = stripQuoted(rawText);
+  return STOP_RE.test(text) || BARE_STOP_WHOLE_RE.test(text);
+}
+
+export interface ClassifyOptions { ownEmail?: string | null; excludeNames?: (string | null)[]; excludeEmails?: (string | null)[] }
+
+/**
+ * Deterministic reply reading: ordered phrase rules, the same ones every time.
+ * When in doubt it lands on "interested", which only costs the user a glance at the dock.
+ * `today` is the date of the message being read.
+ */
+export function classifyReply(rawText: string, today: Date, opts: ClassifyOptions = {}): Classification {
   const text = stripQuoted(rawText);
   // "it went to my spam folder" is not a complaint
   const hostileText = text.replace(/\b(?:in|into|to|from|via|my|the)\s+(?:my\s+|the\s+)?(?:spam|junk)(?:\s+(?:folder|box|filter))?\b/gi, ' ');
-  if (STOP_RE.test(text) || STOP_WORD_RE.test(text)) return result('stop');
+  if (STOP_RE.test(text) || BARE_STOP_WHOLE_RE.test(text) || BARE_STOP_IMPERATIVE_RE.test(text)) return result('stop');
   if (HOSTILE_RE.test(hostileText)) return result('hostile');
   if (OOO_RE.test(text)) return result('out_of_office', { returnDate: findDate(text, today) ?? findRelativeReturn(text, today) });
-  const referral = findReferral(text, ownEmail);
+  const referral = findReferral(text, { emails: [opts.ownEmail ?? null, ...(opts.excludeEmails ?? [])], names: opts.excludeNames ?? [] });
   if (referral) return result('referral', { referral });
   if (NOT_INTERESTED_RE.test(text) || /^\s*no[\s.,]*$/i.test(text)) return result('not_interested');
-  if (NOT_NOW_RE.test(text)) return result('not_now', { returnDate: findDate(text, today) });
+  // "let's circle back on Monday" proposes a day; it is not a request to wait
+  const waiting = text.replace(new RegExp(`\\b(?:circle|get|come|check|reach) back (?:to me )?(?:on |by |this )?${BACK_DAY_RE}\\b`, 'gi'), ' ');
+  if (NOT_NOW_RE.test(waiting)) return result('not_now', { returnDate: findDate(text, today) });
   if (BOOK_RE.test(text)) return result('interested', {}, 'book');
   if (QUESTION_RE.test(text)) return result('question');
   return result('interested');
@@ -198,7 +255,7 @@ const STOPWORDS = new Set([
   'a', 'an', 'the', 'your', 'their', 'our', 'its', 'my', 'all', 'any', 'more', 'less', 'some', 'every', 'each', 'of', 'off', 'out', 'on', 'in', 'to', 'for', 'from',
   'by', 'at', 'as', 'and', 'or', 'so', 'that', 'which', 'without', 'with', 'into', 'over', 'under', 'using', 'while', 'than', 'it', 'them', 'up', 'down',
 ]);
-const NAME_TRIGGER_RE = /\b(?:with|take|takes|taking|run|runs|running|handle|handles|manage|manages|automate|automates|build|builds|offer|offers|provide|provides|sell|sells|make|makes|design|designs|deliver|delivers|do|does|set up|sets up)\s+((?:[a-z][a-z&'-]*\s*){1,8})/gi;
+const NAME_TRIGGER_RE = /\b(?:with|take|takes|taking|run|runs|running|handle|handles|manage|manages|automate|automates|build|builds|offer|offers|provide|provides|sell|sells|design|designs|deliver|delivers|set up|sets up)\s+((?:[a-z][a-z&'-]*\s*){1,8})/gi;
 
 /** The most specific noun phrase after with/take/run/…, title-cased, stop words dropped. */
 export function nameFromOffer(offer: string): string {
@@ -215,10 +272,33 @@ export function nameFromOffer(offer: string): string {
     }
     if (words.length > 0) return words.map(titleCase).join(' ');
   }
-  return 'My project';
+  // "easy to pay contractors abroad": the thing acted on
+  const infinitive = /\bto\s+[a-z]+\s+((?:[a-z][a-z&'-]*\s*){1,4})/i.exec(text)?.[1];
+  const object = infinitive?.toLowerCase().split(/\s+/).filter(Boolean).find((w) => !STOPWORDS.has(w));
+  return object ? titleCase(object) : 'My project';
 }
 
 const BANG = /!/g;
+
+/** The date of the reply being read: the latest inbound message in the history, else now. */
+export function messageDate(ctx: WriteContext, clock: Clock): Date {
+  let latest: Date | null = null;
+  for (const m of ctx.history) {
+    if (m.direction !== 'in') continue;
+    const at = new Date(m.at);
+    if (!Number.isNaN(at.getTime()) && (!latest || at > latest)) latest = at;
+  }
+  return latest ?? clock.now();
+}
+
+/** Names and addresses that can never be the person someone points us to: the replier and the sender. */
+export function classifyOptions(ctx: WriteContext): ClassifyOptions {
+  return {
+    ownEmail: ctx.person.email,
+    excludeEmails: [ctx.settings.senderEmail],
+    excludeNames: [ctx.person.name, ctx.person.firstName, ctx.settings.senderName],
+  };
+}
 
 export class TemplateWriter implements Writer {
   constructor(private readonly clock: Clock = systemClock) {}
@@ -233,7 +313,7 @@ export class TemplateWriter implements Writer {
         body = helloBody(ctx.project.tone, first, company, offer);
         break;
       case 'invite':
-        body = clampNote(`Hi ${first}, ${offer} Would love to connect.`);
+        body = clampNote(`Hi ${first}, ${inlineOffer(offer)} Would love to connect.`);
         break;
       case 'thanks':
         body = `Thanks for connecting, ${first}. ${offer} Would a quick chat be useful?`;
@@ -257,7 +337,7 @@ export class TemplateWriter implements Writer {
   }
 
   async classify(text: string, ctx: WriteContext): Promise<Classification> {
-    return classifyReply(text, this.clock.now(), ctx.person.email);
+    return classifyReply(text, messageDate(ctx, this.clock), classifyOptions(ctx));
   }
 
   async offerLine(siteText: string, _domain: string): Promise<string> {
@@ -281,7 +361,7 @@ export class TemplateWriter implements Writer {
 function helloBody(tone: Tone, first: string, company: string, offer: string): string {
   switch (tone) {
     case 'direct':
-      return `Hi ${first}, ${offer} Worth 15 minutes next week?`;
+      return `Hi ${first}, ${inlineOffer(offer)} Worth 15 minutes next week?`;
     case 'playful':
       return `Hi ${first}, quick question: who at ${company} would get the most out of this? ${offer}`;
     case 'warm':
@@ -324,17 +404,37 @@ function firstNameOf(name: string): string {
   return (name.trim().split(/\s+/)[0] ?? '').toLowerCase();
 }
 
-/** People whose first name (or full name) appears as a word in the text, in the order they are named. */
-function peopleNamedIn(text: string, people: { id: number; name: string }[]): number[] {
+const escapeRe = (w: string): string => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const wordIn = (word: string, text: string): RegExpExecArray | null =>
+  new RegExp(`(?:^|[^\\p{L}])${escapeRe(word)}(?![\\p{L}])`, 'iu').exec(text);
+
+/**
+ * People named in the text, in the order they are named. A first name shared by several people picks the one
+ * whose full name is in the text; if that still leaves more than one, the text is ambiguous and nobody is picked.
+ */
+function peopleNamedIn(text: string, people: { id: number; name: string }[]): { ids: number[]; ambiguous: boolean } {
   const lower = text.toLowerCase();
-  const hits: { id: number; at: number }[] = [];
+  const byFirst = new Map<string, { id: number; name: string }[]>();
   for (const p of people) {
     const first = firstNameOf(p.name);
-    if (!first) continue;
-    const m = new RegExp(`(?:^|[^\\p{L}])${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'iu').exec(lower);
-    if (m) hits.push({ id: p.id, at: m.index });
+    if (first) byFirst.set(first, [...(byFirst.get(first) ?? []), p]);
   }
-  return hits.sort((a, b) => a.at - b.at).map((h) => h.id);
+  const hits: { id: number; at: number }[] = [];
+  let ambiguous = false;
+  for (const [first, group] of byFirst) {
+    const m = wordIn(first, lower);
+    if (!m) continue;
+    let chosen = group;
+    if (group.length > 1) {
+      chosen = group.filter((p) => wordIn(p.name.trim().replace(/\s+/g, ' ').toLowerCase(), lower));
+      if (chosen.length !== 1) {
+        ambiguous = true;
+        continue;
+      }
+    }
+    for (const p of chosen) hits.push({ id: p.id, at: m.index });
+  }
+  return { ids: hits.sort((a, b) => a.at - b.at).map((h) => h.id), ambiguous };
 }
 
 export function parseAskText(rawText: string, people: { id: number; name: string }[]): AskIntent {
@@ -365,13 +465,16 @@ export function parseAskText(rawText: string, people: { id: number; name: string
   const sw = /^(?:switch|move|change)\s+(.+?)\s+(?:over\s+)?to\s+(?:use\s+)?(e-?mail|linked-?in|twitter|x)\b/i.exec(body);
   if (sw) {
     const channel = channelIn(sw[2] ?? '');
-    const personIds = peopleNamedIn(sw[1] ?? '', people);
-    if (channel && personIds.length > 0) return { intent: 'switch', personIds, channel };
+    const named = peopleNamedIn(sw[1] ?? '', people);
+    if (named.ambiguous) return { intent: 'unknown' };
+    if (channel && named.ids.length > 0) return { intent: 'switch', personIds: named.ids, channel };
   }
 
   const like = /\b(?:more|people|others|ones?)\s+(?:people\s+)?like\s+([\p{L}'-]+)/iu.exec(body);
   if (like) {
-    const likeId = peopleNamedIn(like[1] ?? '', people)[0];
+    const named = peopleNamedIn(body.slice(like.index + like[0].length - (like[1] ?? '').length), people);
+    if (named.ambiguous) return { intent: 'unknown' };
+    const likeId = named.ids[0];
     if (likeId !== undefined) return { intent: 'find', likePersonId: likeId, query: null, count: clampCount(/\b(\d+)\b/.exec(body)?.[1]) };
   }
 
