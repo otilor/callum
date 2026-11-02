@@ -1,11 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AppState, OutboxItem, Project } from '../shared/types.js';
+import type { AppState, OutboxItem, Person, Project } from '../shared/types.js';
 import { ApiError } from './api.js';
 import { App, screenFor } from './App.js';
 
-const mocks = vi.hoisted(() => ({ state: vi.fn(), login: vi.fn() }));
+const mocks = vi.hoisted(() => ({ state: vi.fn(), login: vi.fn(), logout: vi.fn() }));
 vi.mock('./api.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('./api.js')>()), api: mocks }));
 
 const AT = '2026-11-02T10:00:00.000Z';
@@ -24,6 +24,15 @@ function awaiting(): OutboxItem {
   };
 }
 
+function kemi(over: Partial<Person> = {}): Person {
+  return {
+    id: 1, projectId: 1, name: 'Kemi Eze', firstName: 'Kemi', company: 'Oko Pay', role: 'Founder', email: 'kemi@okopay.com', linkedinUrl: null, xHandle: null,
+    timezone: null, channel: 'email', stage: 'stranger', status: 'active', touches: 0, lastTouchAt: null, nextTouchAt: AT, linkedinState: 'none', invitedAt: null,
+    snoozedUntil: null, restUntil: null, badge: null, replyKind: null, suggested: null, draft: null, lastInbound: null, repliedAt: null, source: 'paste', note: null,
+    createdAt: AT, updatedAt: AT, ...over,
+  };
+}
+
 function appState(over: Partial<AppState> = {}, settings: Partial<AppState['settings']> = {}): AppState {
   return {
     settings: { senderName: null, senderEmail: null, timezone: 'UTC', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null, ...settings },
@@ -36,14 +45,18 @@ function appState(over: Partial<AppState> = {}, settings: Partial<AppState['sett
 beforeEach(() => {
   mocks.state.mockReset();
   mocks.login.mockReset();
+  mocks.logout.mockReset();
+  localStorage.clear();
 });
 
 describe('screenFor', () => {
   it('picks the screen the state calls for', () => {
     expect(screenFor(appState({}, { onboarded: false }), null)).toBe('first-run');
     expect(screenFor(appState({}, { pauseState: 'wrapped' }), project())).toBe('wrapped');
-    expect(screenFor(appState({ outbox: [awaiting()] }), project())).toBe('day-one');
-    expect(screenFor(appState({ outbox: [awaiting()] }), project({ approvalsLeft: 0 }))).toBe('home');
+    expect(screenFor(appState({ people: [kemi()], outbox: [awaiting()] }), project())).toBe('day-one');
+    expect(screenFor(appState({ people: [kemi()], outbox: [awaiting()] }), project({ approvalsLeft: 0 }))).toBe('home');
+    // Hellos waiting in another project do not hold this one on Day one.
+    expect(screenFor(appState({ people: [kemi({ projectId: 2 })], outbox: [awaiting()] }), project())).toBe('home');
     expect(screenFor(appState(), project())).toBe('home');
   });
 });
@@ -64,7 +77,7 @@ describe('App', () => {
   });
 
   it('shows Day one while hellos wait for an OK, and Leave done when wrapped', async () => {
-    mocks.state.mockResolvedValue(appState({ outbox: [awaiting()] }));
+    mocks.state.mockResolvedValue(appState({ people: [kemi()], outbox: [awaiting()] }));
     const first = render(<App />);
     await waitFor(() => expect(first.container.querySelector('main')).toHaveAttribute('data-screen', 'day-one'));
     first.unmount();
@@ -90,6 +103,20 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     await waitFor(() => expect(container.querySelector('main')).toHaveAttribute('data-screen', 'home'));
     expect(mocks.login).toHaveBeenLastCalledWith('right');
+  });
+
+  it('offers Sign out only to a browser that signed in, and goes back to the password card', async () => {
+    localStorage.setItem('callum.signed-in', '1');
+    mocks.state.mockResolvedValue(appState({ people: [kemi()], outbox: [awaiting()] }));
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Your account' }));
+    mocks.logout.mockResolvedValue({ ok: true });
+    mocks.state.mockRejectedValue(new ApiError(401, 'Sign in first'));
+    await user.click(screen.getByRole('menuitem', { name: 'Sign out' }));
+    expect(await screen.findByRole('heading', { name: 'This Callum is private.' })).toBeInTheDocument();
+    expect(mocks.logout).toHaveBeenCalled();
+    expect(localStorage.getItem('callum.signed-in')).toBeNull();
   });
 
   it('says plainly when Callum cannot be reached at first', async () => {
