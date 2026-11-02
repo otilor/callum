@@ -48,7 +48,7 @@ describe('linkedin invitations against a local LinkedIn stand-in', () => {
 
     it('explains people it cannot invite', async () => {
       expect(await li.main.send(message('celeb'))).toMatchObject({ ok: false, error: { code: 'invalid_recipient', message: expect.stringContaining("doesn't offer Connect") } });
-      expect(await li.main.send(message('ada'))).toMatchObject({ ok: false, error: { code: 'invalid_recipient', message: expect.stringContaining('already connected') } });
+      expect(await li.main.send(message('ada'))).toMatchObject({ ok: false, error: { code: 'already_connected', message: expect.stringContaining('already connected') } });
       expect(await li.main.send(message('nobody'))).toMatchObject({ ok: false, error: { code: 'invalid_recipient', message: expect.stringContaining("wasn't found") } });
       expect(await li.main.send(message(null))).toMatchObject({ ok: false, error: { code: 'invalid_recipient' } });
       expect(await li.main.send(message('ghost'))).toMatchObject({ ok: false, error: { code: 'invalid_recipient', message: expect.stringContaining("wasn't found") } });

@@ -89,6 +89,8 @@ export interface LinkedinFixture {
   challengeLists: boolean;
   /** Leave the preview text out of the messaging list, as if LinkedIn's markup for it had changed. */
   hidePreviews: boolean;
+  /** Thread headers link to the member-id address (/in/ACo...) of people who have one, as LinkedIn sometimes does. */
+  memberIdHeaders: boolean;
   close(): Promise<void>;
 }
 
@@ -158,10 +160,14 @@ function messageHtml(t: Thread, m: ThreadMessage): string {
   return `      <li class="msg-s-message-list__event"><div class="msg-s-message-group"><a class="msg-s-message-group__profile-link" href="/in/${esc(who.slug)}/"><span class="msg-s-message-group__name">${esc(who.name)}</span></a><div class="${who.cls}"><div class="msg-s-event-listitem__body">${esc(m.text)}</div></div></div></li>`;
 }
 
-function threadPanel(t: Thread | null): string {
+/** The member-id address LinkedIn sometimes puts in a thread header instead of the vanity one. Case matters in it. */
+export const MEMBER_IDS: Record<string, string> = { 'ben-ward': 'ACoAABbenWard9Xy', zoe: 'ACoAABzoeZed7Qw' };
+
+function threadPanel(t: Thread | null, memberIds = false): string {
   if (!t) return '';
   const messages = t.messages.map((m) => messageHtml(t, m)).join('\n');
-  return `      <header class="msg-title-bar"><a class="msg-thread__link-to-profile" href="/in/${esc(t.slug)}/">${esc(t.name)}</a></header>\n      <ul class="msg-s-message-list">\n${messages}\n      </ul>`;
+  const headerSlug = memberIds ? (MEMBER_IDS[t.slug] ?? t.slug) : t.slug;
+  return `      <header class="msg-title-bar"><a class="msg-thread__link-to-profile" href="/in/${esc(headerSlug)}/">${esc(t.name)}</a></header>\n      <ul class="msg-s-message-list">\n${messages}\n      </ul>`;
 }
 
 /** The messaging page. Most rows are divs that open their thread on click; one is a link (the fast path). */
@@ -175,7 +181,7 @@ function messagingPage(fixture: LinkedinFixture, open: Thread | null, landing = 
       : `<div class="msg-conversation-listitem__link" role="button" tabindex="0" data-thread="${t.id}">${inner}</div>`;
     return `      <li class="msg-conversation-listitem">${link}</li>`;
   }).join('\n');
-  return fill(read('messaging.html'), { threads, panel: threadPanel(open), open: landing && open ? open.id : '' });
+  return fill(read('messaging.html'), { threads, panel: threadPanel(open, fixture.memberIdHeaders), open: landing && open ? open.id : '' });
 }
 
 export async function startLinkedinFixture(): Promise<LinkedinFixture> {
@@ -188,6 +194,7 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
     env: [],
     challengeLists: false,
     hidePreviews: false,
+    memberIdHeaders: false,
     close: async () => undefined,
   };
 
@@ -235,6 +242,9 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
       const slug = profile[1] ?? '';
       if (slug === 'blocked') return redirect(res, '/checkpoint/challenge/AQxyz');
       if (slug === 'ghost') return html(res, 200, read('unavailable.html'));
+      // A member-id address lands on the vanity address, like LinkedIn's own redirect.
+      const vanity = Object.entries(MEMBER_IDS).find(([, id]) => id === slug)?.[0];
+      if (vanity) return redirect(res, `/in/${vanity}/`);
       const data = PROFILES[slug];
       return data ? html(res, 200, profilePage(slug, data)) : html(res, 404, '<!doctype html><title>Page not found</title><h1>This page doesn&rsquo;t exist</h1>');
     }
@@ -266,7 +276,7 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
       const t = THREADS.find((x) => x.id === threadData[1]);
       if (!t) return html(res, 404, 'not found');
       res.writeHead(200, { 'content-type': 'application/json' });
-      return void res.end(JSON.stringify({ panel: threadPanel(t) }));
+      return void res.end(JSON.stringify({ panel: threadPanel(t, fixture.memberIdHeaders) }));
     }
 
     if (path === '/search/results/people/') return html(res, 200, searchPage(Number(url.searchParams.get('page') ?? '1') || 1));

@@ -39,10 +39,16 @@ export const INCIDENT_COPY = {
   send_deferred: (first: string, slot: string): string => `Your reply to ${first} goes ${slot}. Your mailbox reached today's limit.`,
   /** A reply could not be read after several tries; it is on the dock as it came. */
   reply_unread: (first: string): string => `Callum couldn't read a reply from ${first}. It's on your dock.`,
-  reply_unread_unknown: (channel: string): string => `Callum couldn't read a reply on ${channel}. Check it by hand.`,
+  reply_unread_unknown: (channel: string, senders: string[] = []): string => {
+    const shown = senders.slice(-3);
+    const from = shown.length > 0 ? ` from ${shown.join(', ')}` : '';
+    return `Callum couldn't read a reply${from} on ${channel}. Check it by hand.`;
+  },
   /** A channel's check for new messages has stopped answering. */
   not_answering: (channel: string): string => `${channel} isn't answering. Callum will keep trying.`,
   /** Callum was closed while a reply was on its way, so nobody knows whether it left. */
+  /** Gmail's daily sending limit: email waits until the user's next day. */
+  mailbox_limit: "Your mailbox reached its daily sending limit, so Callum paused email until tomorrow. Nothing is lost and replies keep arriving.",
   send_unsure: (first: string): string =>
     `Callum was closed while your reply to ${first} was going out. It may have gone, so check your Sent folder before you try again.`,
 } as const;
@@ -115,7 +121,7 @@ export function resumeChannel(ctx: Ctx, ch: Channel, pace: 'half' | 'full'): Cha
     pausedUntil: null,
     halfPaceUntil: pace === 'half' ? new Date(now.getTime() + 7 * DAY_MS).toISOString() : null,
   });
-  resolveIncidents(ctx, ch, ['linkedin_check', 'x_limit', 'mailbox_signed_out', 'x_signed_out', 'linkedin_signed_out']);
+  resolveIncidents(ctx, ch, ['linkedin_check', 'x_limit', 'mailbox_limit', 'mailbox_signed_out', 'x_signed_out', 'linkedin_signed_out']);
   ctx.bus.emit('channels');
   return account;
 }
@@ -178,6 +184,46 @@ export function weeklyInviteLimit(ctx: Ctx, ch: Channel): Date {
 export function nextLocalMidnight(ctx: Ctx): Date {
   const tz = ctx.repo.getSettings().timezone;
   return addLocalDays(startOfLocalDay(ctx.clock.now(), tz), 1, tz);
+}
+
+/**
+ * The mailbox said its daily sending limit is reached. Automatic email stops until the user's next day, in one step, rather
+ * than every waiting message finding out for itself. The channel stays connected so replies and stops keep arriving;
+ * `pausedUntil` is the hold. Returns the instant it lifts.
+ */
+export function mailboxLimitReached(ctx: Ctx, ch: Channel, item: OutboxItem): Date | null {
+  if (ch !== 'email') return null;
+  const until = nextLocalMidnight(ctx);
+  ctx.repo.updateChannel(ch, { pausedUntil: until.toISOString() });
+  ctx.bus.emit('channels');
+  // A reply of the user's that hit the limit has its own notice, with the time it goes.
+  if (item.origin === 'auto') openIncident(ctx, { channel: ch, kind: 'mailbox_limit', message: INCIDENT_COPY.mailbox_limit });
+  return until;
+}
+
+/** True while automatic email is held back by the mailbox's daily limit. */
+export function mailboxHeld(account: ChannelAccount, now: Date): boolean {
+  return account.channel === 'email' && account.status === 'connected' && account.pausedUntil !== null && new Date(account.pausedUntil).getTime() > now.getTime();
+}
+
+/** The next day has come: email goes again and the notice is settled. */
+export function releaseMailboxLimit(ctx: Ctx): void {
+  const account = ctx.repo.getChannel('email');
+  if (account.status !== 'connected' || account.pausedUntil === null || new Date(account.pausedUntil).getTime() > ctx.clock.now().getTime()) return;
+  ctx.repo.updateChannel('email', { pausedUntil: null });
+  resolveIncidents(ctx, 'email', ['mailbox_limit']);
+  ctx.bus.emit('channels');
+}
+
+/**
+ * LinkedIn showed that the user is already connected to this person, so the invitation is moot: it is not a bad address.
+ * The person is marked connected and the planner writes a message instead. Their LinkedIn address stays.
+ */
+export function alreadyConnected(ctx: Ctx, personId: number): void {
+  ctx.outbox.cancelPending(personId, ['auto']);
+  ctx.repo.updatePerson(personId, { linkedinState: 'connected', nextTouchAt: null });
+  ctx.bus.emit('outbox');
+  ctx.bus.emit('people');
 }
 
 /** X (or another account) is out of room for today: pause it until the user's next midnight. */

@@ -91,6 +91,7 @@ function titleOf(incident: Incident, state: AppState): string {
     case 'linkedin_check': return "LinkedIn wants to check it's you";
     case 'linkedin_weekly_limit': return "LinkedIn's weekly limit";
     case 'x_limit': return 'X stopped taking messages';
+    case 'mailbox_limit': return 'Your mailbox reached its daily limit';
     case 'mailbox_signed_out': {
       const subject = /^(.*?) signed Callum out/.exec(incident.message)?.[1];
       return subject ? `${subject} signed Callum out` : `${CHANNEL_NAME[incident.channel]} needs to be connected again`.replace(/^./, (c) => c.toUpperCase());

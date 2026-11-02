@@ -178,7 +178,7 @@ describe('mapSmtpError', () => {
     expect(mapSmtpError({ responseCode: 553 }).code).toBe('invalid_recipient');
   });
   it('maps temporary trouble', () => {
-    for (const e of [{ code: 'ETIMEDOUT' }, { code: 'ECONNECTION' }, { responseCode: 421 }, { responseCode: 450 }, { responseCode: 451 }, { responseCode: 452 }]) {
+    for (const e of [{ responseCode: 421 }, { responseCode: 450 }, { responseCode: 451 }, { responseCode: 452 }]) {
       expect(mapSmtpError(e).code).toBe('temporary');
     }
   });
@@ -202,9 +202,25 @@ describe('mapSmtpError', () => {
     expect(mapSmtpError({ responseCode: 452, response: '452 Insufficient storage' }).code).toBe('temporary');
   });
   it('maps connect, timeout and TLS failures to temporary', () => {
-    for (const code of ['CONNECT_TIMEOUT', 'GREETING_TIMEOUT', 'ETLS', 'EPROTOCOL', 'ERR_SSL_WRONG_VERSION_NUMBER', 'CERT_HAS_EXPIRED']) {
+    for (const code of ['CONNECT_TIMEOUT', 'GREETING_TIMEOUT', 'ETLS', 'EDNS', 'ERR_SSL_WRONG_VERSION_NUMBER', 'CERT_HAS_EXPIRED', 'ECONNREFUSED']) {
       expect(mapSmtpError({ code }).code).toBe('temporary');
     }
+    // nodemailer reports the refused or unreachable socket under ESOCKET/ECONNECTION and keeps the system code beside it.
+    expect(mapSmtpError({ code: 'ECONNECTION', originalCode: 'ECONNREFUSED' }).code).toBe('temporary');
+    expect(mapSmtpError({ code: 'ETIMEDOUT', timeoutType: 'GREETING_TIMEOUT' }).code).toBe('temporary');
+    expect(mapSmtpError({ code: 'ETIMEDOUT', timeoutType: 'CONNECT_TIMEOUT' }).code).toBe('temporary');
+  });
+  it('maps a timeout or a dropped connection that may have come after the message was handed over to unknown', () => {
+    for (const e of [
+      { code: 'ETIMEDOUT' }, { code: 'ETIMEDOUT', timeoutType: 'SOCKET_TIMEOUT', command: 'CONN' },
+      { code: 'ECONNECTION', command: 'CONN', message: 'Connection closed unexpectedly' },
+      { code: 'ESOCKET', originalCode: 'ECONNRESET' }, { code: 'EPROTOCOL' },
+    ]) {
+      expect(mapSmtpError(e).code).toBe('unknown');
+    }
+  });
+  it('maps a Gmail daily limit without an enhanced code to rate_limit', () => {
+    expect(mapSmtpError({ responseCode: 550, response: '550 Daily user sending limit exceeded' }).code).toBe('rate_limit');
   });
   it('maps anything else to unknown and keeps a message', () => {
     expect(mapSmtpError(new Error('weird')) ).toEqual({ code: 'unknown', message: 'weird' });

@@ -6,7 +6,7 @@ import { dayLong, dayShort, plural, timeOf, weekdayIn } from './quietCopy.js';
  * What can break, in the words of the V3Breaks board: one card per situation, with what happened, what Callum did,
  * the one next step, and the people who wait. Task 15's IncidentCard renders these for every kind except the LinkedIn check.
  */
-export type VariantKey = 'signed_out' | 'bounces' | 'x_limit' | 'send_failed' | 'weekly_limit' | 'stop' | 'reply_unread' | 'not_answering';
+export type VariantKey = 'signed_out' | 'bounces' | 'x_limit' | 'mailbox_limit' | 'send_failed' | 'weekly_limit' | 'stop' | 'reply_unread' | 'not_answering';
 
 export interface VariantLine { kind: 'what' | 'did' | 'next'; text: string }
 
@@ -177,6 +177,27 @@ function xLimit(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' |
   };
 }
 
+/** The mailbox's own daily sending limit: email is held until the user's next day, and replies keep arriving. */
+function mailboxLimit(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when'>, tz: string, now: Date): IncidentVariant {
+  const waiting = waitingOn(state.people, 'email');
+  const until = state.channels.find((c) => c.channel === 'email')?.pausedUntil;
+  const parts = sentences(i.message);
+  return {
+    ...base, key: 'mailbox_limit',
+    title: 'Your mailbox reached its daily limit', quote: null,
+    lines: [
+      { kind: 'what', text: parts[0] ?? i.message },
+      { kind: 'did', text: `Callum paused email${until ? ' until tomorrow' : ''}.${othersKeepGoing(state, 'email')}` },
+      { kind: 'next', text: until ? `Nothing to do. Email resumes ${formatSlot(xResumes(until, tz), tz, now)}.` : 'Nothing to do.' },
+    ],
+    waitIds: waiting.map((p) => p.id),
+    waitLine: waiting.length ? `${waiting.length} ${plural(waiting.length, 'person waits', 'people wait')} for email. Nothing is lost.` : null,
+    primary: OKAY,
+    secondary: null,
+    icon: { personId: null, glyph: 'mail', badge: 'pause' },
+  };
+}
+
 function sendFailed(i: Incident, state: AppState, base: Pick<IncidentVariant, 'id' | 'incidentId' | 'when'>): IncidentVariant | null {
   const outboxId = parseOutboxId(i.detail);
   const item = outboxId === null ? undefined : state.outbox.find((o) => o.id === outboxId);
@@ -287,6 +308,7 @@ export function incidentVariant(incident: Incident, state: AppState, now: Date):
     case 'not_answering': return notAnswering(incident, base);
     case 'bounces': return bounces(incident, base);
     case 'x_limit': return xLimit(incident, state, base, tz, now);
+    case 'mailbox_limit': return mailboxLimit(incident, state, base, tz, now);
     case 'send_failed': return sendFailed(incident, state, base);
     case 'linkedin_weekly_limit': return weeklyLimit(incident, state, base);
     case 'linkedin_check': return null;
@@ -354,7 +376,7 @@ export function faceReactions(state: AppState, quiet: QuietSnapshot | null = nul
   const alive = new Set(state.people.map((p) => p.id));
   for (const i of state.incidents) {
     if (i.state !== 'open') continue;
-    if (i.kind === 'mailbox_signed_out' || i.kind === 'x_limit' || i.kind === 'x_signed_out' || i.kind === 'linkedin_signed_out') {
+    if (i.kind === 'mailbox_signed_out' || i.kind === 'mailbox_limit' || i.kind === 'x_limit' || i.kind === 'x_signed_out' || i.kind === 'linkedin_signed_out') {
       for (const p of waitingOn(state.people, i.channel)) set(p.id, { mark: 'pause', still: true, label: 'waiting' });
     } else if (i.kind === 'linkedin_weekly_limit') {
       for (const p of state.people) {

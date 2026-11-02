@@ -306,6 +306,21 @@ export class Repo {
     return this.selectOne<Person>(`SELECT * FROM people WHERE ${clauses.join(' OR ')} ORDER BY id LIMIT 1`, params);
   }
 
+  /** The person Callum wrote to in a message with one of these provider ids (Message-IDs, with or without angle brackets). */
+  findPersonByOutboundMessageId(channel: Channel, ids: string[]): Person | null {
+    const wanted = [...new Set(ids.map((id) => id.trim()).filter(Boolean).flatMap((id) => {
+      const bare = id.replace(/^<|>$/g, '');
+      return bare ? [bare, `<${bare}>`] : [];
+    }))];
+    if (wanted.length === 0) return null;
+    return this.selectOne<Person>(
+      `SELECT p.* FROM people p JOIN messages m ON m.person_id = p.id
+       WHERE m.direction = 'out' AND m.channel = ? AND m.external_id IN (${wanted.map(() => '?').join(', ')})
+       ORDER BY m.at DESC, m.id DESC LIMIT 1`,
+      [channel, ...wanted],
+    );
+  }
+
   // ---- messages ----------------------------------------------------------
 
   insertMessage(m: NewMessage): Message {

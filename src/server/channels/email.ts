@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { ImapFlow } from 'imapflow';
 import { simpleParser, type ParsedMail } from 'mailparser';
 import nodemailer from 'nodemailer';
@@ -220,6 +221,10 @@ function bracket(id: string): string {
   return id.startsWith('<') ? id : `<${id}>`;
 }
 
+function referencesOf(value: string | string[] | undefined): string[] {
+  return (Array.isArray(value) ? value : value ? value.split(/\s+/) : []).filter(Boolean);
+}
+
 function toDate(value: Date | string | undefined, fallback: Date): Date {
   const date = value instanceof Date ? value : value ? new Date(value) : fallback;
   return Number.isNaN(date.getTime()) ? fallback : date;
@@ -278,6 +283,9 @@ export function createEmailAdapter(secret: Record<string, string> | null, deps: 
   const seen = new Set<string>();
   // Message-IDs of mail this instance sent, so they are not mistaken for mail the user wrote by hand.
   const sentIds = new Set<string>();
+  // The Message-ID of a send that failed in a way that allows another try. The try uses the same one, so if the first
+  // copy did reach the person after all, their mail program sees one message and not two.
+  const retryIds = new Map<string, string>();
 
   function requireConfig(): MailConfig {
     if (config) return config;
@@ -396,6 +404,9 @@ export function createEmailAdapter(secret: Record<string, string> | null, deps: 
           text: stripQuoted(parsed.text ?? ''),
           at,
           externalId,
+          subject: parsed.subject ?? null,
+          inReplyTo: parsed.inReplyTo ?? null,
+          references: referencesOf(parsed.references),
         });
       }
     } finally {
@@ -488,33 +499,46 @@ export function createEmailAdapter(secret: Record<string, string> | null, deps: 
       }
       const to = msg.to.email?.trim();
       if (!to) return { ok: false, error: { code: 'invalid_recipient', message: `${msg.to.name} has no email address.` } };
+      // The Message-ID is chosen here, before anything is sent, so it is known even when the answer never arrives.
+      const fingerprint = `${to}\n${msg.subject ?? ''}\n${msg.body}`;
+      const messageId = retryIds.get(fingerprint) ?? `<${randomUUID()}@${cfg.address.split('@')[1] ?? 'localhost'}>`;
       const mail = {
         from: `${quoteName(cfg.name)} <${cfg.address}>`,
         to: `${quoteName(msg.to.name)} <${to}>`,
         subject: msg.subject ?? '',
         text: msg.body,
+        messageId,
         headers: { 'List-Unsubscribe': `<mailto:${cfg.address}?subject=stop>` },
         ...(msg.inReplyTo ? { inReplyTo: bracket(msg.inReplyTo), references: bracket(msg.inReplyTo) } : {}),
+      };
+      const failed = (error: ChannelError): SendResult => {
+        // Only a failure that allows another try keeps its Message-ID for that try; the rest are decided by the user.
+        if (error.code === 'temporary') retryIds.set(fingerprint, messageId);
+        else retryIds.delete(fingerprint);
+        // Whoever has to decide about a send that may have left needs the Message-ID to look for it in Sent.
+        return { ok: false, error: error.code === 'temporary' || error.code === 'unknown' ? { ...error, messageId } : error };
       };
       for (let attempt = 0; ; attempt++) {
         let transport: Awaited<ReturnType<typeof smtp>>;
         try {
           transport = await smtp(cfg, attempt > 0);
         } catch (err) {
-          return { ok: false, error: refreshFailure(err) };
+          return failed(refreshFailure(err));
         }
         try {
           const info = await transport.sendMail(mail);
           if ((info.rejected ?? []).length > 0) {
-            return { ok: false, error: { code: 'invalid_recipient', message: `${to} was rejected by the mail server.` } };
+            return failed({ code: 'invalid_recipient', message: `${to} was rejected by the mail server.` });
           }
-          if (info.messageId) sentIds.add(info.messageId);
-          return { ok: true, externalId: info.messageId ?? null };
+          retryIds.delete(fingerprint);
+          const sentId = info.messageId || messageId;
+          sentIds.add(sentId);
+          return { ok: true, externalId: sentId };
         } catch (err) {
           const error = mapSmtpError(err);
           // An OAuth token can be revoked early; try one fresh one before reporting a sign-out.
           if (error.code === 'auth' && cfg.oauth && attempt === 0) continue;
-          return { ok: false, error };
+          return failed(error);
         }
       }
     },

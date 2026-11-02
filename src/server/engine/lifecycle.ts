@@ -43,8 +43,10 @@ export function nextKind(p: Person): OutKind | null {
   if (p.stage === 'talking' || p.touches >= MAX_TOUCHES) return null;
   if (p.channel === 'email' || p.channel === 'x') return p.touches === 0 ? 'hello' : 'follow_up';
   if (p.channel === 'linkedin') {
-    if (p.touches === 0) return 'invite';
-    if (p.touches === 1 && p.linkedinState === 'connected') return 'thanks';
+    // Someone already connected to the user needs no invitation: the first message is a hello.
+    if (p.touches === 0) return p.linkedinState === 'connected' ? 'hello' : 'invite';
+    // The thank-you answers an accepted invitation; after a hello the next message is a follow-up.
+    if (p.touches === 1 && p.linkedinState === 'connected') return p.invitedAt === null ? 'follow_up' : 'thanks';
     if (p.touches === 2) return 'follow_up';
   }
   return null;
