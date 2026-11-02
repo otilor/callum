@@ -146,3 +146,16 @@ export const api = {
   exportJsonUrl: (projectId?: number) => `/api${withQuery('/export.json', { projectId })}`,
   exportCsvUrl: (projectId?: number) => `/api${withQuery('/export.csv', { projectId })}`,
 };
+
+// Task 19
+/** The weekly note and the quiet moments of Home. */
+export const noteApi = {
+  weekly: () => get<import('../shared/types.js').WeeklyAnswer>('/weekly'),
+  weeklySeen: () => post<{ seenAt: string }>('/weekly/seen'),
+  quiet: (projectId?: number) => get<import('../shared/types.js').QuietSnapshot>('/quiet', { projectId }),
+  /** The person's auto-reply was a real reply: they move to the dock. */
+  realReply: (id: number) => post<Person>(`/people/${id}/real-reply`),
+  /** The user's hello to a person someone pointed to. */
+  referralHello: (id: number, body: string, subject?: string | null) =>
+    post<OutboxItem>(`/people/${id}/referral-hello`, subject ? { body, subject } : { body }),
+};
