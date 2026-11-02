@@ -24,15 +24,17 @@ function dayName(month: number, day: number): string {
 /** The three ready-made breaks, as 9:00 in `tz`: next Monday, two weeks from today, the next January 6. */
 export function breakChoices(now: Date, tz: string): BreakChoice[] {
   const here = localParts(now, tz);
+  // Monday and January 6 are searched from the start of the next local day, so a break never ends today.
+  const tomorrow = zonedTime(tz, here.year, here.month, here.day + 1, 0);
   const jan = zonedTime(tz, here.year, 1, 6, RESUME_HOUR);
   return [
-    { key: 'monday', label: 'Until Monday', button: 'Pause until Monday', until: nextMonday(now, tz, RESUME_HOUR) },
+    { key: 'monday', label: 'Until Monday', button: 'Pause until Monday', until: nextMonday(tomorrow, tz, RESUME_HOUR) },
     { key: 'two', label: 'Two weeks', button: 'Pause for two weeks', until: zonedTime(tz, here.year, here.month, here.day + 14, RESUME_HOUR) },
     {
       key: 'jan',
       label: 'Until January 6',
       button: 'Pause until January 6',
-      until: jan.getTime() > now.getTime() ? jan : zonedTime(tz, here.year + 1, 1, 6, RESUME_HOUR),
+      until: jan.getTime() >= tomorrow.getTime() ? jan : zonedTime(tz, here.year + 1, 1, 6, RESUME_HOUR),
     },
   ];
 }

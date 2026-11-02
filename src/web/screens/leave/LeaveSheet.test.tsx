@@ -76,6 +76,32 @@ describe('LeaveSheet: take a break', () => {
     expect(mocks.pause).toHaveBeenLastCalledWith('2027-01-06T08:00:00.000Z');
   });
 
+  it('Until Monday starts from the next day: on a Monday morning it is next week, not this morning', () => {
+    // Monday 2 November, 08:00 in Lagos, before the 9:00 that day.
+    const early = new Date('2026-11-02T07:00:00Z');
+    render(
+      <ToastProvider>
+        <LeaveSheet state={appState()} refresh={refresh} onClose={onClose} now={() => early} save={save} />
+      </ToastProvider>,
+    );
+    return userEvent.setup().click(screen.getByRole('button', { name: 'Pause until Monday' })).then(() => {
+      expect(mocks.pause).toHaveBeenCalledWith('2026-11-09T08:00:00.000Z');
+    });
+  });
+
+  it('Until January 6 on the morning of January 6 means next year', async () => {
+    const morning = new Date('2027-01-06T07:00:00Z');
+    render(
+      <ToastProvider>
+        <LeaveSheet state={appState()} refresh={refresh} onClose={onClose} now={() => morning} save={save} />
+      </ToastProvider>,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('radio', { name: 'Until January 6' }));
+    await user.click(screen.getByRole('button', { name: 'Pause until January 6' }));
+    expect(mocks.pause).toHaveBeenCalledWith('2028-01-06T08:00:00.000Z');
+  });
+
   it('a picked date ends at 9:00 that day and cannot be today', async () => {
     const user = setup();
     await user.click(screen.getByRole('radio', { name: 'Pick a date' }));
@@ -101,8 +127,8 @@ describe('LeaveSheet: take a break', () => {
       people: [person(1, 'Kemi', { status: 'waiting' })],
     });
     const user = setup(state);
-    expect(screen.getByRole('heading', { name: 'Callum is resting' })).toBeInTheDocument();
-    expect(screen.getByText(/Nothing goes out until 9 Nov at 9:00\./)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Callum is resting until 9 Nov at 9:00' })).toBeInTheDocument();
+    expect(screen.getByText(/Nothing goes out until then\./)).toBeInTheDocument();
     expect(screen.getByText(/your 1 conversation stays yours/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Resume' }));
     expect(mocks.resumeAll).toHaveBeenCalledTimes(1);
@@ -136,7 +162,7 @@ describe('LeaveSheet: wrap up', () => {
     expect(await screen.findByText(new RegExp(LINE))).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Download everything' })).toBeChecked();
     expect(screen.getByRole('switch', { name: 'Delete my data from this computer' })).not.toBeChecked();
-    expect(screen.getByText('Kemi keep talking with you in your own inbox')).toBeInTheDocument();
+    expect(screen.getByText('Kemi keeps talking with you in your own inbox')).toBeInTheDocument();
     expect(screen.queryByText("You won't be able to get these conversations back.")).not.toBeInTheDocument();
   });
 
@@ -146,7 +172,9 @@ describe('LeaveSheet: wrap up', () => {
     await user.click(screen.getByRole('switch', { name: 'Download everything' }));
     await user.click(screen.getByRole('switch', { name: 'Delete my data from this computer' }));
     expect(screen.getByRole('alert')).toHaveTextContent("You won't be able to get these conversations back.");
-    await user.click(screen.getByRole('button', { name: 'Wrap up Callum' }));
+    expect(screen.getByText("Callum deletes everything here once your files are saved. This can't be undone.")).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Wrap up Callum' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Wrap up and delete' }));
     expect(save).not.toHaveBeenCalled();
     expect(mocks.wrap).toHaveBeenCalledWith(true);
     expect(await screen.findByRole('heading', { name: 'All wrapped up' })).toBeInTheDocument();
@@ -182,10 +210,50 @@ describe('LeaveSheet: wrap up', () => {
     const user = setup();
     await openWrap(user);
     await user.click(screen.getByRole('switch', { name: 'Delete my data from this computer' }));
-    await user.click(screen.getByRole('button', { name: 'Wrap up Callum' }));
+    await user.click(screen.getByRole('button', { name: 'Wrap up and delete' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('The download did not work');
     expect(mocks.wrap).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Wrap up Callum' })).toBeInTheDocument();
+    expect(screen.queryByText('Your files are saved')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Wrap up and delete' })).toBeInTheDocument();
+  });
+
+  it('with the download and the delete both on, it saves the files first and deletes only after a second press', async () => {
+    const user = setup();
+    await openWrap(user);
+    await user.click(screen.getByRole('switch', { name: 'Delete my data from this computer' }));
+    await user.click(screen.getByRole('button', { name: 'Wrap up and delete' }));
+    expect(await screen.findByRole('heading', { name: 'Your files are saved' })).toBeInTheDocument();
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(mocks.wrap).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('link', { name: 'Download again' })).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: 'Delete and wrap up' }));
+    expect(mocks.wrap).toHaveBeenCalledWith(true);
+    expect(await screen.findByRole('heading', { name: 'All wrapped up' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Download again' }).map((a) => a.getAttribute('href'))).toEqual(['blob:callum-people.json', 'blob:callum-people.csv']);
+  });
+
+  it('Keep Callum on the saved step deletes nothing', async () => {
+    const user = setup();
+    await openWrap(user);
+    await user.click(screen.getByRole('switch', { name: 'Delete my data from this computer' }));
+    await user.click(screen.getByRole('button', { name: 'Wrap up and delete' }));
+    await screen.findByRole('heading', { name: 'Your files are saved' });
+    await user.click(screen.getByRole('button', { name: 'Keep Callum' }));
+    expect(mocks.wrap).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'Take a break, or wrap up?' })).toBeInTheDocument();
+  });
+
+  it('reads what the work so far was before it wraps, when that has not come back yet', async () => {
+    let release: (v: { line: string }) => void = () => {};
+    mocks.wrapSummary.mockReturnValue(new Promise((resolve) => (release = resolve)));
+    const user = setup();
+    await openWrap(user);
+    await user.click(screen.getByRole('button', { name: 'Wrap up Callum' }));
+    expect(mocks.wrap).not.toHaveBeenCalled();
+    release({ line: LINE });
+    expect(await screen.findByRole('heading', { name: 'All wrapped up' })).toBeInTheDocument();
+    expect(mocks.wrap).toHaveBeenCalledWith(false);
+    expect(screen.getByText(new RegExp(LINE))).toBeInTheDocument();
   });
 
   it('Keep Callum goes back and changes nothing', async () => {

@@ -98,6 +98,66 @@ describe('PhoneHome', () => {
     expect(screen.getByRole('article', { name: 'Reply from Kemi Eze' })).toBeInTheDocument();
   });
 
+  it('brings someone back who replies again after they were answered', async () => {
+    mocks.reply.mockResolvedValue(outboxItem(31, 1));
+    const first = appState({ people: [kemi()] });
+    const { user, rerender } = setup(first);
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('All caught up')).toBeInTheDocument();
+    // The state moves on: Kemi is still waiting, but this is a newer reply.
+    const again = appState({ people: [kemi({ repliedAt: '2026-11-02T09:30:00.000Z', lastInbound: 'One more thing: can you do Tuesday?', draft: 'Tuesday works.' })] });
+    rerender(
+      <ToastProvider>
+        <PhoneHome state={again} project={again.projects[0] ?? null} refresh={refresh} river={<div />} onReconnect={onReconnect} now={() => NOW} />
+      </ToastProvider>,
+    );
+    expect(await screen.findByText('One more thing: can you do Tuesday?')).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'Reply from Kemi Eze' })).toBeInTheDocument();
+  });
+
+  it('runs the undo ring for what is left of the server window, less the time the call took', async () => {
+    let clock = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    mocks.reply.mockImplementation(async () => {
+      clock = 3000;
+      return outboxItem(31, 1, { updatedAt: NOW.toISOString(), undoUntil: new Date(NOW.getTime() + 10_000).toISOString() });
+    });
+    const { user, container } = setup();
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Sent to Kemi');
+    const ring = container.ownerDocument.querySelector('.ph-ring') as SVGElement;
+    expect(ring.style.animationDuration).toBe('8000ms');
+    vi.restoreAllMocks();
+  });
+
+  it('offers no Undo when the undo window was already used up by the call', async () => {
+    let clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    mocks.reply.mockImplementation(async () => {
+      clock = 12_000;
+      return outboxItem(31, 1);
+    });
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Sent to Kemi');
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
+  it('leaves line breaks where they were when the placeholder sentence goes', async () => {
+    const draft = 'Hi Kemi,\n\nHappy to help. Our price is [YOUR PRICE] a month. Talk soon.\n\nGabriel';
+    const { user } = setup(appState({ people: [kemi({ draft })] }));
+    await user.click(screen.getByRole('button', { name: 'Leave the price out' }));
+    expect(screen.getByLabelText("Callum's draft, in your voice")).toHaveValue('Hi Kemi,\n\nHappy to help. Talk soon.\n\nGabriel');
+  });
+
+  it('guards the other kinds of placeholder too', () => {
+    setup(appState({ people: [kemi({ draft: 'Hi {{first_name}}, glad to help.' })] }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Fill in {{first_name}} first. Callum never sends a message with {{first_name}} in it.');
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: 'Leave it out' })).toBeInTheDocument();
+  });
+
   it('will not send a draft that still has a placeholder, and Leave the price out fixes it', async () => {
     const state = appState({ people: [kemi({ draft: 'Happy to help. Our price is [YOUR PRICE] a month. Talk soon.' })] });
     const { user } = setup(state);
@@ -206,9 +266,52 @@ describe('PhoneHome: top bar and sheets', () => {
     const { user } = setup(two());
     await user.click(screen.getByRole('button', { name: /Switch project/ }));
     await user.click(screen.getByRole('button', { name: 'Pause Reconciliation' }));
-    expect(mocks.pauseProject).toHaveBeenCalledWith(1, null);
+    // Until 9:00 on the next Monday in Lagos, and the toast says who keeps going.
+    expect(mocks.pauseProject).toHaveBeenCalledWith(1, '2026-11-09T08:00:00.000Z');
+    expect(await screen.findByText('Reconciliation is paused.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Resume Payroll' }));
     expect(mocks.resumeProject).toHaveBeenCalledWith(2);
+    expect(await screen.findByText('Payroll is back to work')).toBeInTheDocument();
+  });
+
+  it('says who keeps going when another project is still running', async () => {
+    mocks.pauseProject.mockResolvedValue({});
+    const state = appState({ people: [], projects: [project(), project({ id: 2, name: 'Payroll' })] });
+    const { user } = setup(state);
+    await user.click(screen.getByRole('button', { name: /Switch project/ }));
+    await user.click(screen.getByRole('button', { name: 'Pause Reconciliation' }));
+    expect(await screen.findByText('Reconciliation is paused. Payroll keeps going.')).toBeInTheDocument();
+  });
+
+  it('moves focus into the sheet, keeps Tab inside it, and gives focus back to the switcher', async () => {
+    const { user } = setup(two(), { onNewProject: vi.fn() });
+    const switcher = screen.getByRole('button', { name: /Switch project/ });
+    await user.click(switcher);
+    const sheet = screen.getByRole('dialog', { name: 'Your projects' });
+    expect(sheet).toHaveFocus();
+    const buttons = within(sheet).getAllByRole('button');
+    const last = buttons[buttons.length - 1] as HTMLElement;
+    last.focus();
+    await user.tab();
+    expect(buttons[0]).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(last).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(switcher).toHaveFocus();
+  });
+
+  it('does the same for the Ask sheet', async () => {
+    const { user } = setup(undefined, { ask: <label>Ask Callum about Reconciliation<input /></label> });
+    const fab = screen.getByRole('button', { name: 'Ask Callum' });
+    await user.click(fab);
+    expect(screen.getByRole('dialog', { name: 'Ask Callum' })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByLabelText('Ask Callum about Reconciliation')).toHaveFocus();
+    await user.tab();
+    expect(screen.getByLabelText('Ask Callum about Reconciliation')).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(fab).toHaveFocus();
   });
 
   it('opens New project from the sheet, and Escape closes it', async () => {

@@ -1,23 +1,22 @@
 import { useEffect, useRef } from 'react';
 import type { AppState, Person } from '../shared/types.js';
 
-const BODY_MAX = 140;
+/** Nothing from the reply goes in the notification: it can show on a lock screen. */
+const BODY = 'Open Callum to read it and answer.';
 
 function canNotify(): boolean {
   return typeof Notification !== 'undefined' && Notification.permission === 'granted';
 }
 
-function snippet(text: string | null): string | undefined {
-  const flat = (text ?? '').replace(/\s+/g, ' ').trim();
-  if (!flat) return undefined;
-  return flat.length > BODY_MAX ? `${flat.slice(0, BODY_MAX - 1).trimEnd()}…` : flat;
+/** Someone is looking at Callum right now, so a notification would only repeat what is on screen. */
+function lookingAtCallum(): boolean {
+  return typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus();
 }
 
 function tell(person: Person): void {
-  const body = snippet(person.lastInbound);
   try {
     const note = new Notification(`${person.firstName} replied`, {
-      ...(body ? { body } : {}),
+      body: BODY,
       tag: `callum-reply-${person.id}`,
       icon: '/icon.svg',
     });
@@ -48,7 +47,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
 /**
  * A browser notification, `{first} replied`, for each person who newly starts waiting on the person using Callum.
  * It follows who was waiting at the last look, so the first load never notifies, and it only speaks when
- * notifications are on in settings and the browser has said yes.
+ * notifications are on in settings, the browser has said yes and nobody has Callum open in front of them.
  */
 export function useNotifications(state: AppState | null): void {
   const seen = useRef<Set<number> | null>(null);
@@ -57,7 +56,7 @@ export function useNotifications(state: AppState | null): void {
     const waiting = state.people.filter((p) => p.status === 'waiting');
     const before = seen.current;
     seen.current = new Set(waiting.map((p) => p.id));
-    if (!before || state.settings.notifications !== true || !canNotify()) return;
+    if (!before || state.settings.notifications !== true || !canNotify() || lookingAtCallum()) return;
     for (const person of waiting) if (!before.has(person.id)) tell(person);
   }, [state]);
 }

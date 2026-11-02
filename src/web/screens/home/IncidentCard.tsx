@@ -177,7 +177,7 @@ function Shell({ incident, state, now, titleId, paused, children }: { incident: 
       <div className="inc-head">
         <ChannelBadge channel={incident.channel} paused={paused} />
         <div className="inc-head-text">
-          <h2 id={titleId} className="inc-title">{titleOf(incident, state)}</h2>
+          <h2 id={titleId} className="inc-title" tabIndex={-1}>{titleOf(incident, state)}</h2>
           <span className="inc-when">{when(incident, state, now)}</span>
         </div>
       </div>
@@ -196,11 +196,13 @@ export interface IncidentCardProps {
   onDismiss(id: number): void;
   /** LinkedIn is back on. The list keeps the card on screen a few seconds so the person can read what happens next. */
   onResumed?(incident: Incident): void;
+  /** Opens a person's conversation, for a reply whose words are no longer kept here. */
+  onOpenPerson?(personId: number): void;
   now?: () => Date;
 }
 
 /** What happened, what Callum did, and the one next step, for a single open incident. */
-export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss, onResumed, now = () => new Date() }: IncidentCardProps) {
+export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss, onResumed, onOpenPerson, now = () => new Date() }: IncidentCardProps) {
   const toast = useToast();
   const titleId = `inc-title-${incident.id}`;
   const [phase, setPhase] = useState<Phase>('alert');
@@ -210,6 +212,16 @@ export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss,
   const [retried, setRetried] = useState(false);
   const waiting = waitingFor(state, incident.channel);
   const at = now();
+
+  // Each step of the LinkedIn check is a new heading, so a screen reader is taken to it.
+  const firstPhase = useRef(true);
+  useEffect(() => {
+    if (firstPhase.current) {
+      firstPhase.current = false;
+      return;
+    }
+    document.getElementById(titleId)?.focus();
+  }, [phase, titleId]);
 
   async function run(task: () => Promise<void>) {
     if (busy) return;
@@ -231,7 +243,7 @@ export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss,
     if (phase === 'resumed') {
       return (
         <section className="inc-card inc-card-small card-in" aria-labelledby={titleId} data-kind={incident.kind}>
-          <span className="inc-status"><span className="inc-status-dot" aria-hidden="true" /><span id={titleId}>LinkedIn is back on</span></span>
+          <span className="inc-status"><span className="inc-status-dot" aria-hidden="true" /><span id={titleId} tabIndex={-1}>LinkedIn is back on</span></span>
           <p className="inc-sub">
             {waiting.length > 0 ? `The ${waiting.length === 1 ? 'person' : `${waiting.length} people`} who waited go${waiting.length === 1 ? 'es' : ''} first. ` : ''}
             {pace === 'half' ? '7 invites a day for a week, then 15.' : '15 invites a day.'}
@@ -251,7 +263,7 @@ export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss,
               </svg>
             </span>
             <div className="inc-head-text">
-              <h2 id={titleId} className="inc-title">Finish the check on LinkedIn</h2>
+              <h2 id={titleId} className="inc-title" tabIndex={-1}>Finish the check on LinkedIn</h2>
               <span className="inc-when">Finish the check, then come back.</span>
             </div>
           </div>
@@ -275,7 +287,7 @@ export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss,
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
             </span>
             <div className="inc-head-text">
-              <h2 id={titleId} className="inc-title">All clear</h2>
+              <h2 id={titleId} className="inc-title" tabIndex={-1}>All clear</h2>
               <span className="inc-when">LinkedIn is happy again. How should Callum restart?</span>
             </div>
           </div>
@@ -353,11 +365,12 @@ export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss,
   if (incident.kind === 'send_failed') {
     const outboxId = outboxIdOf(incident);
     const item: OutboxItem | undefined = state.outbox.find((o) => o.id === outboxId);
-    const first = state.people.find((p) => p.id === incident.personId)?.firstName ?? 'them';
+    const person = state.people.find((p) => p.id === incident.personId);
+    const first = person?.firstName ?? 'them';
     return (
       <Shell incident={incident} state={state} now={at} titleId={titleId} paused={false}>
         {item ? <p className="inc-quote">{item.body}</p> : null}
-        <Lines what={incident.message} next={retried ? 'Callum is sending it again.' : nextStepOf(incident)} />
+        <Lines what={incident.message} next={retried ? 'Callum is sending it again.' : item ? nextStepOf(incident) : 'Try again, or open the conversation and write it again.'} />
         {error ? <ErrorNote>{error}</ErrorNote> : null}
         <div className="inc-actions">
           <button
@@ -394,6 +407,10 @@ export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss,
             >
               Copy
             </button>
+          ) : person && onOpenPerson ? (
+            <button type="button" className="inc-quiet" onClick={() => onOpenPerson(person.id)}>
+              Open {first}'s conversation
+            </button>
           ) : null}
         </div>
       </Shell>
@@ -415,11 +432,13 @@ export interface IncidentCardsProps {
   state: AppState;
   refresh(): Promise<void>;
   onReconnect(channel: Channel): void;
+  /** Opens a person's conversation (the face popover). */
+  onOpenPerson?(personId: number): void;
   now?: () => Date;
 }
 
 /** One card for each open incident. Notices that only need reading go away on `Okay` and stay away on this computer. */
-export function IncidentCards({ state, refresh, onReconnect, now }: IncidentCardsProps) {
+export function IncidentCards({ state, refresh, onReconnect, onOpenPerson, now }: IncidentCardsProps) {
   const [dismissed, setDismissed] = useState<Set<number>>(readDismissed);
   const [kept, setKept] = useState<Incident[]>([]);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -446,6 +465,7 @@ export function IncidentCards({ state, refresh, onReconnect, now }: IncidentCard
           refresh={refresh}
           onReconnect={onReconnect}
           {...(now ? { now } : {})}
+          {...(onOpenPerson ? { onOpenPerson } : {})}
           onDismiss={(id) => {
             const next = new Set(dismissed).add(id);
             writeDismissed(next);

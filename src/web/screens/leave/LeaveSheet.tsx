@@ -6,7 +6,7 @@ import { Marble } from '../../ui/Marble.js';
 import { formatSlot, joinNames } from '../../ui/format.js';
 import { useToast } from '../../ui/Toast.js';
 import { breakChoices, earliestPick, pickedBreak, type BreakChoice } from './breakDates.js';
-import { saveFile, type SaveFile, type SavedFile } from './download.js';
+import { formatBytes, saveFile, type SaveFile, type SavedFile } from './download.js';
 import { LeaveFrame } from './LeaveFrame.js';
 import { rememberWrap, Wrapped } from './Wrapped.js';
 
@@ -101,6 +101,8 @@ export function LeaveSheet({ state, refresh, onClose, now = () => new Date(), sa
   const [deleteOn, setDeleteOn] = useState(false);
   const [line, setLine] = useState<string | null>(null);
   const [progress, setProgress] = useState(-1);
+  // Both the copy and the deletion were asked for: the files are saved, and the person presses once more before anything is deleted.
+  const [saved, setSaved] = useState<SavedFile[] | null>(null);
   const [outcome, setOutcome] = useState<{ line: string | null; summary: string; files: SavedFile[] } | null>(null);
 
   const working = view === 'wrap' && progress >= 0;
@@ -156,10 +158,36 @@ export function LeaveSheet({ state, refresh, onClose, now = () => new Date(), sa
     }
   }
 
+  async function finishWrap(files: SavedFile[], summaryLine: string | null) {
+    setProgress(1);
+    try {
+      const result = await api.wrap(deleteOn);
+      setProgress(WRAP_TITLES.length);
+      const memory = { line: summaryLine, summary: result.summary, files };
+      rememberWrap(memory);
+      setSaved(null);
+      setOutcome(memory);
+      await refresh();
+    } catch (e) {
+      setError(messageOf(e));
+      setProgress(-1);
+    }
+  }
+
   async function confirmWrap() {
     if (working) return;
     setError(null);
     setProgress(0);
+    // The line about the work so far has to be read before anything is cancelled or deleted.
+    let summaryLine = line;
+    if (summaryLine === null) {
+      try {
+        summaryLine = (await api.wrapSummary()).line;
+        setLine(summaryLine);
+      } catch {
+        summaryLine = null;
+      }
+    }
     const files: SavedFile[] = [];
     if (exportOn) {
       try {
@@ -172,18 +200,19 @@ export function LeaveSheet({ state, refresh, onClose, now = () => new Date(), sa
         return;
       }
     }
-    setProgress(1);
-    try {
-      const result = await api.wrap(deleteOn);
-      setProgress(WRAP_TITLES.length);
-      const memory = { line, summary: result.summary, files };
-      rememberWrap(memory);
-      setOutcome(memory);
-      await refresh();
-    } catch (e) {
-      setError(messageOf(e));
+    if (exportOn && deleteOn) {
+      setSaved(files);
       setProgress(-1);
+      return;
     }
+    await finishWrap(files, summaryLine);
+  }
+
+  async function deleteAndWrap() {
+    if (working || !saved) return;
+    setError(null);
+    setProgress(1);
+    await finishWrap(saved, line);
   }
 
   // ---- resting -------------------------------------------------------------------------------------------------------
@@ -198,9 +227,11 @@ export function LeaveSheet({ state, refresh, onClose, now = () => new Date(), sa
               <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
             </svg>
           </span>
-          <h1 id="lv-rest-title" className="lv-title" tabIndex={-1}>Callum is resting</h1>
+          <h1 id="lv-rest-title" className="lv-title" tabIndex={-1}>
+            {until ? `Callum is resting until ${formatSlot(until, tz, now())}` : 'Callum is resting'}
+          </h1>
           <p className="lv-lede">
-            {until ? `Nothing goes out until ${formatSlot(until, tz, now())}.` : 'Nothing goes out until you resume.'} Replies still reach you
+            {until ? 'Nothing goes out until then.' : 'Nothing goes out until you resume.'} Replies still reach you
             {stay > 0 ? `, and your ${stay} ${stay === 1 ? 'conversation stays' : 'conversations stay'} yours.` : '.'}
           </p>
           {error ? <ErrorNote>{error}</ErrorNote> : null}
@@ -214,6 +245,47 @@ export function LeaveSheet({ state, refresh, onClose, now = () => new Date(), sa
   }
 
   // ---- wrapping up ---------------------------------------------------------------------------------------------------
+  if (view === 'wrap' && saved) {
+    return (
+      <LeaveFrame people={state.people} still viewKey={working ? 'deleting' : 'saved'}>
+        <section className="lv-view lv-wrap step-in" aria-labelledby="lv-saved-title">
+          <div className="lv-head">
+            <h1 id="lv-saved-title" className="lv-title" tabIndex={-1}>Your files are saved</h1>
+            <p className="lv-lede lv-lede-sm">They are on this computer now. Callum deletes its copies when you go on, and that can't be undone.</p>
+          </div>
+          <ul className="lv-files" aria-label="Saved files">
+            {saved.map((f) => (
+              <li key={f.name} className="lv-file">
+                <span className="lv-file-text">
+                  <span className="lv-file-name">{f.name}</span>
+                  <span className="lv-file-meta">{formatBytes(f.bytes)}, saved to your downloads</span>
+                </span>
+                <a className="lv-file-again" href={f.href} download={f.name}>Download again</a>
+              </li>
+            ))}
+          </ul>
+          {error ? <ErrorNote>{error}</ErrorNote> : null}
+          <div className="lv-actions">
+            <button type="button" className="lv-primary" onClick={() => void deleteAndWrap()} aria-busy={working}>Delete and wrap up</button>
+            <button
+              type="button"
+              className="lv-quiet"
+              disabled={working}
+              onClick={() => {
+                setSaved(null);
+                setError(null);
+                setView('choose');
+                toast('Callum keeps going. Nothing changed.');
+              }}
+            >
+              Keep Callum
+            </button>
+          </div>
+        </section>
+      </LeaveFrame>
+    );
+  }
+
   if (view === 'wrap') {
     // Progress 0: the copy is being saved. 1: Callum is cancelling and (if asked) deleting. 4: finished.
     const statuses = WRAP_TITLES.map((_, i): 'idle' | 'busy' | 'done' | 'skipped' => {
@@ -227,7 +299,7 @@ export function LeaveSheet({ state, refresh, onClose, now = () => new Date(), sa
     const subs: ReactNode[] = [
       'Every person and message, as a spreadsheet and a JSON file',
       talking.length > 0
-        ? `${talking.length > 3 ? `${talking.slice(0, 3).map((p) => p.firstName).join(', ')} and ${talking.length - 3} more` : joinNames(talking.map((p) => p.firstName))} keep talking with you in your own inbox`
+        ? `${talking.length > 3 ? `${talking.slice(0, 3).map((p) => p.firstName).join(', ')} and ${talking.length - 3} more` : joinNames(talking.map((p) => p.firstName))} ${talking.length === 1 ? 'keeps' : 'keep'} talking with you in your own inbox`
         : 'Anyone who writes back finds you in your own inbox',
       'Nobody else hears from you. Waiting hellos and follow-ups are cancelled.',
       deleteOn ? 'Callum forgets every person and message it holds here' : 'Callum keeps its copy here, in case you start again',
@@ -262,10 +334,11 @@ export function LeaveSheet({ state, refresh, onClose, now = () => new Date(), sa
             })}
           </ol>
           {warn ? <ErrorNote>You won't be able to get these conversations back.</ErrorNote> : null}
+          {deleteOn && !working ? <p className="lv-note">Callum deletes everything here once your files are saved. This can't be undone.</p> : null}
           {error ? <ErrorNote>{error}</ErrorNote> : null}
           {!working ? (
             <div className="lv-actions">
-              <button type="button" className="lv-primary" onClick={() => void confirmWrap()}>Wrap up Callum</button>
+              <button type="button" className="lv-primary" onClick={() => void confirmWrap()}>{deleteOn ? 'Wrap up and delete' : 'Wrap up Callum'}</button>
               <button
                 type="button"
                 className="lv-quiet"

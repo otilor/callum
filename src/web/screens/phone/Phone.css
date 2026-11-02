@@ -2,7 +2,7 @@
 .ph-root {
   position: relative;
   min-height: 100dvh;
-  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  padding-bottom: calc(112px + env(safe-area-inset-bottom));
   background: var(--white);
   color: var(--ink);
 }
@@ -125,6 +125,10 @@
   flex-direction: column;
   gap: 14px;
   padding: 10px 16px 0;
+}
+.ph-root[data-ask='true'] .ph-main {
+  /* The Ask icon floats over the bottom right; leave room under the last button so it never covers one. */
+  padding-bottom: 72px;
 }
 .ph-brief {
   display: flex;

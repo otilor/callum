@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AppState, OutboxItem, Person } from '../../../shared/types.js';
+import { placeholderMessage, findPlaceholders } from '../../../server/engine/guard.js';
 import { api } from '../../api.js';
 import { ErrorNote } from '../../ui/ErrorNote.js';
 import { formatSlot } from '../../ui/format.js';
@@ -7,24 +8,30 @@ import { Marble } from '../../ui/Marble.js';
 import { prefersReducedMotion } from '../firstrun/motion.js';
 import type { PhoneToastData } from './PhoneToast.js';
 
-const HOLE = /\[[A-Z][A-Z0-9 ]*\]/;
-const HOLE_ALL = /\[[A-Z][A-Z0-9 ]*\]/g;
 const LEAVE_MS = 420;
 const UNDO_MS = 10_000;
+
+/** `${personId}:${repliedAt}`: a person who writes again is a new card, even after the last one was answered. */
+const cardKey = (p: Person) => `${p.id}:${p.repliedAt ?? ''}`;
 const CHANNEL_NAME = { email: 'Email', linkedin: 'LinkedIn', x: 'X' } as const;
 
 type Kind = 'reply' | 'book' | 'close' | 'snooze';
 
-/** `[YOUR PRICE]` gives `price`: the thing the person has to fill in. */
-function holeNoun(text: string): string {
-  const name = (HOLE.exec(text)?.[0] ?? '').slice(1, -1);
-  return name.replace(/^YOUR /, '').toLowerCase() || 'detail';
+/** `Leave the price out` for `[YOUR PRICE]`; a placeholder with no name in it just says `Leave it out`. */
+function leaveOutLabel(placeholder: string): string {
+  if (!placeholder.startsWith('[')) return 'Leave it out';
+  const what = placeholder.slice(1, -1).replace(/_/g, ' ').trim().toLowerCase().replace(/^your(\s+|$)/, '');
+  return what ? `Leave the ${what} out` : 'Leave it out';
 }
 
-/** The draft without the sentences that carry a placeholder. */
-function withoutHoleSentences(text: string): string {
-  const sentences = text.match(/[^.!?]+[.!?]*\s*/g) ?? [text];
-  return sentences.filter((s) => !HOLE.test(s)).join('').replace(/\s+/g, ' ').trim();
+/** The draft without the sentences that carry a placeholder. Line breaks and blank lines stay where they were. */
+function withoutPlaceholderSentences(text: string): string {
+  const pieces = text.match(/[^.!?\n]*[.!?]+[ \t]*|[^.!?\n]+|\n+/g) ?? [text];
+  return pieces
+    .filter((piece) => findPlaceholders(piece).length === 0)
+    .join('')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim();
 }
 
 function messageOf(e: unknown): string {
@@ -49,7 +56,7 @@ export interface PhoneDeckProps {
 /** The people who want to talk, one full-width card at a time: their words, Callum's draft, and what to do about it. */
 export function PhoneDeck({ state, refresh, notify, now }: PhoneDeckProps) {
   const people = useMemo(() => dockPeople(state), [state]);
-  const [handled, setHandled] = useState<Set<number>>(new Set());
+  const [handled, setHandled] = useState<Set<string>>(new Set());
   const [leaving, setLeaving] = useState<{ id: number; kind: Kind } | null>(null);
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
@@ -66,7 +73,7 @@ export function PhoneDeck({ state, refresh, notify, now }: PhoneDeckProps) {
     };
   }, []);
 
-  const waiting = people.filter((p) => !handled.has(p.id));
+  const waiting = people.filter((p) => !handled.has(cardKey(p)));
   const card = waiting[0] ?? null;
   const cardId = card?.id;
   const cardDraft = card?.draft ?? null;
@@ -94,21 +101,25 @@ export function PhoneDeck({ state, refresh, notify, now }: PhoneDeckProps) {
   const person = card;
   const draft = drafts[person.id] ?? person.draft ?? '';
   const loading = drafts[person.id] === undefined && person.draft === null;
-  const holeFound = HOLE.test(draft);
+  const holes = findPlaceholders(draft);
+  const holeFound = holes.length > 0;
   const canSend = !holeFound && draft.trim().length > 0 && !busy && !leaving;
   const project = state.projects.find((p) => p.id === person.projectId) ?? null;
   const tag = state.projects.length > 1 ? project?.name : null;
   const tz = state.settings.timezone;
   const suggested = person.suggested;
 
-  function done(kind: Kind, text: string, item: OutboxItem | null) {
-    const undoMs = item?.undoUntil ? Math.max(1500, new Date(item.undoUntil).getTime() - now.getTime()) : UNDO_MS;
+  function done(kind: Kind, text: string, item: OutboxItem | null, t0: number) {
+    // The undo window the server gave, less the time the call itself took, so the ring runs out when Undo really stops working.
+    const opened = item?.undoUntil ? new Date(item.undoUntil).getTime() - new Date(item.updatedAt || item.createdAt).getTime() : 0;
+    const undoMs = Math.min(UNDO_MS, Math.max(0, opened - (performance.now() - t0)));
     const first = person.firstName;
+    const key = cardKey(person);
     setLeaving({ id: person.id, kind });
     timers.current.push(
       setTimeout(
         () => {
-          setHandled((h) => new Set(h).add(person.id));
+          setHandled((h) => new Set(h).add(key));
           setLeaving(null);
         },
         prefersReducedMotion() ? 0 : LEAVE_MS,
@@ -116,17 +127,17 @@ export function PhoneDeck({ state, refresh, notify, now }: PhoneDeckProps) {
     );
     notify({
       text,
-      ...(item
+      ...(item && undoMs > 0
         ? {
             undo: {
-              ms: Math.min(undoMs, UNDO_MS),
+              ms: undoMs,
               run: () => {
                 void api
                   .undo(item.id)
                   .then(async () => {
                     setHandled((h) => {
                       const next = new Set(h);
-                      next.delete(person.id);
+                      next.delete(key);
                       return next;
                     });
                     notify({ text: kind === 'reply' ? `Not sent. Your reply to ${first} is back.` : `${first} is back with you.` });
@@ -156,14 +167,20 @@ export function PhoneDeck({ state, refresh, notify, now }: PhoneDeckProps) {
 
   const send = () => {
     if (!canSend) return;
-    void act(async () => done('reply', `Sent to ${person.firstName}`, await api.reply(person.id, draft.trim())));
+    void act(async () => {
+      const t0 = performance.now();
+      done('reply', `Sent to ${person.firstName}`, await api.reply(person.id, draft.trim()), t0);
+    });
   };
   const book = () => {
     if (!project?.calendarUrl) {
       setNeedCalendar(person.firstName);
       return;
     }
-    void act(async () => done('book', `Calendar link sent to ${person.firstName}`, await api.book(person.id)));
+    void act(async () => {
+      const t0 = performance.now();
+      done('book', `Calendar link sent to ${person.firstName}`, await api.book(person.id), t0);
+    });
   };
   const saveCalendar = () => {
     const url = calendar.trim();
@@ -171,14 +188,19 @@ export function PhoneDeck({ state, refresh, notify, now }: PhoneDeckProps) {
     void act(async () => {
       await api.updateProject(person.projectId, { calendarUrl: url });
       setNeedCalendar(null);
-      done('book', `Calendar link sent to ${person.firstName}`, await api.book(person.id));
+      const t0 = performance.now();
+      done('book', `Calendar link sent to ${person.firstName}`, await api.book(person.id), t0);
     });
   };
-  const close = () => void act(async () => done('close', `Sent. No more follow-ups for ${person.firstName}`, await api.close(person.id)));
+  const close = () =>
+    void act(async () => {
+      const t0 = performance.now();
+      done('close', `Sent. No more follow-ups for ${person.firstName}`, await api.close(person.id), t0);
+    });
   const snooze = () =>
     void act(async () => {
       const resting = await api.snooze(person.id);
-      done('snooze', resting.snoozedUntil ? `${person.firstName} rests until ${formatSlot(resting.snoozedUntil, tz, now)}` : `${person.firstName} rests for now`, null);
+      done('snooze', resting.snoozedUntil ? `${person.firstName} rests until ${formatSlot(resting.snoozedUntil, tz, now)}` : `${person.firstName} rests for now`, null, performance.now());
     });
 
   const pending = waiting.length;
@@ -214,11 +236,9 @@ export function PhoneDeck({ state, refresh, notify, now }: PhoneDeckProps) {
         {holeFound ? (
           <div className="ph-hole fade-in" role="alert">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D9480F" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.6v.01" /></svg>
-            <span>
-              Add your {holeNoun(draft)} first. Callum never sends a message with {draft.match(HOLE)?.[0]} in it.
-            </span>
-            <button type="button" onClick={() => setDrafts((d) => ({ ...d, [person.id]: withoutHoleSentences(draft).replace(HOLE_ALL, '').trim() }))}>
-              Leave the {holeNoun(draft)} out
+            <span>{placeholderMessage(holes[0] ?? '')}</span>
+            <button type="button" onClick={() => setDrafts((d) => ({ ...d, [person.id]: withoutPlaceholderSentences(draft) }))}>
+              {leaveOutLabel(holes[0] ?? '')}
             </button>
           </div>
         ) : null}

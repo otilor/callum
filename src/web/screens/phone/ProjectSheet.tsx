@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import type { AppState, Project } from '../../../shared/types.js';
 import { api } from '../../api.js';
 import { ErrorNote } from '../../ui/ErrorNote.js';
-import { formatSlot } from '../../ui/format.js';
+import { formatSlot, joinNames } from '../../ui/format.js';
 import { Marble } from '../../ui/Marble.js';
+import { breakChoices } from '../leave/breakDates.js';
+import { PhoneSheet } from './PhoneSheet.js';
+import type { PhoneToastData } from './PhoneToast.js';
 
 function messageOf(e: unknown): string {
   return e instanceof Error && e.message ? e.message : 'Something went wrong. Callum kept everything as it was.';
@@ -25,19 +28,17 @@ export interface ProjectSheetProps {
   refresh(): Promise<void>;
   onClose(): void;
   onNewProject?(): void;
+  notify(toast: Omit<PhoneToastData, 'id'>): void;
+  /** The button that opened the sheet. */
+  returnTo?: HTMLElement | null;
   now: Date;
 }
 
 /** The phone's project switcher: a sheet from the bottom with one row for each project that is running or paused. */
-export function ProjectSheet({ state, currentId, refresh, onClose, onNewProject, now }: ProjectSheetProps) {
-  const ref = useRef<HTMLDivElement>(null);
+export function ProjectSheet({ state, currentId, refresh, onClose, onNewProject, notify, returnTo, now }: ProjectSheetProps) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const rows = state.projects.filter((p) => p.state !== 'wrapped');
-
-  useEffect(() => {
-    ref.current?.focus();
-  }, []);
 
   async function run(task: () => Promise<unknown>) {
     if (busy) return;
@@ -53,21 +54,24 @@ export function ProjectSheet({ state, currentId, refresh, onClose, onNewProject,
     }
   }
 
+  /** Pausing from the phone is a short rest: until 9:00 on the next Monday, the same as Take a break. */
+  function pauseOrResume(p: Project) {
+    if (p.state === 'paused') {
+      return run(async () => {
+        await api.resumeProject(p.id);
+        notify({ text: `${p.name} is back to work` });
+      });
+    }
+    const until = breakChoices(now, state.settings.timezone)[0]?.until ?? now;
+    return run(async () => {
+      await api.pauseProject(p.id, until.toISOString());
+      const others = state.projects.filter((o) => o.id !== p.id && o.state === 'running');
+      notify({ text: others.length > 0 ? `${p.name} is paused. ${joinNames(others.map((o) => o.name))} keeps going.` : `${p.name} is paused.` });
+    });
+  }
+
   return (
-    <>
-      <div className="ph-veil" aria-hidden="true" onClick={onClose} />
-      <div
-        ref={ref}
-        className="ph-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Your projects"
-        tabIndex={-1}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') onClose();
-        }}
-      >
-        <span className="ph-grab" aria-hidden="true" />
+    <PhoneSheet label="Your projects" onClose={onClose} returnTo={returnTo ?? null}>
         {rows.map((p) => {
           const line = projectLine(p, state, now);
           const faces = state.people.filter((x) => x.projectId === p.id).slice(0, 5);
@@ -104,7 +108,7 @@ export function ProjectSheet({ state, currentId, refresh, onClose, onNewProject,
                 type="button"
                 className="ph-pill"
                 aria-label={`${p.state === 'paused' ? 'Resume' : 'Pause'} ${p.name}`}
-                onClick={() => void run(() => (p.state === 'paused' ? api.resumeProject(p.id) : api.pauseProject(p.id, null)))}
+                onClick={() => void pauseOrResume(p)}
               >
                 {p.state === 'paused' ? 'Resume' : 'Pause'}
               </button>
@@ -127,7 +131,6 @@ export function ProjectSheet({ state, currentId, refresh, onClose, onNewProject,
             New project
           </button>
         ) : null}
-      </div>
-    </>
+    </PhoneSheet>
   );
 }

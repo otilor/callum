@@ -81,6 +81,17 @@ describe('IncidentCards: LinkedIn wants to check it is you', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  it('takes focus to the heading of each new step', async () => {
+    mocks.resumeChannel.mockResolvedValue({});
+    const { user } = setup(state());
+    await user.click(screen.getByRole('button', { name: /Open LinkedIn/ }));
+    expect(screen.getByRole('heading', { name: 'Finish the check on LinkedIn' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: "Done, I've finished the check" }));
+    expect(screen.getByRole('heading', { name: 'All clear' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Resume LinkedIn' }));
+    expect(await screen.findByText('LinkedIn is back on')).toHaveFocus();
+  });
+
   it('full pace sends full', async () => {
     mocks.resumeChannel.mockResolvedValue({});
     const { user } = setup(state());
@@ -172,6 +183,20 @@ describe('IncidentCards: the other kinds', () => {
     expect(await screen.findByText('Callum is sending it again.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeDisabled();
     expect(refresh).toHaveBeenCalled();
+  });
+
+  it('when the failed reply is no longer kept it offers the conversation instead of Copy', async () => {
+    const onOpenPerson = vi.fn();
+    const state = { ...failed(), outbox: [] };
+    const user = userEvent.setup();
+    render(
+      <ToastProvider>
+        <IncidentCards state={state} refresh={refresh} onReconnect={onReconnect} onOpenPerson={onOpenPerson} />
+      </ToastProvider>,
+    );
+    expect(screen.queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: "Open Tomas's conversation" }));
+    expect(onOpenPerson).toHaveBeenCalledWith(7);
   });
 
   it('Copy puts the reply on the clipboard', async () => {

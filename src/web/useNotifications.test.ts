@@ -36,13 +36,21 @@ class FakeNotification {
   close() {}
 }
 
+let looking = false;
+
 beforeEach(() => {
+  looking = false;
+  vi.spyOn(document, 'hasFocus').mockImplementation(() => looking);
+  vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => (looking ? 'visible' : 'hidden'));
   made.length = 0;
   FakeNotification.permission = 'granted';
   FakeNotification.requestPermission.mockClear();
   vi.stubGlobal('Notification', FakeNotification);
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe('useNotifications', () => {
   it('stays quiet on the first load, even when people are already waiting', () => {
@@ -55,7 +63,9 @@ describe('useNotifications', () => {
     rerender({ s: state([person(1, 'Kemi', { status: 'waiting', lastInbound: 'Could you send a short deck before Monday?' })]) });
     expect(made).toHaveLength(1);
     expect(made[0]?.title).toBe('Kemi replied');
-    expect(made[0]?.options?.body).toBe('Could you send a short deck before Monday?');
+    // The reply itself never goes on the lock screen.
+    expect(made[0]?.options?.body).toBe('Open Callum to read it and answer.');
+    expect(JSON.stringify(made[0])).not.toContain('short deck');
     rerender({ s: state([person(1, 'Kemi', { status: 'waiting', lastInbound: 'Could you send a short deck before Monday?' })]) });
     expect(made).toHaveLength(1);
   });
@@ -80,6 +90,16 @@ describe('useNotifications', () => {
     rerender({ s: state([person(1, 'Kemi', { status: 'waiting' })], false) });
     rerender({ s: state([person(1, 'Kemi', { status: 'waiting' })], true) });
     expect(made).toEqual([]);
+  });
+
+  it('is silent while the page is visible and focused, and speaks once it is not', () => {
+    looking = true;
+    const { rerender } = renderHook(({ s }) => useNotifications(s), { initialProps: { s: state([person(1, 'Kemi'), person(2, 'Tunde')]) } });
+    rerender({ s: state([person(1, 'Kemi', { status: 'waiting' }), person(2, 'Tunde')]) });
+    expect(made).toEqual([]);
+    looking = false;
+    rerender({ s: state([person(1, 'Kemi', { status: 'waiting' }), person(2, 'Tunde', { status: 'waiting' })]) });
+    expect(made.map((n) => n.title)).toEqual(['Tunde replied']);
   });
 
   it('is silent when the setting is off or unset', () => {

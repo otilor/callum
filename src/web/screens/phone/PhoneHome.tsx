@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import type { AppState, Channel, Project } from '../../../shared/types.js';
 import { api } from '../../api.js';
 import { ErrorNote } from '../../ui/ErrorNote.js';
@@ -6,6 +6,7 @@ import { formatSlot, joinNames } from '../../ui/format.js';
 import { IncidentCards } from '../home/IncidentCard.js';
 import { PhoneDeck, WaitingLine, dockPeople } from './PhoneDeck.js';
 import { PhoneToast, type PhoneToastData } from './PhoneToast.js';
+import { PhoneSheet } from './PhoneSheet.js';
 import { ProjectSheet } from './ProjectSheet.js';
 import './Phone.css';
 
@@ -31,11 +32,13 @@ export interface PhoneHomeProps {
   onNewProject?(): void;
   /** `Reconnect Google` and its kin. */
   onReconnect(channel: Channel): void;
+  /** Opens a person's conversation, for an incident about a reply that was not kept. */
+  onOpenPerson?(personId: number): void;
   now?: () => Date;
 }
 
 /** Home for a narrow screen: the project switcher, the brief, the river, and the people who want to talk as cards. */
-export function PhoneHome({ state, project, refresh, river, dock, ask, onOpenAccount, onNewProject, onReconnect, now = () => new Date() }: PhoneHomeProps) {
+export function PhoneHome({ state, project, refresh, river, dock, ask, onOpenAccount, onNewProject, onReconnect, onOpenPerson, now = () => new Date() }: PhoneHomeProps) {
   const at = now();
   const tz = state.settings.timezone;
   const [sheet, setSheet] = useState<'projects' | 'ask' | null>(null);
@@ -46,14 +49,11 @@ export function PhoneHome({ state, project, refresh, river, dock, ask, onOpenAcc
   const notify = useCallback((t: Omit<PhoneToastData, 'id'>) => setToast({ ...t, id: nextId.current++ }), []);
   const gone = useCallback((id: number) => setToast((cur) => (cur?.id === id ? null : cur)), []);
 
-  useEffect(() => {
-    if (!sheet) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSheet(null);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [sheet]);
+  const trigger = useRef<HTMLElement | null>(null);
+  const openSheet = (kind: 'projects' | 'ask') => (e: React.MouseEvent<HTMLElement>) => {
+    trigger.current = e.currentTarget;
+    setSheet(kind);
+  };
 
   const { brief } = state;
   const running = state.settings.pauseState === 'running';
@@ -79,9 +79,9 @@ export function PhoneHome({ state, project, refresh, river, dock, ask, onOpenAcc
   }
 
   return (
-    <div className="ph-root" data-screen="phone-home">
+    <div className="ph-root" data-screen="phone-home" data-ask={Boolean(ask)}>
       <header className="ph-top">
-        <button type="button" className="ph-switch" aria-haspopup="dialog" aria-label={`Switch project, now ${project?.name ?? 'none'}`} onClick={() => setSheet('projects')}>
+        <button type="button" className="ph-switch" aria-haspopup="dialog" aria-label={`Switch project, now ${project?.name ?? 'none'}`} onClick={openSheet('projects')}>
           <span className="ph-mark"><span className="ph-mark-dot" aria-hidden="true" />callum</span>
           {project ? (
             <>
@@ -106,7 +106,7 @@ export function PhoneHome({ state, project, refresh, river, dock, ask, onOpenAcc
       </header>
 
       <main className="ph-main">
-        <IncidentCards state={state} refresh={refresh} onReconnect={onReconnect} now={now} />
+        <IncidentCards state={state} refresh={refresh} onReconnect={onReconnect} {...(onOpenPerson ? { onOpenPerson } : {})} now={now} />
 
         <section className="ph-brief" aria-labelledby="ph-brief-title">
           <h1 id="ph-brief-title" className="ph-hello">{greeting(at, tz)}</h1>
@@ -133,7 +133,7 @@ export function PhoneHome({ state, project, refresh, river, dock, ask, onOpenAcc
       </main>
 
       {ask ? (
-        <button type="button" className="ph-ask-fab" aria-label="Ask Callum" aria-haspopup="dialog" onClick={() => setSheet('ask')}>
+        <button type="button" className="ph-ask-fab" aria-label="Ask Callum" aria-haspopup="dialog" onClick={openSheet('ask')}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 3.5V16A2.5 2.5 0 0 1 4 13.5z" /></svg>
         </button>
       ) : null}
@@ -141,16 +141,21 @@ export function PhoneHome({ state, project, refresh, river, dock, ask, onOpenAcc
       <PhoneToast toast={toast} onGone={gone} />
 
       {sheet === 'projects' ? (
-        <ProjectSheet state={state} currentId={project?.id ?? null} refresh={refresh} onClose={() => setSheet(null)} {...(onNewProject ? { onNewProject } : {})} now={at} />
+        <ProjectSheet
+          state={state}
+          currentId={project?.id ?? null}
+          refresh={refresh}
+          onClose={() => setSheet(null)}
+          notify={notify}
+          returnTo={trigger.current}
+          {...(onNewProject ? { onNewProject } : {})}
+          now={at}
+        />
       ) : null}
       {sheet === 'ask' && ask ? (
-        <>
-          <div className="ph-veil" aria-hidden="true" onClick={() => setSheet(null)} />
-          <div className="ph-sheet" role="dialog" aria-modal="true" aria-label="Ask Callum">
-            <span className="ph-grab" aria-hidden="true" />
-            {ask}
-          </div>
-        </>
+        <PhoneSheet label="Ask Callum" onClose={() => setSheet(null)} returnTo={trigger.current}>
+          {ask}
+        </PhoneSheet>
       ) : null}
     </div>
   );
