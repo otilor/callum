@@ -1,4 +1,5 @@
 import type { Db } from './db.js';
+import { inTransaction } from './transaction.js';
 
 const V1 = `
 CREATE TABLE settings (
@@ -191,16 +192,11 @@ const STEPS: Step[] = [V1, V2, v3, V4];
 export function migrate(db: Db, upTo: number = STEPS.length): void {
   const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
   for (let v = row.user_version; v < Math.min(upTo, STEPS.length); v++) {
-    db.exec('BEGIN');
-    try {
+    inTransaction(db, () => {
       const step = STEPS[v] as Step;
       if (typeof step === 'string') db.exec(step);
       else step(db);
       db.exec(`PRAGMA user_version = ${v + 1}`);
-      db.exec('COMMIT');
-    } catch (e) {
-      db.exec('ROLLBACK');
-      throw e;
-    }
+    });
   }
 }

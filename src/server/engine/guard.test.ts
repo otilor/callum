@@ -52,3 +52,13 @@ describe('placeholderMessage', () => {
     expect(placeholderMessage('{{first_name}}')).toBe('Fill in {{first_name}} first. Callum never sends a message with {{first_name}} in it.');
   });
 });
+
+describe('findPlaceholders across lines', () => {
+  it('finds a {{ }} placeholder that spans a line break in a body', () => {
+    expect(findPlaceholders('Hello Kemi,\n\nSaw {{first\nname}} today.')).toEqual(['{{first\nname}}']);
+  });
+  it('keeps subject and body apart: an opening {{ in one and a closing }} in the other is not one placeholder', () => {
+    expect(findPlaceholders('Hello {{')).toEqual([]);
+    expect(findPlaceholders('name }}')).toEqual([]);
+  });
+});

@@ -4,6 +4,7 @@ import type {
 } from '../../shared/types.js';
 import { CHANNELS } from '../../shared/types.js';
 import type { Db } from './db.js';
+import { inTransaction } from './transaction.js';
 import { normalizeEmail, normalizeLinkedinUrl, normalizeXHandle } from './handles.js';
 
 type Row = Record<string, unknown>;
@@ -418,32 +419,17 @@ export class Repo {
 
   /** Run `fn` so that all of its writes land together or not at all. Nests as a savepoint. */
   transaction<T>(fn: () => T): T {
-    const nested = this.db.isTransaction;
-    const mark = 'repo_tx';
-    this.db.exec(nested ? `SAVEPOINT ${mark}` : 'BEGIN');
-    try {
-      const result = fn();
-      this.db.exec(nested ? `RELEASE ${mark}` : 'COMMIT');
-      return result;
-    } catch (e) {
-      this.db.exec(nested ? `ROLLBACK TO ${mark}; RELEASE ${mark}` : 'ROLLBACK');
-      throw e;
-    }
+    return inTransaction(this.db, fn);
   }
 
   // ---- reset -------------------------------------------------------------
 
   deleteAll(): void {
-    this.db.exec('BEGIN');
-    try {
+    this.transaction(() => {
       for (const t of ['messages', 'outbox', 'incidents', 'inbound_failed', 'people', 'projects', 'channels', 'channel_secrets', 'settings']) {
         this.db.exec(`DELETE FROM ${t}`);
       }
       this.db.exec("DELETE FROM sqlite_sequence WHERE name IN ('messages','outbox','incidents','inbound_failed','people','projects')");
-      this.db.exec('COMMIT');
-    } catch (e) {
-      this.db.exec('ROLLBACK');
-      throw e;
-    }
+    });
   }
 }
