@@ -345,8 +345,47 @@ describe('parsePaste', () => {
     ]);
   });
 
+  it('a tab is always a boundary: a three-field tab line among comma lines keeps its company, in either order', () => {
+    const { people } = parsePaste(
+      'Kemi Eze, kemi@okopay.com, Oko Pay\n' +
+      'Ada Okafor\tada@okafor.dev\tOkafor Labs\n' +
+      'ada.o@okafor.dev\tAda Okafor\tOkafor Labs\n' +
+      'Tunde Bakare\ttunde@paystack.example\tOkafor, Inc.\n' +
+      'Femi Ade, femi@ledgerly.io, Ledgerly',
+    );
+    expect(people.map((p) => [p.name, p.email, p.company])).toEqual([
+      ['Kemi Eze', 'kemi@okopay.com', 'Oko Pay'],
+      ['Ada Okafor', 'ada@okafor.dev', 'Okafor Labs'],
+      ['Ada Okafor', 'ada.o@okafor.dev', 'Okafor Labs'],
+      ['Tunde Bakare', 'tunde@paystack.example', 'Okafor, Inc.'],
+      ['Femi Ade', 'femi@ledgerly.io', 'Ledgerly'],
+    ]);
+  });
+
+  it('tab rows whose company has a comma are read right beside a single comma-only line', () => {
+    const { people } = parsePaste('Ada Okafor\tada@okafor.dev\tOkafor, Inc.\nFemi Ade\tfemi@ledgerly.io\tLedgerly, Inc.\nKemi Eze, kemi@okopay.com, Oko Pay');
+    expect(people.map((p) => [p.name, p.company])).toEqual([['Ada Okafor', 'Okafor, Inc.'], ['Femi Ade', 'Ledgerly, Inc.'], ['Kemi Eze', 'Oko Pay']]);
+  });
+
+  it('when separators tie on the number of lines, the steadier and then the more frequent one wins', () => {
+    // Every row has "Ledgerly, Inc.": pipe (2 a row) beats comma (1 a row); the email stays whole.
+    expect(parsePaste('Kemi Eze|kemi@okopay.com|Ledgerly, Inc.\nFemi Ade|femi@ledgerly.io|Ledgerly, Inc.').people.map((p) => [p.name, p.email, p.company])).toEqual([
+      ['Kemi Eze', 'kemi@okopay.com', 'Ledgerly, Inc.'], ['Femi Ade', 'femi@ledgerly.io', 'Ledgerly, Inc.'],
+    ]);
+    // Semicolons with comma decimals.
+    const sheet = parseCsv('Kemi Eze;kemi@okopay.com;Oko Pay;4,5\nFemi Ade;femi@ledgerly.io;Ledgerly;3,5\n');
+    expect(sheet.people.map((p) => [p.name, p.company, p.role])).toEqual([['Kemi Eze', 'Oko Pay', '4,5'], ['Femi Ade', 'Ledgerly', '3,5']]);
+    // Comma lines whose headlines hold a varying number of pipes.
+    const headlines = parsePaste('Kemi Eze, kemi@okopay.com, Head of Finance | Oko Pay\nFemi Ade, femi@ledgerly.io, CTO | Ledgerly | Advisor\nAda Okafor, ada@okafor.dev, Founder');
+    expect(headlines.people.map((p) => [p.name, p.company])).toEqual([
+      ['Kemi Eze', 'Head of Finance | Oko Pay'], ['Femi Ade', 'CTO | Ledgerly | Advisor'], ['Ada Okafor', 'Founder'],
+    ]);
+    // A single line keeps the fixed order.
+    expect(parsePaste('Kemi Eze; kemi@okopay.com | Oko Pay, Lagos').people[0]).toMatchObject({ name: 'Kemi Eze; | Oko Pay', email: 'kemi@okopay.com', company: 'Lagos' });
+  });
+
   it('on a tie the order is tab, comma, semicolon, pipe', () => {
-    expect(parsePaste('Kemi Eze\tkemi@okopay.com\tOko Pay\nFemi Ade, femi@ledgerly.io, Ledgerly').people[0]).toMatchObject({ name: 'Kemi Eze', company: 'Oko Pay' });
+    expect(parsePaste('Kemi Eze\tkemi@okopay.com\tOko Pay\nFemi Ade, femi@ledgerly.io, Ledgerly').people.map((p) => [p.name, p.company])).toEqual([['Kemi Eze', 'Oko Pay'], ['Femi Ade', 'Ledgerly']]);
     expect(parsePaste('Kemi Eze, kemi@okopay.com, Oko Pay\nFemi Ade; femi@ledgerly.io; Ledgerly').people[0]).toMatchObject({ name: 'Kemi Eze', company: 'Oko Pay' });
     expect(parsePaste('Kemi Eze; kemi@okopay.com; Oko Pay\nFemi Ade | femi@ledgerly.io | Ledgerly').people[0]).toMatchObject({ name: 'Kemi Eze', company: 'Oko Pay' });
   });

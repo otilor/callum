@@ -252,8 +252,8 @@ describe('ApolloSource.enrich against a local Apollo-shaped server (real fetch)'
   it.each([
     [401, 'bad_key', "Apollo didn't accept the API key. Check it in Your Callum."],
     [403, 'not_allowed', "This Apollo key can't look up people. Check its permissions in Apollo."],
-    [422, 'bad_search', "Apollo couldn't understand that search. Try fewer words."],
-    [429, 'rate_limited', "Apollo's hourly search limit is reached. Try again in an hour."],
+    [422, 'bad_search', "Apollo couldn't look up the people you chose. Search again and pick them from the new results."],
+    [429, 'rate_limited', "Apollo's lookup limit is reached. Try again in an hour."],
     [500, 'failed', 'Apollo lookup failed. Try again in a minute.'],
   ] as const)('maps status %i to a plain sentence in lookup words, never showing the key', async (status, code, message) => {
     respond = () => ({ status, body: { error: 'bad key super-secret-key' } });
@@ -290,6 +290,15 @@ describe('ApolloSource.enrich against a local Apollo-shaped server (real fetch)'
     expect(JSON.parse(seen[0]!.body)).toEqual({ details: [{ id: 'a' }, { id: 'b' }] });
     expect(await apollo().enrich(['', '   '])).toEqual({ people: [], creditsUsed: 0 });
     expect(seen).toHaveLength(1);
+  });
+
+  it('throws an ApolloError, not a TypeError, for an id that is not text', async () => {
+    for (const bad of [[null], [42], ['a', undefined], [{ id: 'a' }]] as unknown as string[][]) {
+      const err = await apollo().enrich(bad).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ApolloError);
+      expect(err).toMatchObject({ code: 'bad_search', message: "Apollo couldn't look up the people you chose. Search again and pick them from the new results." });
+    }
+    expect(seen).toEqual([]);
   });
 
   it('keeps the search wording for search failures', async () => {

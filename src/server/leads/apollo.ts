@@ -38,6 +38,8 @@ const MESSAGES: Record<ApolloErrorCode, string> = {
 /** The same failures, as they read when looking up the people the user kept. */
 const ENRICH_MESSAGES: Record<ApolloErrorCode, string> = {
   ...MESSAGES,
+  bad_search: "Apollo couldn't look up the people you chose. Search again and pick them from the new results.",
+  rate_limited: "Apollo's lookup limit is reached. Try again in an hour.",
   not_allowed: "This Apollo key can't look up people. Check its permissions in Apollo.",
   failed: 'Apollo lookup failed. Try again in a minute.',
 };
@@ -137,6 +139,8 @@ export class ApolloSource {
 
   /** Looks the chosen people up by their Apollo id, ten at a time. Spends credits. */
   async enrich(ids: string[]): Promise<ApolloEnrichment> {
+    // An id that is not text can never be looked up; say so in words rather than failing with a TypeError.
+    if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) throw new ApolloError('bad_search', null, 'enrich');
     const unique = [...new Set(ids.map((id) => id.trim()).filter((id) => id !== ''))];
     const result: ApolloEnrichment = { people: [], creditsUsed: 0 };
     for (let i = 0; i < unique.length; i += ENRICH_BATCH) {
