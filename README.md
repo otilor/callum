@@ -6,7 +6,7 @@ It reaches people by email, LinkedIn and X, one channel per person, inside worki
 
 Callum is open source and runs on your own computer. Your people, your messages and your channel logins stay on your machine, in one folder.
 
-<img src="docs/img/morning.png" alt="Callum on a weekday morning: the river of people and three replies waiting" width="900">
+<img src="docs/img/morning.png" alt="Callum on a weekday morning: the river of people and four replies waiting" width="900">
 
 <img src="docs/img/reply.png" alt="A reply with Callum's draft, ready to send or edit" width="900">
 
@@ -139,8 +139,15 @@ npm run dev:server      # the server in demo mode, restarting on changes
 npm run dev:web         # the web app with hot reload, talking to the server on 4600
 npm run typecheck
 npm test
-npm run e2e             # end-to-end tests in a real browser, against demo mode
+npm run build && npm run build:server
+npm run e2e             # nine journeys in a real browser, against the built server in demo mode
+npm run test:real       # Callum in normal mode against a real mail server (needs Java; see below)
+npm run screenshots     # the pictures at the top of this page, from the demo
 ```
+
+`npm run e2e` starts the built server on a throwaway data folder for each journey: first run, day one, a morning with replies, a person's page, adding people, two projects, taking a break and wrapping up, a server with a password, and a phone. Each one checks the server's own state through `/api` and its database, not only the words on the page.
+
+`npm run test:real` starts [GreenMail](https://greenmail-mail-test.github.io/greenmail/) (a real SMTP and IMAP server; it downloads the jar once into `.cache`) and connects Callum to it through the same "another provider" form a person uses. It checks that each hello lands in the right mailbox with the right From, the opt-out line and a `List-Unsubscribe` header; that a reply is picked up, shown on the dock and answered in the same thread; that "please stop emailing me" and the unsubscribe link stop a person for good; and that two projects share the daily email limit. Callum's clock is set by the script, because a first hello never goes out on the day Start is pressed and follow-ups come days later. The mail itself is real. Plain connections are only accepted for `localhost`.
 
 How the code is laid out:
 
