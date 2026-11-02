@@ -1,0 +1,12 @@
+{
+  "name": "Callum",
+  "short_name": "Callum",
+  "description": "Callum reaches out for you and taps you when someone wants to talk.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
