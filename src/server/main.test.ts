@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, statSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,9 +13,9 @@ afterEach(async () => {
 
 async function start(over: Partial<Parameters<typeof startServer>[0]> = {}) {
   const lines: string[] = [];
-  const dataDir = join(mkdtempSync(join(tmpdir(), 'callum-boot-')), 'data');
+  const dataDir = over.dataDir ?? join(mkdtempSync(join(tmpdir(), 'callum-boot-')), 'data');
   const server = await startServer({
-    dataDir, host: '127.0.0.1', port: 0, password: null, webDir: null, env: { CALLUM_DEMO: '1' }, log: (l) => lines.push(l), ...over,
+    host: '127.0.0.1', port: 0, password: null, webDir: null, env: { CALLUM_DEMO: '1' }, log: (l) => lines.push(l), ...over, dataDir,
   });
   running.push(server);
   return { server, lines, dataDir };
@@ -24,9 +24,9 @@ async function start(over: Partial<Parameters<typeof startServer>[0]> = {}) {
 describe('startServer', () => {
   it('serves the app on a free port, says where, and stops cleanly', async () => {
     const { server, lines, dataDir } = await start();
-    expect(server.url).toMatch(/^http:\/\/localhost:\d+$/);
-    expect(server.url).not.toBe('http://localhost:0');
-    expect(lines).toEqual([`Callum is running at ${server.url}`]);
+    expect(server.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(server.url).not.toBe('http://127.0.0.1:0');
+    expect(lines).toEqual([`Callum is running at ${server.url.replace('127.0.0.1', 'localhost')}`]);
 
     const res = await fetch(`${server.url}/api/state`);
     expect(res.status).toBe(200);
@@ -80,6 +80,28 @@ describe('startServer', () => {
     });
     running.push(again);
     expect(again.ctx.repo.getSettings().timezone).toBe('Europe/London');
+  });
+
+  it('will not open to other computers without a password', async () => {
+    const dataDir = join(mkdtempSync(join(tmpdir(), 'callum-boot-')), 'data');
+    for (const host of ['0.0.0.0', '::', '192.168.1.20']) {
+      await expect(startServer({ dataDir, host, port: 0, password: null, webDir: null, env: {}, log: () => undefined })).rejects.toThrow(
+        'Callum needs CALLUM_PASSWORD to be reached from other computers.',
+      );
+    }
+    expect(existsSync(dataDir)).toBe(false);
+  });
+
+  it('opens to other computers when there is a password', async () => {
+    const { server } = await start({ host: '0.0.0.0', password: 'open sesame' });
+    expect(server.url).toMatch(/^http:\/\/localhost:\d+$/);
+  });
+
+  it('tightens a data folder that was left open', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'callum-boot-'));
+    chmodSync(dataDir, 0o755);
+    await start({ dataDir });
+    expect(statSync(dataDir).mode & 0o777).toBe(0o700);
   });
 
   it('fails in words when the port is taken, and leaves nothing open', async () => {

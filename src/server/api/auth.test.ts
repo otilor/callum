@@ -71,12 +71,41 @@ describe('access gate', () => {
     expect((await second.app.request('/api/secret', { headers: { cookie } })).status).toBe(401);
   });
 
-  it('signs out by clearing the cookie', async () => {
+  it('signs out by clearing the cookie, and the old cookie stops working', async () => {
     const { app, login, cookieOf } = setup('open sesame');
     const cookie = cookieOf(await login('open sesame'));
     const res = await app.request('/api/logout', { method: 'POST', headers: { cookie } });
     expect(res.status).toBe(200);
     expect(res.headers.get('set-cookie')).toMatch(/Max-Age=0|Expires=/i);
+    expect((await app.request('/api/secret', { headers: { cookie } })).status).toBe(401);
+  });
+
+  it('gives every sign-in its own random token', async () => {
+    const { login, cookieOf } = setup('open sesame');
+    const a = cookieOf(await login('open sesame'));
+    const b = cookieOf(await login('open sesame'));
+    expect(a).not.toBe(b);
+    expect(a.split('=')[1]).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('marks the cookie Secure over https, directly or through a proxy, and not over http', async () => {
+    const { app, from } = setup('open sesame');
+    const body = JSON.stringify({ password: 'open sesame' });
+    const secure = async (url: string, headers: Record<string, string> = {}) =>
+      /;\s*Secure/i.test((await app.request(url, { method: 'POST', body, headers }, from('10.1.1.1'))).headers.get('set-cookie') ?? '');
+    expect(await secure('http://localhost/api/login')).toBe(false);
+    expect(await secure('https://callum.example.com/api/login')).toBe(true);
+    expect(await secure('http://localhost/api/login', { 'x-forwarded-proto': 'https' })).toBe(true);
+  });
+
+  it('turns everyone away for a minute after 30 wrong passwords from anywhere', async () => {
+    const { login, clock } = setup('open sesame');
+    for (let i = 0; i < 30; i++) expect((await login('wrong', `10.0.${Math.floor(i / 4)}.${i % 4}`)).status).toBe(401);
+    const locked = await login('open sesame', '10.9.9.9');
+    expect(locked.status).toBe(429);
+    expect(((await locked.json()) as { retryAfter: number }).retryAfter).toBe(60);
+    clock.advance(60_000);
+    expect((await login('open sesame', '10.9.9.9')).status).toBe(200);
   });
 
   it('locks an address out for a minute after five wrong tries', async () => {

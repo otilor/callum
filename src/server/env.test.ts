@@ -37,4 +37,10 @@ describe('readEnv', () => {
     expect(readEnv({ PORT: '70000' }).port).toBe(4600);
     expect(readEnv({ PORT: '0' }).port).toBe(0);
   });
+
+  it('treats an empty value as unset', () => {
+    expect(
+      readEnv({ PORT: '', CALLUM_DATA_DIR: '', CALLUM_DEMO: '', CALLUM_PASSWORD: '', ANTHROPIC_API_KEY: '', CALLUM_MODEL: '', APOLLO_API_KEY: '', TZ_DEFAULT: '' }),
+    ).toEqual(readEnv({}));
+  });
 });

@@ -1,10 +1,11 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createApp } from './api/app.js';
+import { FEATURE_ROUTES } from './api/features.js';
 import { createCtx, type Ctx } from './context.js';
 import { openDb } from './db/db.js';
 import { readEnv } from './env.js';
@@ -62,16 +63,26 @@ function setDefaultTimezone(ctx: Ctx, preferred: string | null): void {
   if (zone) ctx.repo.updateSettings({ timezone: zone });
 }
 
+export function isLoopback(host: string): boolean {
+  return host === 'localhost' || host === '::1' || host === '[::1]' || /^127\./.test(host);
+}
+
+/** The address to open. A loopback host is given as its number so a name that resolves elsewhere cannot get in the way. */
 function addressOf(host: string, port: number): string {
-  const shown = host === '127.0.0.1' || host === '0.0.0.0' || host === '::' || host === '::1' ? 'localhost' : host.includes(':') ? `[${host}]` : host;
-  return `http://${shown}:${port}`;
+  if (isLoopback(host)) return `http://${host.includes(':') ? '[::1]' : host === 'localhost' ? '127.0.0.1' : host}:${port}`;
+  if (host === '0.0.0.0' || host === '::') return `http://localhost:${port}`;
+  return `http://${host.includes(':') ? `[${host}]` : host}:${port}`;
 }
 
 /** Opens the database, starts looking for work and answers requests. Everything it opened is closed again by `close`. */
 export async function startServer(opts: StartOptions): Promise<RunningServer> {
+  if (opts.password === null && !isLoopback(opts.host)) {
+    throw new Error('Callum needs CALLUM_PASSWORD to be reached from other computers.');
+  }
   const env = opts.env ?? process.env;
   const log = opts.log ?? ((line: string) => console.log(line));
   mkdirSync(opts.dataDir, { recursive: true, mode: 0o700 });
+  chmodSync(opts.dataDir, 0o700);
   const db = openDb(join(opts.dataDir, 'callum.db'));
   const ctx = createCtx({ db, demo: readEnv(env).demo, dataDir: opts.dataDir, env });
   setDefaultTimezone(ctx, readEnv(env).timezone);
@@ -97,7 +108,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
     db.close();
   };
   try {
-    const app = createApp(ctx, { password: opts.password, webDir: opts.webDir, runner: tracked });
+    const app = createApp(ctx, { password: opts.password, webDir: opts.webDir, runner: tracked, extraRoutes: FEATURE_ROUTES.map((build) => build(ctx)) });
     server = serve({ fetch: app.fetch, hostname: opts.host, port: opts.port }) as Server;
     await new Promise<void>((resolveListening, reject) => {
       server.once('listening', resolveListening);
@@ -109,7 +120,7 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   }
 
   const url = addressOf(opts.host, (server.address() as AddressInfo).port);
-  log(`Callum is running at ${url}`);
+  log(`Callum is running at ${url.replace('127.0.0.1', 'localhost')}`);
 
   let closing: Promise<void> | null = null;
   return {

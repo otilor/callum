@@ -666,18 +666,125 @@ describe('the password', () => {
 });
 
 describe('requests from other sites', () => {
-  it('refuses a post that comes from another origin when there is no password', async () => {
+  const rebind = { origin: 'http://evil.example:4600', host: 'evil.example:4600' };
+
+  it('refuses a post that comes from another origin', async () => {
     const h = setup();
     const res = await h.post('/api/settings', { senderName: 'Mallory' }, { origin: 'https://evil.example', host: 'localhost:4600' });
     expect(res.status).toBe(403);
     expect(h.ctx.repo.getSettings().senderName).toBe('Ada Obi');
   });
 
-  it('takes a post from its own page, and a get from anywhere', async () => {
+  it('refuses a read from another origin, with or without a password', async () => {
+    for (const password of [null, 'open sesame']) {
+      const h = setup({ password });
+      const res = await h.get('/api/sample?tone=warm', { origin: 'https://evil.example', host: 'localhost:4600' });
+      expect(res.status).toBe(403);
+      expect((await h.get('/api/state', { 'sec-fetch-site': 'cross-site', host: 'localhost:4600' })).status).toBe(403);
+    }
+  });
+
+  it('refuses a name pointed at this computer (DNS rebinding), for any method', async () => {
     const h = setup();
-    const own = await h.post('/api/settings', { senderName: 'Ada' }, { origin: 'http://localhost:4600', host: 'localhost:4600' });
-    expect(own.status).toBe(200);
-    expect((await h.get('/api/state', { origin: 'https://evil.example', host: 'localhost:4600' })).status).toBe(200);
+    expect((await h.post('/api/settings', { senderName: 'Mallory' }, rebind)).status).toBe(403);
+    expect((await h.get('/api/state', rebind)).status).toBe(403);
+    expect((await h.get('/api/state', { host: 'evil.example:4600' })).status).toBe(403);
+    expect(h.ctx.repo.getSettings().senderName).toBe('Ada Obi');
+  });
+
+  it('takes the web app and Electron on this computer, GET and POST', async () => {
+    const h = setup();
+    for (const [host, origin] of [['localhost:4600', 'http://localhost:4600'], ['127.0.0.1:51234', 'http://127.0.0.1:51234'], ['[::1]:4600', 'http://[::1]:4600']] as const) {
+      expect((await h.post('/api/settings', { senderName: 'Ada' }, { origin, host })).status).toBe(200);
+      expect((await h.get('/api/state', { origin, host, 'sec-fetch-site': 'same-origin' })).status).toBe(200);
+    }
+    expect((await h.get('/api/state', { host: 'localhost:4600', 'sec-fetch-site': 'none' })).status).toBe(200);
+  });
+
+  it('refuses a null origin', async () => {
+    const h = setup();
+    expect((await h.post('/api/settings', {}, { origin: 'null', host: 'localhost:4600' })).status).toBe(403);
+  });
+
+  it('with a password, takes any host name that matches the page, and the proxy name when Host was rewritten', async () => {
+    const h = setup({ password: 'open sesame' });
+    const login = await h.post('/api/login', { password: 'open sesame' }, { origin: 'https://callum.example.com', host: 'callum.example.com' });
+    expect(login.status).toBe(200);
+    const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0]!;
+    const proxied = await h.get('/api/state', { cookie, origin: 'https://callum.example.com', host: 'localhost:4600', 'x-forwarded-host': 'callum.example.com' });
+    expect(proxied.status).toBe(200);
+    expect((await h.get('/api/state', { cookie, origin: 'https://evil.example', host: 'callum.example.com' })).status).toBe(403);
+  });
+
+  it('does not let a no-password Callum trust a forwarded host', async () => {
+    const h = setup();
+    const res = await h.get('/api/state', { origin: 'https://callum.example.com', host: 'localhost:4600', 'x-forwarded-host': 'callum.example.com' });
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('body size', () => {
+  it('refuses a body over 10 MB with a 413 in words', async () => {
+    const h = setup();
+    await h.post('/api/projects', { offer: 'Offer', name: 'One' });
+    const big = JSON.stringify({ csv: 'a'.repeat(10 * 1024 * 1024 + 1) });
+    const res = await h.app.request('/api/leads/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: big });
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: "That's too large for Callum. Try a smaller file." });
+  });
+
+  it('refuses a body over the limit even when it does not say how long it is', async () => {
+    const h = setup();
+    const chunk = new Uint8Array(1024 * 1024).fill(97);
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent++ < 11) controller.enqueue(chunk);
+        else controller.close();
+      },
+    });
+    const res = await h.app.request('/api/settings', { method: 'POST', headers: { 'content-type': 'application/json' }, body, duplex: 'half' } as RequestInit);
+    expect(res.status).toBe(413);
+  });
+
+  it('takes a large CSV that is under the limit', async () => {
+    const h = setup();
+    await h.post('/api/projects', { offer: 'Offer', name: 'One' });
+    const csv = `Name,Email\n${Array.from({ length: 5000 }, (_, i) => `Person${i} Test,p${i}@example${i}.com`).join('\n')}\n`;
+    const res = await h.post('/api/leads/import', { csv });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { added: unknown[] }).added).toHaveLength(5000);
+  });
+
+  it('keeps the sign-in to 16 KB', async () => {
+    const h = setup({ password: 'open sesame' });
+    const res = await h.post('/api/login', { password: 'x'.repeat(17 * 1024) });
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: "That's too large for Callum. Try a smaller file." });
+    expect((await h.post('/api/login', { password: 'open sesame' })).status).toBe(200);
+  });
+});
+
+describe('what an action and a search must carry', () => {
+  it('needs an action with arguments', async () => {
+    const h = setup();
+    await h.post('/api/projects', { offer: 'Offer', name: 'One' });
+    for (const action of [{ kind: 'pause_channel' }, { kind: 'pause_channel', args: 'linkedin' }, { kind: 'pause_channel', args: [1] }, 'pause', null]) {
+      const res = await h.post('/api/ask/act', { action });
+      expect(res.status).toBe(422);
+    }
+  });
+
+  it('keeps a search to between 1 and 200 people', async () => {
+    const h = setup();
+    await h.post('/api/projects', { offer: 'Offer', name: 'One' });
+    for (const count of [0, -3, 201, 'many', 1.5]) {
+      const res = await h.post('/api/leads/search', { query: 'cfo', count });
+      expect(res.status).toBe(422);
+      expect(((await res.json()) as { error: string }).error).toBe('Pick between 1 and 200 people to look for.');
+    }
+    // A good count gets past the check and reaches the Apollo question.
+    expect(((await (await h.post('/api/leads/search', { query: 'cfo', count: 200 })).json()) as { error: string }).error).toContain('Callum needs a list');
   });
 });
 

@@ -7,7 +7,7 @@ import { UserError } from '../services/errors.js';
 
 export const NEEDS_A_LIST = 'Callum needs a list for that. Bring a CSV or a LinkedIn search link.';
 export const DEFAULT_FIND = 25;
-export const MAX_FIND = 100;
+export const MAX_FIND = 200;
 const LINKEDIN_RESULTS = 100;
 
 export interface Imported { added: Person[]; skipped: Skipped[] }

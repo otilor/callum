@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Correction, Settings } from '../../shared/types.js';
 import { ConnectError } from '../channels/types.js';
@@ -18,7 +19,7 @@ import { createAuth } from './auth.js';
 import {
   channelParam, idParam, needText, optBool, optionalProjectId, optText, projectIdOf, readBody, toneOf, validTimezone, wholeNumber,
 } from './http.js';
-import { importLeads, searchLeads } from './leads.js';
+import { importLeads, MAX_FIND, searchLeads } from './leads.js';
 import { eventStream } from './sse.js';
 import { staticHandler } from './static.js';
 
@@ -28,18 +29,23 @@ export interface AppOptions {
   webDir: string | null;
   /** Asked to look for work after every change, so a send that is due goes out promptly. */
   runner?: { tick(): Promise<unknown> };
-  /** Route modules from other parts of Callum; their paths are relative to /api. */
+  /** Route modules from other parts of Callum (see features.ts); their paths are relative to /api. */
   extraRoutes?: Hono[];
   /** Where a failure nobody expected is reported. Defaults to the console. */
   onError?: (err: unknown) => void;
 }
 
-/**
- * Route modules of the other parts of Callum, each `<feature>Routes(ctx)` from `./routes/<feature>.js`.
- * Add one line per module here; their paths are relative to /api.
- */
-function featureRoutes(_ctx: Ctx): Hono[] {
-  return [];
+export const TOO_LARGE = "That's too large for Callum. Try a smaller file.";
+export const BODY_LIMIT = 10 * 1024 * 1024;
+export const LOGIN_BODY_LIMIT = 16 * 1024;
+const LOCAL_NAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+function hostnameOf(host: string): string {
+  try {
+    return new URL(`http://${host}`).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
 }
 
 export const SOMETHING_WENT_WRONG = 'Something went wrong. Callum kept everything as it was.';
@@ -59,21 +65,31 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
 
   // ---- guards ----------------------------------------------------------------------------------------
 
-  // Without a password Callum is open to anything on this computer, so a page on another site must not be able
-  // to make the browser post to it. With one, the SameSite cookie already does that.
+  // A page on another site must not be able to read from Callum or make the browser post to it, and without a
+  // password a hostile name pointed at this computer (DNS rebinding) must not reach it either.
   app.use('/api/*', async (c, next) => {
+    const refuse = () => c.json({ error: 'Callum only takes requests from its own page.' }, 403);
+    if (c.req.header('sec-fetch-site') === 'cross-site') return refuse();
+    const host = c.req.header('host') ?? new URL(c.req.url).host;
     const origin = c.req.header('origin');
-    if (opts.password === null && origin && !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
-      let sameSite = false;
+    if (origin !== undefined) {
+      // Behind a proxy that rewrites Host, the page's own address arrives as X-Forwarded-Host (password mode only).
+      const own = new Set([host]);
+      const forwarded = opts.password !== null ? c.req.header('x-forwarded-host') : undefined;
+      if (forwarded) own.add(forwarded);
+      let originHost: string | null = null;
       try {
-        sameSite = new URL(origin).host === c.req.header('host');
+        originHost = new URL(origin).host;
       } catch {
-        sameSite = false;
+        originHost = null;
       }
-      if (!sameSite) return c.json({ error: 'Callum only takes requests from its own page.' }, 403);
+      if (originHost === null || !own.has(originHost)) return refuse();
     }
+    if (opts.password === null && !LOCAL_NAMES.has(hostnameOf(host))) return refuse();
     return next();
   });
+  app.use('/api/login', bodyLimit({ maxSize: LOGIN_BODY_LIMIT, onError: (c) => c.json({ error: TOO_LARGE }, 413) }));
+  app.use('/api/*', bodyLimit({ maxSize: BODY_LIMIT, onError: (c) => c.json({ error: TOO_LARGE }, 413) }));
   app.use('/api/*', auth.gate);
   // Every change wakes the runner, so a send that is due now does not wait for the next 5 seconds.
   app.use('/api/*', async (c, next) => {
@@ -224,7 +240,7 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
     const b = await readBody(c);
     const query = needText(b, 'query', 'a few words about who to find');
     const count = b.count === undefined ? undefined : wholeNumber(b.count);
-    if (count === null) throw new UserError('Pick how many people to look for.');
+    if (count === null || (count !== undefined && (count < 1 || count > MAX_FIND))) throw new UserError(`Pick between 1 and ${MAX_FIND} people to look for.`);
     return c.json(await searchLeads(ctx, projectIdOf(ctx, b.projectId), query, count));
   });
   api.post('/start', async (c) => c.json(await onboarding.start(ctx, projectIdOf(ctx, (await readBody(c)).projectId))));
@@ -276,7 +292,10 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
   });
   api.post('/ask/act', async (c) => {
     const b = await readBody(c);
-    if (b.action === null || typeof b.action !== 'object' || Array.isArray(b.action)) throw new UserError('Callum needs an action for that.');
+    const action = b.action as { args?: unknown } | null | undefined;
+    if (!action || typeof action !== 'object' || Array.isArray(action) || !action.args || typeof action.args !== 'object' || Array.isArray(action.args)) {
+      throw new UserError('Callum needs an action for that.');
+    }
     return c.json(await ask.act(ctx, projectIdOf(ctx, b.projectId), b.action as Parameters<typeof ask.act>[2]));
   });
 
@@ -325,7 +344,7 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
     return c.json((await seedScene(ctx, scene)) ?? { ok: true });
   });
 
-  for (const routes of [...featureRoutes(ctx), ...(opts.extraRoutes ?? [])]) api.route('/', routes);
+  for (const routes of (opts.extraRoutes ?? [])) api.route('/', routes);
   app.route('/api', api);
   app.all('/api/*', (c) => c.json({ error: NOT_FOUND }, 404));
   if (opts.webDir !== null) app.get('*', staticHandler(opts.webDir));
