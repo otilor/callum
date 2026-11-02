@@ -31,4 +31,17 @@ Notes:
 - On Linux as root (a container) Electron refuses to start without `--no-sandbox`: `npx electron . --no-sandbox`.
 - `CALLUM_DEMO=1` works in the desktop app too. `CALLUM_USER_DATA=<folder>` keeps its data somewhere else, which the end-to-end test uses.
 - The tests: `npm test` covers the tray menu, notifications, open at login and the LinkedIn browser choice. `xvfb-run -a npx playwright test e2e/desktop.spec.ts` starts the real app (drop `xvfb-run -a` on a computer with a screen).
-- The builds are not signed, which is why macOS and Windows warn the first time. See the README.
+- The builds have no developer certificate, which is why macOS and Windows warn the first time (see the README). The macOS app is signed ad hoc, so Apple Silicon does not call it damaged; it still opens through right-click, Open.
+- Releases (tags `v*`, `.github/workflows/desktop.yml`) attach a dmg for Apple Silicon and one for Intel, a Windows installer, and an AppImage and a `.deb` for Linux.
+
+## What is where
+
+- `dist/web` is the built web app, `dist/server` the compiled server (`npm run build:server`, the same output server mode and Docker run), `dist/electron` the compiled shell, and `dist/preload` the preload script (CommonJS, because a sandboxed preload cannot be an ES module).
+- The shell loads the server from `dist/server` when it starts. `electron/server-api.ts` lists the little it uses, and `electron/server-api.test.ts` checks the real server still has those shapes.
+- `src/server/channels/browser.ts` picks the browser for LinkedIn; `electron/browser.ts` re-exports it.
+
+## Known limits
+
+- On Linux the AppImage needs the kernel's unprivileged user namespaces for Chromium's sandbox. Where they are switched off (some Ubuntu 24.04 setups, Docker, running as root), start it with `./Callum-*.AppImage --no-sandbox`, or install the `.deb`, which ships the setuid sandbox helper.
+- Closing the window only hides it, so reply notices come from the page itself while it lives; the shell notifies replies only if the window is gone, and always shows the 8:30 morning note.
+- The desktop app reads `ANTHROPIC_API_KEY` from its environment only until the key can be entered in Your Callum.

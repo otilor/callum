@@ -3,10 +3,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, session, shell, Tray, type MenuItemConstructorOptions } from 'electron';
-import { startServer, type RunningServer } from '../src/server/main.js';
 import { getOpenAtLogin, HIDDEN_FLAG, setOpenAtLogin, type LoginDeps } from './login.js';
 import { createNotifier, type Notifier } from './notify.js';
+import type { DesktopServer, ServerModule, TimeApi } from './server-api.js';
 import { createTray, nextMondayMorning, type CallumTray, type TrayStatus } from './tray.js';
 
 app.setName('Callum');
@@ -15,11 +16,13 @@ const userDataOverride = process.env.CALLUM_USER_DATA?.trim();
 if (userDataOverride) app.setPath('userData', resolve(userDataOverride));
 
 const mac = process.platform === 'darwin';
-const e2e = process.env.CALLUM_E2E === '1';
+// The test hooks exist only in a build that is run from source, never in an installed app.
+const e2e = !app.isPackaged && process.env.CALLUM_E2E === '1';
 // Both the unpacked project and the packaged archive have this shape: <root>/dist/electron/main.js.
 const root = resolve(import.meta.dirname, '../..');
 
-let server: RunningServer | null = null;
+let server: DesktopServer | null = null;
+let time: TimeApi | null = null;
 let win: BrowserWindow | null = null;
 let tray: CallumTray | null = null;
 let notifier: Notifier | null = null;
@@ -73,6 +76,18 @@ function showWindow(): void {
   win.focus();
 }
 
+let appOrigin = '';
+
+/** Origins are compared parsed: a permission check hands over `http://localhost:1234/` and a page `http://localhost:1234`. */
+function isAppOrigin(address: string | undefined): boolean {
+  if (!address || !appOrigin) return false;
+  try {
+    return new URL(address).origin === appOrigin;
+  } catch {
+    return false;
+  }
+}
+
 /** Only web and mail addresses leave the app, and they leave for the person's own browser or mail program. */
 function openOutside(url: string): void {
   try {
@@ -92,7 +107,7 @@ function noteBackground(): void {
 }
 
 function createWindow(url: string, startHidden: boolean): BrowserWindow {
-  const appOrigin = new URL(url).origin;
+  appOrigin = new URL(url).origin;
   const window = new BrowserWindow({
     width: 1280,
     height: 840,
@@ -119,11 +134,22 @@ function createWindow(url: string, startHidden: boolean): BrowserWindow {
     openOutside(target);
     return { action: 'deny' };
   });
+  // Nothing but Callum's own pages loads in the window, whether by a click, a redirect or a frame.
   window.webContents.on('will-navigate', (event, target) => {
-    if (new URL(target).origin !== appOrigin) {
+    if (!isAppOrigin(target)) {
       event.preventDefault();
       openOutside(target);
     }
+  });
+  window.webContents.on('will-redirect', (event, target) => {
+    if (!isAppOrigin(target)) event.preventDefault();
+  });
+  window.webContents.on('will-frame-navigate', (event) => {
+    if (!isAppOrigin(event.url)) event.preventDefault();
+  });
+  // If the page crashes, bring it back: Callum itself keeps running either way.
+  window.webContents.on('render-process-gone', (_event, details) => {
+    if (details.reason !== 'clean-exit' && !window.isDestroyed()) window.webContents.reload();
   });
 
   if (mac) {
@@ -161,7 +187,12 @@ async function call(path: string, body?: unknown): Promise<unknown> {
   return res.json();
 }
 
-function readTrayStatus(running: RunningServer): { status: TrayStatus; timezone: string } {
+function serverTime(): TimeApi {
+  if (!time) throw new Error('Callum is not running yet.');
+  return time;
+}
+
+function readTrayStatus(running: DesktopServer): { status: TrayStatus; timezone: string } {
   const { repo } = running.ctx;
   const settings = repo.getSettings();
   const linkedin = repo.getChannel('linkedin');
@@ -180,7 +211,7 @@ function tellAboutTrouble(what: string, err: unknown): void {
   if (Notification.isSupported()) new Notification({ title: 'Callum', body: `Callum could not ${what}. Open Callum and try again.` }).show();
 }
 
-function startTray(running: RunningServer): void {
+function startTray(running: DesktopServer): void {
   const refresh = () => tray?.refresh();
   tray = createTray(
     { Tray, Menu, nativeImage },
@@ -192,7 +223,7 @@ function startTray(running: RunningServer): void {
       actions: {
         open: showWindow,
         takeBreak: () => {
-          const until = nextMondayMorning(new Date(), running.ctx.repo.getSettings().timezone).toISOString();
+          const until = nextMondayMorning(new Date(), running.ctx.repo.getSettings().timezone, serverTime()).toISOString();
           call('/api/pause', { until }).then(refresh, (err: unknown) => tellAboutTrouble('take a break', err));
         },
         resume: () => {
@@ -209,10 +240,11 @@ function startTray(running: RunningServer): void {
 
 // ---- notifications from here ---------------------------------------------------------------------------------
 
-function startNotifier(running: RunningServer): void {
+function startNotifier(running: DesktopServer): void {
   const { repo, bus } = running.ctx;
   notifier = createNotifier({
     bus,
+    time: serverTime(),
     waitingPeople: () => repo.listPeople({ status: ['waiting'] }).map((p) => ({ id: p.id, firstName: p.firstName })),
     settings: () => {
       const s = repo.getSettings();
@@ -243,23 +275,26 @@ function startNotifier(running: RunningServer): void {
 // ---- what the page may ask of this program -------------------------------------------------------------------
 
 function loginDeps(): LoginDeps {
-  return { app, platform: process.platform, home: homedir(), execPath: process.execPath, env: process.env };
+  // Run from source (`electron .`), the computer has to be told the app folder as well as the program.
+  return { app, platform: process.platform, home: homedir(), execPath: process.execPath, ...(app.isPackaged ? {} : { execArgs: [app.getAppPath()] }), env: process.env };
 }
 
-function startIpc(running: RunningServer): void {
-  const fromOurWindow = (sender: Electron.WebContents) => !!win && !win.isDestroyed() && sender === win.webContents;
+function startIpc(running: DesktopServer): void {
+  /** Only the app's own window, showing the app's own page, may ask for anything. */
+  const fromOurWindow = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) =>
+    !!win && !win.isDestroyed() && event.sender === win.webContents && isAppOrigin(event.senderFrame?.url);
   ipcMain.on('callum:version', (event) => {
-    event.returnValue = appVersion();
+    event.returnValue = fromOurWindow(event) ? appVersion() : '';
   });
   ipcMain.on('callum:platform', (event) => {
-    event.returnValue = process.platform;
+    event.returnValue = fromOurWindow(event) ? process.platform : '';
   });
   ipcMain.handle('callum:open-at-login:get', async (event) => {
-    if (!fromOurWindow(event.sender)) throw new Error('Not allowed.');
+    if (!fromOurWindow(event)) throw new Error('Not allowed.');
     return getOpenAtLogin(loginDeps());
   });
   ipcMain.handle('callum:open-at-login:set', async (event, openAtLogin: unknown) => {
-    if (!fromOurWindow(event.sender)) throw new Error('Not allowed.');
+    if (!fromOurWindow(event)) throw new Error('Not allowed.');
     const actual = await setOpenAtLogin(loginDeps(), openAtLogin === true);
     running.ctx.repo.updateSettings({ openAtLogin: actual });
     running.ctx.bus.emit('settings');
@@ -268,8 +303,12 @@ function startIpc(running: RunningServer): void {
 
   if (e2e) {
     const items = () => (tray?.template() ?? []).filter((i): i is MenuItemConstructorOptions & { label: string } => i.type !== 'separator' && !!i.label);
-    ipcMain.handle('callum:test:trayItems', () => items().map((i) => i.label));
-    ipcMain.handle('callum:test:clickTrayItem', (_event, label: string) => {
+    ipcMain.handle('callum:test:trayItems', (event) => {
+      if (!fromOurWindow(event)) throw new Error('Not allowed.');
+      return items().map((i) => i.label);
+    });
+    ipcMain.handle('callum:test:clickTrayItem', (event, label: string) => {
+      if (!fromOurWindow(event)) throw new Error('Not allowed.');
       const item = items().find((i) => i.label === label);
       if (!item?.click) return false;
       (item.click as () => void)();
@@ -280,18 +319,34 @@ function startIpc(running: RunningServer): void {
 
 // ---- leaving ---------------------------------------------------------------------------------------------------
 
-/** Stops the runner and the server before the program ends, so nothing is cut off half way through a send. */
+/** The longest Quit waits for the runner to finish what it is doing. */
+const CLOSE_TIMEOUT_MS = 15_000;
+
+/** Quit looks instant (window and tray go at once), then stops the runner so nothing is cut off half way through a send. */
 async function shutDown(): Promise<void> {
   if (stopping) return;
   stopping = true;
   for (const timer of timers) clearInterval(timer);
   notifier?.stop();
+  if (win && !win.isDestroyed()) win.hide();
+  tray?.destroy();
+  let timeout: NodeJS.Timeout | undefined;
   try {
-    await server?.close();
+    if (server) {
+      await Promise.race([
+        server.close(),
+        new Promise<void>((resolve) => {
+          timeout = setTimeout(() => {
+            console.error(`[callum] still stopping after ${CLOSE_TIMEOUT_MS / 1000} s, leaving anyway`);
+            resolve();
+          }, CLOSE_TIMEOUT_MS);
+        }),
+      ]);
+    }
   } catch (err) {
     console.error(`[callum] could not stop cleanly: ${err instanceof Error ? err.message : String(err)}`);
   } finally {
-    tray?.destroy();
+    clearTimeout(timeout);
     app.exit(0);
   }
 }
@@ -312,7 +367,13 @@ async function boot(): Promise<void> {
   if (!existsSync(webIndex)) console.error('[callum] dist/web is missing: run "npm run build" first.');
 
   try {
-    server = await startServer({
+    // The server is built to dist/server next to this folder; it is not bundled into the shell.
+    const [serverModule, timeModule] = await Promise.all([
+      import(pathToFileURL(join(root, 'dist/server/main.js')).href) as Promise<ServerModule>,
+      import(pathToFileURL(join(root, 'dist/server/engine/time.js')).href) as Promise<TimeApi>,
+    ]);
+    time = timeModule;
+    server = await serverModule.startServer({
       dataDir: join(app.getPath('userData'), 'data'),
       host: '127.0.0.1',
       port: 0,
@@ -326,15 +387,17 @@ async function boot(): Promise<void> {
     return;
   }
 
-  const origin = new URL(server.url).origin;
-  session.defaultSession.setPermissionRequestHandler((contents, permission, callback) => {
-    callback(permission === 'notifications' && contents.getURL().startsWith(origin));
+  appOrigin = new URL(server.url).origin;
+  // Only Callum's own page may ask: for notifications, and for copying to the clipboard (the Copy buttons).
+  const allowed = new Set(['notifications', 'clipboard-sanitized-write']);
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
+    callback(allowed.has(permission) && isAppOrigin(details.requestingUrl));
   });
-  session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin) => permission === 'notifications' && requestingOrigin === origin);
+  session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin) => allowed.has(permission) && isAppOrigin(requestingOrigin));
 
-  // The computer's own record of "open at login" wins; Callum's setting follows it (and is put back after a move or reinstall).
-  const saved = server.ctx.repo.getSettings().openAtLogin;
-  if (saved) await setOpenAtLogin(loginDeps(), true).catch(() => false);
+  // The computer's own record of "open at login" is the truth; Callum's setting follows it.
+  const actual = await getOpenAtLogin(loginDeps()).catch(() => false);
+  if (server.ctx.repo.getSettings().openAtLogin !== actual) server.ctx.repo.updateSettings({ openAtLogin: actual });
 
   startIpc(server);
   startTray(server);

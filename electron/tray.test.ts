@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import * as time from '../src/server/engine/time.js';
 import { menuTemplate, nextMondayMorning, statusLine, type TrayStatus } from './tray.js';
 
 const running: TrayStatus = { pauseState: 'running', pausedUntil: null, linkedinNeedsYou: false };
@@ -36,11 +37,11 @@ describe('statusLine', () => {
 describe('nextMondayMorning', () => {
   it('is 9:00 on the next Monday in the person\'s time zone', () => {
     // Monday 2 November 2026 10:00 in Lagos: the next Monday is 9 November.
-    expect(nextMondayMorning(new Date('2026-11-02T09:00:00Z'), 'Africa/Lagos').toISOString()).toBe('2026-11-09T08:00:00.000Z');
+    expect(nextMondayMorning(new Date('2026-11-02T09:00:00Z'), 'Africa/Lagos', time).toISOString()).toBe('2026-11-09T08:00:00.000Z');
     // Wednesday: the Monday after.
-    expect(nextMondayMorning(new Date('2026-11-04T09:00:00Z'), 'Africa/Lagos').toISOString()).toBe('2026-11-09T08:00:00.000Z');
+    expect(nextMondayMorning(new Date('2026-11-04T09:00:00Z'), 'Africa/Lagos', time).toISOString()).toBe('2026-11-09T08:00:00.000Z');
     // Sunday evening in New York is already Monday in UTC, but not there.
-    expect(nextMondayMorning(new Date('2026-11-09T02:00:00Z'), 'America/New_York').toISOString()).toBe('2026-11-09T14:00:00.000Z');
+    expect(nextMondayMorning(new Date('2026-11-09T02:00:00Z'), 'America/New_York', time).toISOString()).toBe('2026-11-09T14:00:00.000Z');
   });
 });
 

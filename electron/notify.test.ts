@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Bus } from '../src/server/bus.js';
+import * as time from '../src/server/engine/time.js';
 import { createNotifier, type NotifierDeps } from './notify.js';
 
 function setup(over: Partial<NotifierDeps> = {}) {
@@ -14,6 +15,7 @@ function setup(over: Partial<NotifierDeps> = {}) {
   const show = vi.fn();
   const deps: NotifierDeps = {
     bus,
+    time,
     waitingPeople: () => state.waiting,
     settings: () => ({ notifications: state.notifications, timezone: 'Africa/Lagos' }),
     brief: async () => ({ line: '3 people want to talk. 12 hellos went out yesterday.' }),

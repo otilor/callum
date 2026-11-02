@@ -53,6 +53,16 @@ test('gives the page the desktop bridge and nothing from Node', async () => {
   expect(bridge).toEqual({ desktop: true, version: expect.stringMatching(/^\d+\.\d+\.\d+/), platform: process.platform, node: 'undefined', process: 'undefined' });
 });
 
+test('lets the page show notifications and copy to the clipboard', async () => {
+  // Both used to be refused because the permission checks compared origins with a trailing slash.
+  expect(await page.evaluate(() => Notification.permission)).toBe('granted');
+  expect(await page.evaluate(() => Notification.requestPermission())).toBe('granted');
+  await page.bringToFront();
+  await expect(page.evaluate(() => navigator.clipboard.writeText('x'))).resolves.toBeUndefined();
+  // Other permissions stay refused.
+  expect(await page.evaluate(async () => (await navigator.permissions.query({ name: 'geolocation' })).state)).not.toBe('granted');
+});
+
 test('closing the window leaves Callum running', async () => {
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());
   await expect.poll(isVisible).toBe(false);

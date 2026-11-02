@@ -20,7 +20,7 @@
     "start": "node --disable-warning=ExperimentalWarning --import tsx src/server/main.ts",
     "dev:server": "CALLUM_DEMO=1 node --disable-warning=ExperimentalWarning --watch --import tsx src/server/main.ts",
     "demo": "CALLUM_DEMO=1 npm start",
-    "desktop:compile": "tsc -p tsconfig.electron.json && tsc -p tsconfig.preload.json && node scripts/preload-package.mjs",
+    "desktop:compile": "tsc -p tsconfig.server.json && tsc -p tsconfig.electron.json && tsc -p tsconfig.preload.json && node scripts/preload-package.mjs",
     "desktop:prepare": "npm run build && npm run desktop:compile",
     "desktop:dev": "npm run desktop:prepare && electron .",
     "desktop:build": "npm run desktop:prepare && electron-builder --dir",

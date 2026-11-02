@@ -2,7 +2,7 @@
 // `createTray` takes the few Electron pieces it needs.
 import { join } from 'node:path';
 import type { Menu, MenuItemConstructorOptions, NativeImage, Tray } from 'electron';
-import { localParts, zonedTime } from '../src/server/engine/time.js';
+import type { TimeApi } from './server-api.js';
 
 export interface TrayStatus {
   pauseState: 'running' | 'paused' | 'wrapped';
@@ -21,10 +21,10 @@ export interface TrayActions {
 const DAY_MS = 86_400_000;
 
 /** 9:00 on the next Monday (never today), in the person's time zone. */
-export function nextMondayMorning(now: Date, tz: string): Date {
-  const today = localParts(now, tz);
+export function nextMondayMorning(now: Date, tz: string, time: Pick<TimeApi, 'localParts' | 'zonedTime'>): Date {
+  const today = time.localParts(now, tz);
   const ahead = (1 - today.weekday + 7) % 7 || 7;
-  return zonedTime(tz, today.year, today.month, today.day + ahead, 9, 0);
+  return time.zonedTime(tz, today.year, today.month, today.day + ahead, 9, 0);
 }
 
 export function statusLine(status: TrayStatus, tz: string, now: Date): string {

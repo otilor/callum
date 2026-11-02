@@ -1,10 +1,10 @@
 // Notifications from the main process: the morning brief, and replies when no window is alive to show them.
 // (While the window exists, even hidden, the web app's own notifications cover replies.)
-import type { Scope } from '../src/shared/types.js';
-import { localParts } from '../src/server/engine/time.js';
+import type { TimeApi } from './server-api.js';
 
 export interface NotifierDeps {
-  bus: { on(fn: (scope: Scope) => void): () => void };
+  bus: { on(fn: (scope: string) => void): () => void };
+  time: Pick<TimeApi, 'localParts'>;
   /** People whose reply is waiting for an answer. */
   waitingPeople(): { id: number; firstName: string }[];
   settings(): { notifications: boolean | null; timezone: string };
@@ -42,7 +42,7 @@ export function createNotifier(deps: NotifierDeps): Notifier {
   async function tick(): Promise<void> {
     const { notifications, timezone } = deps.settings();
     if (notifications !== true) return;
-    const local = localParts(deps.now(), timezone);
+    const local = deps.time.localParts(deps.now(), timezone);
     const minutes = local.hour * 60 + local.minute;
     if (local.weekday === 0 || local.weekday === 6 || minutes < BRIEF_FROM || minutes > BRIEF_UNTIL) return;
     const day = `${local.year}-${String(local.month).padStart(2, '0')}-${String(local.day).padStart(2, '0')}`;

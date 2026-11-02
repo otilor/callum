@@ -2,7 +2,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium, type BrowserContext, type Locator, type Page } from 'playwright';
 import type { PersonLead } from '../../shared/types.js';
-import { findBrowser as findInstalledBrowser, installedChannel, type BrowserChoice } from '../../../electron/browser.js';
+import { findBrowser as findInstalledBrowser, installedChannel, type BrowserChoice } from './browser.js';
 import { systemClock, type Clock } from '../engine/clock.js';
 import {
   SELECTORS, clampNote, cleanName, hasWeeklyLimitText, headerNameCandidates, humanDelayMs, isBlockedStatus, isCheckpointUrl,
@@ -23,7 +23,7 @@ export interface LinkedinDeps {
   /** Show a window for sign-in (default true). Only tests without a display turn this off. */
   loginHeaded?: boolean;
   launch?: typeof chromium.launchPersistentContext;
-  /** Which browser to run. Default: an installed Chrome or Edge, else Playwright's Chromium (see electron/browser.ts). */
+  /** Which browser to run. Default: an installed Chrome or Edge, else Playwright's Chromium (see browser.ts). */
   findBrowser?: () => Promise<BrowserChoice | null>;
   /** Default https://www.linkedin.com. Local test sites override it. */
   baseUrl?: string;

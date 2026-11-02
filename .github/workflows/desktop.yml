@@ -1,5 +1,5 @@
-# The desktop app: tested on every push, and built for macOS, Windows and Linux when a version tag (v*) is pushed.
-# Kept apart from ci.yml so the two can change without touching each other.
+# The desktop app: tested on every push, and built for macOS (Apple Silicon and Intel), Windows and Linux when a
+# version tag (v*) is pushed. Kept apart from ci.yml so the two can change without touching each other.
 name: Desktop
 
 on:
@@ -25,7 +25,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Build the web app and compile the desktop shell
+      - name: Build the web app and compile the server and the desktop shell
         run: npm run desktop:prepare
       - name: Start the real app and check it
         run: xvfb-run -a npx playwright test e2e/desktop.spec.ts
@@ -40,11 +40,23 @@ jobs:
           name: desktop-test-results
           path: test-results
 
+  # The release is made once, here; the installers below only add their files to it.
   release:
-    name: Installer for ${{ matrix.name }}
-    # Only for a version tag, and only once the app starts.
+    name: Create the release
     if: startsWith(github.ref, 'refs/tags/v')
     needs: desktop
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+
+  installers:
+    name: Installer for ${{ matrix.name }}
+    needs: release
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     permissions:
@@ -53,15 +65,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: macOS
+          - name: macOS (Apple Silicon)
             os: macos-latest
+            files: release/*.dmg
+          - name: macOS (Intel)
+            os: macos-13
             files: release/*.dmg
           - name: Windows
             os: windows-latest
             files: release/*.exe
           - name: Linux
             os: ubuntu-latest
-            files: release/*.AppImage
+            files: release/*.AppImage release/*.deb
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -71,10 +86,8 @@ jobs:
       - run: npm ci
       - name: Build the installer
         run: npm run desktop:dist
+      - name: Add it to the release
+        shell: bash
         env:
-          # The builds are not signed yet (see the README).
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-      - name: Attach it to the release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ matrix.files }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" ${{ matrix.files }} --repo "$GITHUB_REPOSITORY" --clobber
