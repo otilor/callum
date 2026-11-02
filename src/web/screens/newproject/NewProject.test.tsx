@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   describe: vi.fn(),
   connectApollo: vi.fn(),
   sample: vi.fn(),
+  discardProject: vi.fn(),
 }));
 vi.mock('../../api.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../api.js')>();
@@ -384,10 +385,11 @@ describe('NewProject, the voice and Start', () => {
     expect(mocks.createProject).not.toHaveBeenCalled();
   });
 
-  it('goes back to the list when nobody new joined, and lets the person choose again', async () => {
+  it('goes back to the list when nobody new joined, and removes the empty project', async () => {
     const user = userEvent.setup();
-    show();
+    const { refresh } = show();
     mocks.createProject.mockResolvedValue(project({ id: 2, name: 'Payroll', startedAt: null }));
+    mocks.discardProject.mockResolvedValue({ discarded: true });
     mocks.commit.mockResolvedValue({ added: [], line: 'Nobody new joined.', groups: [{ reason: 'duplicate', line: '3 already in Callum', names: ['A', 'B', 'C'] }] });
     await toPeople(user);
     await pasteThree(user);
@@ -395,7 +397,81 @@ describe('NewProject, the voice and Start', () => {
     await user.click(screen.getByRole('button', { name: 'Start Payroll' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Nobody new joined Payroll. Choose another list or search to go on.');
     expect(screen.getByRole('heading', { name: 'Who should Callum meet?' })).toBeInTheDocument();
+    expect(mocks.discardProject).toHaveBeenCalledWith(2);
+    expect(refresh).toHaveBeenCalled();
     expect(mocks.start).not.toHaveBeenCalled();
+
+    // The next try makes a fresh project rather than leaning on the one that was removed.
+    mocks.commit.mockResolvedValue({ added: [person(21, 'Yaw Mensah')], line: '', groups: [] });
+    mocks.start.mockResolvedValue({ firstSendAt: '2026-11-03T08:00:00.000Z' });
+    await pasteThree(user);
+    await user.click(screen.getByRole('button', { name: 'These 3 look right' }));
+    await user.click(screen.getByRole('button', { name: 'Start Payroll' }));
+    await screen.findByRole('heading', { name: 'Payroll is ready' });
+    expect(mocks.createProject).toHaveBeenCalledTimes(2);
+  });
+
+  it('goes on to start when the project already has people from an earlier try', async () => {
+    const user = userEvent.setup();
+    show();
+    mocks.createProject.mockResolvedValue(project({ id: 2, name: 'Payroll', startedAt: null }));
+    mocks.discardProject.mockResolvedValue({ discarded: false });
+    mocks.commit.mockResolvedValue({ added: [], line: 'Nobody new joined.', groups: [{ reason: 'other_project', line: '3 are already in Payroll', names: ['A', 'B', 'C'], projectName: 'Payroll' }] });
+    mocks.start.mockResolvedValue({ firstSendAt: '2026-11-03T08:00:00.000Z' });
+    await toPeople(user);
+    await pasteThree(user);
+    await user.click(screen.getByRole('button', { name: 'These 3 look right' }));
+    await user.click(screen.getByRole('button', { name: 'Start Payroll' }));
+    await screen.findByRole('heading', { name: 'Payroll is ready' });
+    expect(mocks.start).toHaveBeenCalledWith(2);
+  });
+
+  it('reads the list again and adds the same people when Callum had forgotten it', async () => {
+    const user = userEvent.setup();
+    show();
+    mocks.createProject.mockResolvedValue(project({ id: 2, name: 'Payroll', startedAt: null }));
+    mocks.commit.mockRejectedValueOnce(new ApiError(410, 'That list is no longer here. Bring it again.'));
+    mocks.commit.mockResolvedValueOnce({ added: [person(21, 'Yaw Mensah')], line: '', groups: [] });
+    mocks.start.mockResolvedValue({ firstSendAt: '2026-11-03T08:00:00.000Z' });
+    await toPeople(user);
+    await pasteThree(user);
+    await user.click(screen.getByRole('button', { name: 'These 3 look right' }));
+    mocks.preview.mockResolvedValue({ ...THREE, batchId: 'batch-2' });
+    await user.click(screen.getByRole('button', { name: 'Start Payroll' }));
+    await screen.findByRole('heading', { name: 'Payroll is ready' });
+    expect(mocks.preview).toHaveBeenCalledTimes(2);
+    expect(mocks.commit).toHaveBeenNthCalledWith(1, { batchId: 'batch-1', projectId: 2, drop: [] });
+    expect(mocks.commit).toHaveBeenNthCalledWith(2, { batchId: 'batch-2', projectId: 2, drop: [] });
+    expect(mocks.createProject).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes back to choosing who to meet, in plain words, when the list cannot be read again', async () => {
+    const user = userEvent.setup();
+    show();
+    mocks.createProject.mockResolvedValue(project({ id: 2, name: 'Payroll', startedAt: null }));
+    mocks.commit.mockRejectedValue(new ApiError(410, 'That list is no longer here. Bring it again.'));
+    await toPeople(user);
+    await pasteThree(user);
+    await user.click(screen.getByRole('button', { name: 'These 3 look right' }));
+    mocks.preview.mockRejectedValue(new ApiError(422, 'Callum could not read that.'));
+    await user.click(screen.getByRole('button', { name: 'Start Payroll' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Callum lost that list while you were setting up. Choose who to meet again.');
+    expect(screen.getByRole('heading', { name: 'Who should Callum meet?' })).toBeInTheDocument();
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it('says what adding will cost beside Start when the people were found by description', async () => {
+    const user = userEvent.setup();
+    show();
+    mocks.describe.mockResolvedValue({
+      batchId: 'apollo-batch', total: 2, narrow: null, line: 'Callum found 2',
+      people: [previewPerson('a1', 'Yaw Me***', { firstName: 'Yaw', source: 'apollo' }), previewPerson('a2', 'Efua Bo***', { firstName: 'Efua', source: 'apollo' })],
+    });
+    await toPeople(user);
+    await user.type(screen.getByLabelText('Describe who you want to meet'), 'heads of people{Enter}');
+    await user.click(await screen.findByRole('button', { name: 'These 2 look right' }));
+    expect(screen.getByRole('heading', { name: 'How should you sound?' })).toBeInTheDocument();
+    expect(screen.getByText('Adding uses about 2 Apollo credits.')).toBeInTheDocument();
   });
 
   it('starts another project from the ready screen', async () => {

@@ -20,7 +20,8 @@ export interface AddPeopleProps {
 }
 
 const AGAIN: Record<Way, string> = { csv: 'Choose another file', paste: 'Paste again', link: 'Use another link', describe: 'Describe again' };
-const UNDO_MS = 9000;
+/** How long the Undo stays on the toast. */
+export const UNDO_MS = 10000;
 
 function sentences(line: string): { title: string; rest: string } {
   const [first = '', ...more] = line.split('. ');
@@ -36,18 +37,21 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
   const [error, setError] = useState('');
   const [done, setDone] = useState<AddCommit | null>(null);
   const [joined, setJoined] = useState<Person[]>([]);
+  // Everyone this batch has brought so far, including what an "Add the rest" brought, for Undo.
+  const [fromBatch, setFromBatch] = useState<Person[]>([]);
 
-  const undo = async (batchId: string, result: AddCommit) => {
+  const undo = async (batchId: string, spentCredits: boolean, brought: Person[]) => {
     try {
       await peopleApi.undo(batchId);
     } catch (e) {
       toast(messageOf(e));
       return;
     }
-    const gone = new Set(result.added.map((p) => p.id));
+    const gone = new Set(brought.map((p) => p.id));
     setJoined((all) => all.filter((p) => !gone.has(p.id)));
+    setFromBatch([]);
     setDone(null);
-    toast('Undone. Nobody was added.');
+    toast(spentCredits ? 'Undone. Nobody was added. The Apollo credits stay spent.' : 'Undone. Nobody was added.');
     await finder.rerun();
   };
 
@@ -58,9 +62,13 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
     setError('');
     try {
       const result = await peopleApi.commit({ batchId: found.batchId, projectId: project.id, drop: finder.dropped });
+      const brought = [...fromBatch, ...result.added];
       setDone(result);
       setJoined((all) => [...all, ...result.added]);
-      if (result.added.length > 0) toast(result.line, { ms: UNDO_MS, action: { label: 'Undo', onAction: () => void undo(found.batchId, result) } });
+      setFromBatch(brought);
+      if (result.added.length > 0) {
+        toast(result.line, { ms: UNDO_MS, action: { label: 'Undo', onAction: () => void undo(found.batchId, found.apollo, brought) } });
+      }
     } catch (e) {
       setError(messageOf(e));
     } finally {
@@ -71,6 +79,7 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
   const again = () => {
     setDone(null);
     setError('');
+    setFromBatch([]);
     finder.reset();
   };
 
@@ -88,6 +97,10 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
       {text?.rest ? <p className="ap-done-sub">{text.rest}</p> : null}
       {done.groups.length > 0 ? <p className="ap-done-skipped">{`Left out: ${done.groups.map((g) => g.line).join(', ')}.`}</p> : null}
       {done.warning ? <AlertLine>{done.warning}</AlertLine> : null}
+      {error ? <AlertLine>{error}</AlertLine> : null}
+      {done.remaining ? (
+        <button type="button" className="ap-btn ap-btn-ink" aria-busy={busy} disabled={busy} onClick={() => void add()}>Add the rest</button>
+      ) : null}
       <button type="button" className="ap-btn ap-btn-quiet" onClick={again}>Add more people</button>
     </div>
   ) : undefined;

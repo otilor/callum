@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ConnectError } from '../channels/types.js';
-import { commit, connectApollo, describe as describePeople, preview, sampleHello, undoBatch, BATCH_MS } from './addPeople.js';
+import { commit, connectApollo, describe as describePeople, discardProject, preview, sampleHello, undoBatch, BATCH_MS } from './addPeople.js';
 import { fakeApollo, matchRow, MONDAY, setup, type Setup } from './addPeople.test-helpers.js';
 import { UserError } from './errors.js';
 
@@ -144,7 +144,39 @@ describe('commit and undo', () => {
     await expect(commit(s.ctx, p.batchId)).rejects.toThrow('Choose the project they join first.');
     const done = await commit(s.ctx, p.batchId, { projectId: other.id });
     expect(done.added[0]?.projectId).toBe(other.id);
-    await expect(commit(s.ctx, p.batchId, { projectId: other.id })).rejects.toThrow('Those people are already in.');
+    await expect(commit(s.ctx, p.batchId, { projectId: s.projectId })).rejects.toThrow('Those people are already in.');
+  });
+
+  it('answers a second Add for the same project with the first answer, and adds nobody twice', async () => {
+    const p = await preview(s.ctx, { paste: 'Kemi Eze, kemi@okopay.com' });
+    const first = await commit(s.ctx, p.batchId);
+    s.scopes.length = 0;
+    const again = await commit(s.ctx, p.batchId);
+    expect(again).toEqual(first);
+    expect(s.ctx.repo.listPeople()).toHaveLength(1);
+    expect(s.scopes).toEqual([]);
+  });
+
+  it('keeps a batch for ten minutes from when it was last used', async () => {
+    const p = await preview(s.ctx, { paste: 'Kemi Eze, kemi@okopay.com' });
+    s.clock.advance(BATCH_MS - 1000);
+    await sampleHello(s.ctx, { offer: 'You help teams run payroll.', tone: 'warm', batchId: p.batchId, key: '0' });
+    s.clock.advance(BATCH_MS - 1000);
+    const done = await commit(s.ctx, p.batchId);
+    expect(done.added).toHaveLength(1);
+    s.clock.advance(BATCH_MS - 1000);
+    expect(undoBatch(s.ctx, p.batchId)).toEqual({ removed: 1 });
+  });
+
+  it('keeps at most twenty previews, the oldest making room', async () => {
+    const first = await preview(s.ctx, { paste: 'Kemi Eze, kemi@okopay.com' });
+    for (let i = 0; i < 20; i++) await preview(s.ctx, { paste: `Person ${i}, p${i}@example.com` });
+    await expect(commit(s.ctx, first.batchId)).rejects.toThrow('That list is no longer here. Bring it again.');
+  });
+
+  it('turns away a list of more than 5000 people', async () => {
+    const paste = Array.from({ length: 5001 }, (_, i) => `Person ${i}, p${i}@example.com`).join('\n');
+    await expect(preview(s.ctx, { paste })).rejects.toThrow("That's a lot of people. Add up to 5000 at a time.");
   });
 
   it('refuses a project that has wrapped up', async () => {
@@ -168,10 +200,18 @@ describe('commit and undo', () => {
     expect(done.added[1]).toMatchObject({ name: 'Abena Mensah', channel: null, nextTouchAt: null });
   });
 
-  it('leaves new people alone in a project that has not started', async () => {
-    const p = await preview(s.ctx, { paste: 'Kemi Eze, kemi@okopay.com' });
-    const done = await commit(s.ctx, p.batchId);
+  it('leaves new people alone in a project that has not started, and does not promise hellos', async () => {
+    const idle = setup({ started: false });
+    const p = await preview(idle.ctx, { paste: 'Kemi Eze, kemi@okopay.com' });
+    const done = await commit(idle.ctx, p.batchId);
     expect(done.added[0]).toMatchObject({ channel: null, nextTouchAt: null });
+    expect(done.line).toBe("1 person joins the river. They'll get hellos once Payroll starts.");
+  });
+
+  it('says hellos wait for the user to resume a paused project', async () => {
+    s.ctx.repo.updateProject(s.projectId, { state: 'paused' });
+    const p = await preview(s.ctx, { paste: 'Kemi Eze, kemi@okopay.com\nFemi Ade, femi@x.com' });
+    expect((await commit(s.ctx, p.batchId)).line).toBe("2 people join the river. They'll get hellos once you resume Payroll.");
   });
 
   it('undo removes the people of the batch that nobody has written to', async () => {
@@ -223,24 +263,50 @@ describe('describe', () => {
     expect(d.line).toBe('Callum found 3');
     expect(d.batchId).toEqual(expect.any(String));
     expect(apollo.calls.enrich).toEqual([]);
-    expect(apollo.calls.search[0]?.searchParams.get('q_keywords')).toBe('Heads of finance at fintechs in Accra');
+    expect(apollo.calls.search[0]?.searchParams.get('q_keywords')).toBe('Heads of finance at fintechs');
+    expect(apollo.calls.search[0]?.searchParams.getAll('person_locations[]')).toEqual(['Accra']);
   });
 
   it('offers to narrow a search that matches more than a thousand people', async () => {
     s.ctx.apollo = fakeApollo({ total: 2300 }).source;
     const d = await describePeople(s.ctx, { query: 'Heads of finance at fintechs in Accra', filters: [] });
     expect(d.total).toBe(2300);
-    expect(d.narrow).toEqual(['Seed to Series A', '20 to 200 people', 'Accra only']);
+    expect(d.narrow).toEqual(['20 to 200 people', 'Accra only']);
     expect(d.line).toBe("That's about 2,300 people. Narrow it down?");
   });
 
   it('leaves out the city chip when the words name no city, and the chips already used', async () => {
+    s.ctx.apollo = fakeApollo({ total: 2300 }).source;
+    expect((await describePeople(s.ctx, { query: 'Heads of finance', filters: [] })).narrow).toEqual(['20 to 200 people']);
+    const again = await describePeople(s.ctx, { query: 'Heads of finance in Accra', filters: ['Accra only'] });
+    expect(again.narrow).toEqual(['20 to 200 people']);
+  });
+
+  it('sends the chips to Apollo as real filters, with the city out of the keywords', async () => {
     const apollo = fakeApollo({ total: 2300 });
     s.ctx.apollo = apollo.source;
-    expect((await describePeople(s.ctx, { query: 'Heads of finance', filters: [] })).narrow).toEqual(['Seed to Series A', '20 to 200 people']);
-    const again = await describePeople(s.ctx, { query: 'Heads of finance in Accra', filters: ['Accra only', 'Seed to Series A'] });
-    expect(again.narrow).toEqual(['20 to 200 people']);
-    expect(apollo.calls.search[1]?.searchParams.get('q_keywords')).toBe('Heads of finance in Accra Accra Seed to Series A');
+    await describePeople(s.ctx, { query: 'Heads of finance in Accra', filters: ['20 to 200 people', 'Accra only'] });
+    const url = apollo.calls.search[0]!;
+    expect(decodeURIComponent(url.search)).toContain('organization_num_employees_ranges[]=21,200');
+    expect(url.searchParams.getAll('person_locations[]')).toEqual(['Accra']);
+    expect(url.searchParams.get('q_keywords')).toBe('Heads of finance');
+  });
+
+  it('pulls a city the words end with into a location filter, with no chip pressed', async () => {
+    const apollo = fakeApollo({ total: 3 });
+    s.ctx.apollo = apollo.source;
+    await describePeople(s.ctx, { query: 'Founders in Cape Town', filters: [] });
+    expect(apollo.calls.search[0]?.searchParams.getAll('person_locations[]')).toEqual(['Cape Town']);
+    expect(apollo.calls.search[0]?.searchParams.get('q_keywords')).toBe('Founders');
+    expect(apollo.calls.search[0]?.searchParams.has('organization_num_employees_ranges[]')).toBe(false);
+  });
+
+  it('refuses a chip Callum did not offer', async () => {
+    const apollo = fakeApollo({ total: 2300 });
+    s.ctx.apollo = apollo.source;
+    const error = await describePeople(s.ctx, { query: 'Heads of finance', filters: ['Seed to Series A'] }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(UserError);
+    expect(apollo.calls.search).toEqual([]);
   });
 
   it('says so in the user\'s words when nobody matched', async () => {
@@ -311,6 +377,38 @@ describe('adding people found by description', () => {
     expect(done.creditsUsed).toBe(10);
     expect(done.warning).toBe("Apollo's lookup limit is reached. Try again in an hour.");
     expect(done.line).toBe('10 people join the river. First hellos from tomorrow at 9:00. That used 10 Apollo credits.');
+    expect(done.remaining).toBe(2);
+  });
+
+  it('adds the rest later, looking up only the two that were left', async () => {
+    const apollo = fakeApollo({ total: 12, rows: 12, failEnrichAt: 2, failStatus: 429 });
+    s.ctx.apollo = apollo.source;
+    const d = await describePeople(s.ctx, { query: 'heads of finance', filters: [] });
+    await commit(s.ctx, d.batchId!);
+    const rest = await commit(s.ctx, d.batchId!);
+    expect(apollo.calls.enrich.map((ids) => ids.length)).toEqual([10, 2, 2]);
+    expect(apollo.calls.enrich[2]).toEqual(['apollo-10', 'apollo-11']);
+    expect(rest.added).toHaveLength(2);
+    expect(rest.remaining).toBeUndefined();
+    expect(s.ctx.repo.listPeople()).toHaveLength(12);
+    expect(undoBatch(s.ctx, d.batchId!)).toEqual({ removed: 12 });
+  });
+
+  it('checks the Sent folder for people Apollo found, too', async () => {
+    s.sentTo.push('kemi@co0.com');
+    s.ctx.apollo = fakeApollo({ total: 3 }).source;
+    const d = await describePeople(s.ctx, { query: 'heads of finance', filters: [] });
+    const done = await commit(s.ctx, d.batchId!);
+    expect(done.added.map((a) => a.name)).toEqual(['Femi Ade', 'Tunde Bello']);
+    expect(done.groups.map((g) => g.line)).toEqual(["1 you've emailed before"]);
+  });
+
+  it('lets an error that is not Apollo\'s through, instead of hiding it', async () => {
+    const source = fakeApollo({ total: 3 }).source;
+    s.ctx.apollo = source;
+    const d = await describePeople(s.ctx, { query: 'heads of finance', filters: [] });
+    source.enrich = async () => { throw new TypeError('database is gone'); };
+    await expect(commit(s.ctx, d.batchId!)).rejects.toThrow(TypeError);
   });
 
   it('adds nobody and says why when Apollo fails at the first step', async () => {
@@ -388,5 +486,26 @@ describe('sampleHello', () => {
   it('wants an offer and a tone', async () => {
     await expect(sampleHello(s.ctx, { offer: '  ', tone: 'warm' })).rejects.toThrow('Say what you offer first.');
     await expect(sampleHello(s.ctx, { offer: OFFER, tone: 'loud' as never })).rejects.toThrow('Pick warm, direct or playful.');
+  });
+});
+
+describe('discardProject', () => {
+  it('removes a project that never started and has nobody, and moves the current project on', () => {
+    const s = setup({ started: false });
+    const other = s.ctx.repo.insertProject({ name: 'Invoicing' });
+    s.scopes.length = 0;
+    expect(discardProject(s.ctx, s.projectId)).toEqual({ discarded: true });
+    expect(s.ctx.repo.getProject(s.projectId)).toBeNull();
+    expect(s.ctx.repo.getSettings().currentProjectId).toBe(other.id);
+    expect(s.scopes).toEqual(expect.arrayContaining(['projects', 'settings']));
+  });
+
+  it('leaves a project alone once it has started or has people', () => {
+    const started = setup();
+    expect(discardProject(started.ctx, started.projectId)).toEqual({ discarded: false });
+    const crowded = setup({ started: false });
+    crowded.ctx.repo.insertPerson({ projectId: crowded.projectId, name: 'Kemi', email: 'k@x.com', source: 'csv' });
+    expect(discardProject(crowded.ctx, crowded.projectId)).toEqual({ discarded: false });
+    expect(crowded.ctx.repo.getProject(crowded.projectId)).not.toBeNull();
   });
 });

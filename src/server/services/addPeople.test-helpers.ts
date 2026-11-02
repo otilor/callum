@@ -25,7 +25,7 @@ export function adapter(channel: Channel, extra: Partial<ChannelAdapter> = {}): 
   };
 }
 
-export function setup(opts: { connected?: Channel[] } = {}): Setup {
+export function setup(opts: { connected?: Channel[]; started?: boolean } = {}): Setup {
   const clock = fixedClock(MONDAY);
   const sentTo: string[] = [];
   const linkedin: Setup['linkedin'] = { searched: [], people: [], fail: null };
@@ -48,6 +48,7 @@ export function setup(opts: { connected?: Channel[] } = {}): Setup {
     ctx.repo.updateChannel(ch, { status: 'connected', identity: 'x', connectedAt: '2026-11-02T08:00:00.000Z' });
   }
   const project = ctx.repo.insertProject({ name: 'Payroll', offer: 'You help teams run payroll' });
+  if (opts.started !== false) ctx.repo.updateProject(project.id, { startedAt: '2026-11-01T09:00:00.000Z' });
   ctx.repo.updateSettings({ currentProjectId: project.id });
   const scopes: Scope[] = [];
   ctx.bus.on((s) => scopes.push(s));

@@ -12,8 +12,15 @@ import { importPeople, sketchPerson } from '../leads/import.js';
 import { decodeLeadFile, ImportFileError, parseCsv, parsePaste, type Skipped } from '../leads/parse.js';
 import { UserError } from './errors.js';
 
-/** A preview waits this long for the user to press Add, and an added batch can be undone for as long. */
+/** A preview waits this long for the user to press Add, and an added batch can be undone for as long. Each use starts it again. */
 export const BATCH_MS = 10 * 60_000;
+/** Previews kept at once. The oldest make room for new ones. */
+export const MAX_BATCHES = 20;
+/** The most people one list can bring. */
+export const MAX_ROWS = 5000;
+const TOO_MANY = `That's a lot of people. Add up to ${MAX_ROWS} at a time.`;
+/** Apollo looks people up this many at a time. */
+const LOOKUP_CHUNK = 10;
 /** How many people a described search brings back to look at. */
 export const DESCRIBE_COUNT = 20;
 /** Past this many matches the search is too wide and Callum asks for a narrower one. */
@@ -44,7 +51,13 @@ interface Batch {
   apollo: ApolloPreview[] | null;
   known: Set<string>;
   committing: boolean;
+  /** Everyone added so far from this batch, for undo. */
   added: number[] | null;
+  /** The project they were added to, and what was said, so pressing Add again gets the same answer. */
+  addedTo: number | null;
+  result: AddCommit | null;
+  /** Apollo ids still to look up after a failure part way. */
+  remaining: string[] | null;
 }
 
 const stores = new WeakMap<Ctx, Map<string, Batch>>();
@@ -60,14 +73,29 @@ function storeOf(ctx: Ctx): Map<string, Batch> {
   return store;
 }
 
-function keep(ctx: Ctx, batch: Omit<Batch, 'expires' | 'committing' | 'added'>): string {
+function keep(ctx: Ctx, batch: Pick<Batch, 'projectId' | 'leads' | 'unreadable' | 'apollo' | 'known'>): string {
   const id = randomUUID();
-  storeOf(ctx).set(id, { ...batch, expires: ctx.clock.now().getTime() + BATCH_MS, committing: false, added: null });
+  const store = storeOf(ctx);
+  while (store.size >= MAX_BATCHES) {
+    const oldest = store.keys().next().value;
+    if (oldest === undefined) break;
+    store.delete(oldest);
+  }
+  store.set(id, {
+    ...batch, expires: ctx.clock.now().getTime() + BATCH_MS, committing: false, added: null, addedTo: null, result: null, remaining: null,
+  });
   return id;
 }
 
-function batchOf(ctx: Ctx, id: string): Batch {
+/** A batch still waiting. Using it gives it another ten minutes. */
+function liveBatch(ctx: Ctx, id: unknown): Batch | undefined {
   const batch = typeof id === 'string' ? storeOf(ctx).get(id) : undefined;
+  if (batch) batch.expires = ctx.clock.now().getTime() + BATCH_MS;
+  return batch;
+}
+
+function batchOf(ctx: Ctx, id: string): Batch {
+  const batch = liveBatch(ctx, id);
   if (!batch) throw new UserError('That list is no longer here. Bring it again.', 410);
   return batch;
 }
@@ -161,6 +189,7 @@ export async function preview(ctx: Ctx, source: AddSource, opts: { projectId?: n
   if (people.length === 0 && unreadable.length === 0) {
     throw new UserError("Callum didn't find anyone in that. Each person needs a name and an email, a LinkedIn link or an X handle.");
   }
+  if (people.length + unreadable.length > MAX_ROWS) throw new UserError(TOO_MANY);
   const known = await emailedBefore(ctx);
   const dry = importPeople(ctx.repo, projectId, people, { dryRun: true, known, at: ctx.clock.now().toISOString() });
   const batchId = keep(ctx, { projectId, leads: people, unreadable, apollo: null, known });
@@ -174,17 +203,31 @@ export async function preview(ctx: Ctx, source: AddSource, opts: { projectId?: n
 
 // ---- describing people (Apollo) ---------------------------------------------------------------------------
 
-const STAGE_CHIP = 'Seed to Series A';
 const SIZE_CHIP = '20 to 200 people';
+/** Apollo writes company sizes as `21,200`. */
+const SIZE_RANGE = '21,200';
+const CITY_CHIP = /^(\p{L}[\p{L}'. -]*) only$/u;
+const IN_CITY = /\s*\b(?:in|near|around)\s+(\p{Lu}[\p{L}'.-]*(?:\s+\p{Lu}[\p{L}'.-]*)?)\s*$/u;
 
-/** The city a search names, for the chip that narrows it: `Heads of finance in Accra` gives `Accra only`. */
-function cityChip(query: string): string | null {
-  const m = /\b(?:in|near|around)\s+([\p{Lu}][\p{L}'.-]*(?:\s+[\p{Lu}][\p{L}'.-]*)?)\s*$/u.exec(query.trim());
-  return m?.[1] ? `${m[1]} only` : null;
+/** The city a search ends with, and the words before it: `Heads of finance in Accra` gives `Accra`. */
+function splitCity(query: string): { words: string; city: string | null } {
+  const m = IN_CITY.exec(query);
+  return m?.[1] ? { words: query.slice(0, m.index).trim(), city: m[1] } : { words: query, city: null };
 }
 
-/** What a narrowing chip adds to the words Apollo searches for. */
-const chipWords = (chip: string): string => chip.replace(/ only$/, '');
+/** What the chips the user pressed ask of Apollo. A chip Callum did not offer is refused. */
+function narrowing(filters: string[]): { employeeRanges: string[]; cities: string[] } {
+  const employeeRanges: string[] = [];
+  const cities: string[] = [];
+  for (const f of filters) {
+    const chip = f.trim();
+    const city = CITY_CHIP.exec(chip)?.[1];
+    if (chip === SIZE_CHIP) employeeRanges.push(SIZE_RANGE);
+    else if (city) cities.push(city);
+    else throw new UserError(`Callum doesn't know how to narrow by '${chip}'.`);
+  }
+  return { employeeRanges, cities };
+}
 
 function previewRow(p: ApolloPreview, projectId: number | null): PreviewPerson {
   const name = [p.firstName, p.lastNameObfuscated].filter(Boolean).join(' ') || 'Someone';
@@ -210,9 +253,16 @@ export async function describe(
   if (query === '') throw new UserError('Describe who you want to meet first.');
   const filters = (q.filters ?? []).filter((f): f is string => typeof f === 'string' && f.trim() !== '');
   const projectId = resolveProject(ctx, q.projectId);
+  const chips = narrowing(filters);
+  const { words, city } = splitCity(query);
+  const cities = [...new Set([...(city ? [city] : []), ...chips.cities])];
   let found;
   try {
-    found = await ctx.apollo.search({ query: [query, ...filters.map(chipWords)].join(' '), titles: [], count: DESCRIBE_COUNT });
+    found = await ctx.apollo.search({
+      query: words === '' ? null : words, titles: [], count: DESCRIBE_COUNT,
+      ...(chips.employeeRanges.length > 0 ? { employeeRanges: chips.employeeRanges } : {}),
+      ...(cities.length > 0 ? { personLocations: cities } : {}),
+    });
   } catch (e) {
     if (e instanceof ApolloError) throw new UserError(e.message);
     throw e;
@@ -222,8 +272,8 @@ export async function describe(
   }
   const batchId = keep(ctx, { projectId, leads: [], unreadable: [], apollo: found.previews, known: new Set() });
   const people = found.previews.map((p) => previewRow(p, projectId));
-  const chips = found.total > TOO_WIDE ? [STAGE_CHIP, SIZE_CHIP, cityChip(query)].filter((c): c is string => c !== null && !filters.includes(c)) : [];
-  const narrow = chips.length > 0 ? chips : null;
+  const offered = found.total > TOO_WIDE ? [SIZE_CHIP, city === null ? null : `${city} only`].filter((c): c is string => c !== null && !filters.includes(c)) : [];
+  const narrow = offered.length > 0 ? offered : null;
   return {
     batchId, total: found.total, people, narrow,
     line: found.total > TOO_WIDE ? `That's about ${fmt(found.total)} people. Narrow it down?` : `Callum found ${people.length}`,
@@ -268,30 +318,55 @@ function slotWords(at: Date, tz: string, now: Date): string {
 
 const credits = (n: number): string => `${fmt(n)} Apollo ${n === 1 ? 'credit' : 'credits'}`;
 
-/** Looks up the people the user kept. Whatever was found before a failure is kept, and the failure comes back in words. */
-async function enrichKept(ctx: Ctx, ids: string[]): Promise<{ found: ApolloEnrichment; warning?: string }> {
+/**
+ * Looks up the people the user kept, ten at a time. Whatever was found before a failure is kept, the failure comes
+ * back in words, and the ids not yet looked up are named so adding again spends credits only on those.
+ */
+async function enrichKept(
+  ctx: Ctx,
+  ids: string[],
+): Promise<{ found: ApolloEnrichment; warning?: string; remaining: string[] }> {
   if (!ctx.apollo) throw new UserError(NO_APOLLO, 422, { code: 'no_apollo' });
-  try {
-    return { found: await ctx.apollo.enrich(ids) };
-  } catch (e) {
-    if (!(e instanceof ApolloError)) throw new UserError('Apollo lookup failed. Try again in a minute.');
-    if (e.partial && e.partial.people.length > 0) return { found: e.partial, warning: e.message };
-    throw new UserError(e.message);
+  const found: ApolloEnrichment = { people: [], creditsUsed: 0 };
+  for (let i = 0; i < ids.length; i += LOOKUP_CHUNK) {
+    try {
+      const got = await ctx.apollo.enrich(ids.slice(i, i + LOOKUP_CHUNK));
+      found.people.push(...got.people);
+      found.creditsUsed += got.creditsUsed;
+    } catch (e) {
+      if (!(e instanceof ApolloError)) throw e;
+      if (found.people.length > 0) return { found, warning: e.message, remaining: ids.slice(i) };
+      throw new UserError(e.message);
+    }
   }
+  return { found, remaining: [] };
+}
+
+/** Where the first hellos stand, in words: when they go out, or what has to happen first. */
+function whenWords(project: Project, now: Date, tz: string): string {
+  if (project.startedAt === null) return `They'll get hellos once ${project.name} starts.`;
+  if (project.state === 'paused') return `They'll get hellos once you resume ${project.name}.`;
+  return `First hellos from ${slotWords(firstSlotAfterStart(now, tz), tz, now)}.`;
 }
 
 /**
  * Adds the batch to a project as strangers. `drop` names the people the user said were not a fit. For people found by
  * description, Apollo looks up only the ones kept (that is what costs credits) and those without an email or a LinkedIn
- * link come back as skipped. In a project that has started, the new people get their first slot at once.
+ * link come back as skipped. In a project that has started, the new people get their first slot at once. Pressing Add
+ * a second time for the same project gives the same answer and adds nobody, unless Apollo stopped part way and some
+ * people are still to be looked up: then it looks up only those.
  */
 export async function commit(ctx: Ctx, batchId: string, opts: { projectId?: number; drop?: string[] } = {}): Promise<AddCommit> {
   const batch = batchOf(ctx, batchId);
-  if (batch.added) throw new UserError('Those people are already in.');
-  if (batch.committing) throw new UserError('Callum is still adding them.');
   const projectId = opts.projectId ?? batch.projectId;
+  if (batch.added && !(batch.remaining && batch.remaining.length > 0)) {
+    if (batch.result && batch.addedTo === projectId) return batch.result;
+    throw new UserError('Those people are already in.');
+  }
+  if (batch.committing) throw new UserError('Callum is still adding them.');
   const project = projectId === null ? null : ctx.repo.getProject(projectId);
   if (!project) throw new UserError('Choose the project they join first.');
+  if (batch.added && batch.addedTo !== project.id) throw new UserError('Those people are already in.');
   if (project.state === 'wrapped') throw new UserError(`${project.name} is wrapped up.`);
   const drop = new Set(opts.drop ?? []);
 
@@ -300,33 +375,40 @@ export async function commit(ctx: Ctx, batchId: string, opts: { projectId?: numb
     let leads: PersonLead[];
     let creditsUsed: number | undefined;
     let warning: string | undefined;
+    let remaining: string[] = [];
+    let known = batch.known;
     if (batch.apollo) {
-      const ids = batch.apollo.map((p) => p.apolloId).filter((id) => !drop.has(id));
+      const ids = batch.remaining ?? batch.apollo.map((p) => p.apolloId).filter((id) => !drop.has(id));
       if (ids.length === 0) throw new UserError('Everyone was left out. Bring someone back.');
-      const { found, warning: failure } = await enrichKept(ctx, ids);
-      leads = found.people;
-      creditsUsed = found.creditsUsed;
-      warning = failure;
+      const looked = await enrichKept(ctx, ids);
+      leads = looked.found.people;
+      creditsUsed = looked.found.creditsUsed;
+      warning = looked.warning;
+      remaining = looked.remaining;
+      known = await emailedBefore(ctx);
     } else {
       leads = batch.leads.filter((_, i) => !drop.has(String(i)));
     }
-    const result = importPeople(ctx.repo, project.id, leads, { known: batch.known });
+    const result = importPeople(ctx.repo, project.id, leads, { known });
     const now = ctx.clock.now();
     const settings = ctx.repo.getSettings();
     const added = project.startedAt === null ? result.added : result.added.map((p) => scheduleFirst(ctx, p, settings.timezone, now));
-    batch.added = added.map((p) => p.id);
-    batch.expires = now.getTime() + BATCH_MS;
+    batch.added = [...(batch.added ?? []), ...added.map((p) => p.id)];
+    batch.addedTo = project.id;
+    batch.remaining = remaining.length > 0 ? remaining : null;
     if (added.length > 0 || result.updated.length > 0) ctx.bus.emit('people');
 
-    const slot = slotWords(firstSlotAfterStart(now, settings.timezone), settings.timezone, now);
     let line = added.length === 0
       ? 'Nobody new joined.'
-      : `${added.length === 1 ? '1 person joins' : `${fmt(added.length)} people join`} the river. First hellos from ${slot}.`;
+      : `${added.length === 1 ? '1 person joins' : `${fmt(added.length)} people join`} the river. ${whenWords(project, now, settings.timezone)}`;
     if (creditsUsed !== undefined) line += ` That used ${credits(creditsUsed)}.`;
-    return {
+    const answer: AddCommit = {
       added, line, groups: groupSkips(batch.apollo ? result.skipped : [...batch.unreadable, ...result.skipped]),
       ...(creditsUsed === undefined ? {} : { creditsUsed }), ...(warning === undefined ? {} : { warning }),
+      ...(remaining.length > 0 ? { remaining: remaining.length } : {}),
     };
+    batch.result = answer;
+    return answer;
   } finally {
     batch.committing = false;
   }
@@ -340,7 +422,7 @@ function scheduleFirst(ctx: Ctx, person: Person, userTz: string, now: Date): Per
   return ctx.repo.updatePerson(person.id, { channel, nextTouchAt: firstSlotAfterStart(now, personTz(person, userTz)).toISOString() });
 }
 
-/** Takes back what `commit` added, for everyone Callum has not written to yet. */
+/** Takes back what `commit` added, for everyone Callum has not written to and has not heard from. */
 export function undoBatch(ctx: Ctx, batchId: string): { removed: number } {
   const store = storeOf(ctx);
   const batch = batchOf(ctx, batchId);
@@ -348,9 +430,7 @@ export function undoBatch(ctx: Ctx, batchId: string): { removed: number } {
   let removed = 0;
   ctx.repo.transaction(() => {
     for (const id of batch.added ?? []) {
-      if (!ctx.repo.getPerson(id) || ctx.repo.listMessages(id).length > 0) continue;
-      ctx.repo.deletePerson(id);
-      removed++;
+      if (ctx.repo.deletePerson(id)) removed++;
     }
   });
   store.delete(batchId);
@@ -359,6 +439,23 @@ export function undoBatch(ctx: Ctx, batchId: string): { removed: number } {
     ctx.bus.emit('outbox');
   }
   return { removed };
+}
+
+/**
+ * Removes a project that was made for a list and then got nobody: it never started and has nobody in it. Anything
+ * else is left alone. Returns whether it was removed.
+ */
+export function discardProject(ctx: Ctx, projectId: number): { discarded: boolean } {
+  const discarded = ctx.repo.deleteEmptyProject(projectId);
+  if (discarded) {
+    if (ctx.repo.getSettings().currentProjectId === projectId) {
+      const next = ctx.repo.listProjects({ state: ['running', 'paused'] })[0];
+      ctx.repo.updateSettings({ currentProjectId: next?.id ?? null });
+    }
+    ctx.bus.emit('projects');
+    ctx.bus.emit('settings');
+  }
+  return { discarded };
 }
 
 // ---- the voice of a project that does not exist yet -------------------------------------------------------
@@ -377,7 +474,7 @@ export async function sampleHello(
   if (offer === '') throw new UserError('Say what you offer first.');
   if (!TONES.includes(input.tone)) throw new UserError('Pick warm, direct or playful.');
   const at = ctx.clock.now().toISOString();
-  const batch = input.batchId ? storeOf(ctx).get(input.batchId) : undefined;
+  const batch = input.batchId ? liveBatch(ctx, input.batchId) : undefined;
   let lead: PersonLead | undefined;
   if (batch && input.key !== undefined) {
     const row = batch.apollo?.find((p) => p.apolloId === input.key);

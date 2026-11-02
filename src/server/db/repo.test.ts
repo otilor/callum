@@ -121,6 +121,27 @@ describe('people', () => {
   });
 });
 
+describe('deletePerson', () => {
+  it('removes a person with their outbox items and frees the incident that named them', () => {
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv', email: 'k@x.com', channel: 'email' });
+    repo.insertOutbox({ personId: p.id, channel: 'email', kind: 'hello', body: 'Hi', state: 'awaiting_ok', origin: 'auto', sendAfter: '2026-01-02T00:00:00.000Z' });
+    const incident = repo.insertIncident({ channel: 'email', kind: 'send_failed', message: 'Failed', personId: p.id });
+    expect(repo.deletePerson(p.id)).toBe(true);
+    expect(repo.getPerson(p.id)).toBeNull();
+    expect(repo.listOutbox()).toEqual([]);
+    expect(repo.listIncidents().find((i) => i.id === incident.id)?.personId).toBeNull();
+  });
+
+  it('keeps anyone Callum has a message with, and says so', () => {
+    const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv', email: 'k@x.com' });
+    repo.insertMessage({ personId: p.id, channel: 'email', direction: 'out', kind: 'hello', subject: 'Hi', body: 'Hi', at: '2026-01-02T00:00:00.000Z', externalId: null });
+    expect(repo.deletePerson(p.id)).toBe(false);
+    expect(repo.getPerson(p.id)).not.toBeNull();
+    expect(repo.listMessages(p.id)).toHaveLength(1);
+    expect(repo.deletePerson(9999)).toBe(false);
+  });
+});
+
 describe('messages', () => {
   it('lists by at then id', () => {
     const p = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv' });

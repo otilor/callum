@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AddCommit, AddPreview, Described, Person, PreviewPerson, Project } from '../../../shared/types.js';
 import { ApiError } from '../../api.js';
 import { ToastProvider } from '../../ui/Toast.js';
-import { AddPeople } from './AddPeople.js';
+import { AddPeople, UNDO_MS } from './AddPeople.js';
 
 const mocks = vi.hoisted(() => ({
   preview: vi.fn(),
@@ -215,6 +215,7 @@ describe('AddPeople, describing who', () => {
 
     mocks.describe.mockResolvedValue(found());
     await user.click(screen.getByRole('button', { name: 'Connect Apollo' }));
+    expect(screen.getByText(/Callum uses it to find people and their emails\. Adding people uses Apollo credits\./)).toBeInTheDocument();
     await user.type(screen.getByLabelText('Apollo API key'), 'key-123');
     await user.click(screen.getByRole('button', { name: 'Connect' }));
     expect(mocks.connectApollo).toHaveBeenCalledWith('key-123');
@@ -252,7 +253,7 @@ describe('AddPeople, describing who', () => {
 
   it('asks to narrow a search of thousands, and looks again with the chips chosen', async () => {
     const user = userEvent.setup();
-    mocks.describe.mockResolvedValueOnce(found({ total: 2300, narrow: ['Seed to Series A', '20 to 200 people', 'Accra only'], line: "That's about 2,300 people. Narrow it down?" }));
+    mocks.describe.mockResolvedValueOnce(found({ total: 2300, narrow: ['20 to 200 people', 'Accra only'], line: "That's about 2,300 people. Narrow it down?" }));
     show();
     await user.click(screen.getByRole('tab', { name: 'Describe who' }));
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'heads of finance in Accra{Enter}');
@@ -267,7 +268,7 @@ describe('AddPeople, describing who', () => {
 
   it('goes on with the first rows when nothing was chosen to narrow', async () => {
     const user = userEvent.setup();
-    mocks.describe.mockResolvedValueOnce(found({ total: 2300, narrow: ['Seed to Series A'], line: "That's about 2,300 people. Narrow it down?" }));
+    mocks.describe.mockResolvedValueOnce(found({ total: 2300, narrow: ['20 to 200 people'], line: "That's about 2,300 people. Narrow it down?" }));
     show();
     await user.click(screen.getByRole('tab', { name: 'Describe who' }));
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'cfo{Enter}');
@@ -302,6 +303,58 @@ describe('AddPeople, describing who', () => {
     await user.click(await screen.findByRole('button', { name: 'Add 3 people' }));
     expect(await screen.findByRole('alert')).toHaveTextContent("Apollo's lookup limit is reached. Try again in an hour.");
     expect(screen.getByText('Left out: 1 has no email or LinkedIn.')).toBeInTheDocument();
+  });
+});
+
+describe('AddPeople, after Apollo', () => {
+  const rows = ['Kemi', 'Femi', 'Tunde'].map((first, i) => ({
+    key: `apollo-${i}`, apolloId: `apollo-${i}`, hasEmail: true, name: `${first} Ez***`, firstName: first, source: 'apollo' as const, projectId: 1,
+    role: 'Head of Finance', company: 'Co',
+  }));
+  const found: Described = { batchId: 'apollo-batch', total: 3, people: rows, narrow: null, line: 'Callum found 3' };
+
+  async function describeAndAdd(user: ReturnType<typeof userEvent.setup>) {
+    show();
+    await user.click(screen.getByRole('tab', { name: 'Describe who' }));
+    await user.type(screen.getByLabelText('Describe who you want to meet'), 'cfo{Enter}');
+    await user.click(await screen.findByRole('button', { name: 'Add 3 people' }));
+  }
+
+  it('gives the Undo ten seconds', () => {
+    expect(UNDO_MS).toBe(10000);
+  });
+
+  it('says the credits stay spent when an Apollo batch is undone', async () => {
+    const user = userEvent.setup();
+    mocks.describe.mockResolvedValue(found);
+    mocks.commit.mockResolvedValue({
+      added: [person(10, 'Kemi Eze'), person(11, 'Femi Ade'), person(12, 'Tunde Bello')], groups: [], creditsUsed: 3,
+      line: '3 people join the river. First hellos from tomorrow at 9:00. That used 3 Apollo credits.',
+    });
+    mocks.undo.mockResolvedValue({ removed: 3 });
+    await describeAndAdd(user);
+    await user.click(within(await screen.findByRole('status')).getByRole('button', { name: 'Undo' }));
+    expect(await screen.findByText('Undone. Nobody was added. The Apollo credits stay spent.')).toBeInTheDocument();
+  });
+
+  it('offers to add the rest after a failure part way, and undoes everyone together', async () => {
+    const user = userEvent.setup();
+    mocks.describe.mockResolvedValue(found);
+    mocks.commit.mockResolvedValueOnce({
+      added: [person(10, 'Kemi Eze')], groups: [], creditsUsed: 1, remaining: 2, warning: "Apollo's lookup limit is reached. Try again in an hour.",
+      line: '1 person joins the river. First hellos from tomorrow at 9:00. That used 1 Apollo credit.',
+    });
+    mocks.commit.mockResolvedValueOnce({
+      added: [person(11, 'Femi Ade'), person(12, 'Tunde Bello')], groups: [], creditsUsed: 2,
+      line: '2 people join the river. First hellos from tomorrow at 9:00. That used 2 Apollo credits.',
+    });
+    mocks.undo.mockResolvedValue({ removed: 3 });
+    await describeAndAdd(user);
+    await user.click(await screen.findByRole('button', { name: 'Add the rest' }));
+    expect(mocks.commit).toHaveBeenCalledTimes(2);
+    expect(mocks.commit).toHaveBeenLastCalledWith({ batchId: 'apollo-batch', projectId: 1, drop: [] });
+    expect(await screen.findByText('2 people join the river.', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add the rest' })).toBeNull();
   });
 });
 

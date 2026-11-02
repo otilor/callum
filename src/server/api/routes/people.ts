@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import type { Tone } from '../../../shared/types.js';
 import type { Ctx } from '../../context.js';
-import { commit, connectApollo, describe, preview, sampleHello, undoBatch, type AddSource } from '../../services/addPeople.js';
+import { commit, connectApollo, describe, discardProject, preview, sampleHello, undoBatch, type AddSource } from '../../services/addPeople.js';
 import type { ApolloSource } from '../../leads/apollo.js';
 import { UserError } from '../../services/errors.js';
 
@@ -63,6 +63,11 @@ export function peopleRoutes(ctx: Ctx, opts: { makeApollo?: (key: string) => Apo
   }));
 
   routes.post('/people/undo', answer((b) => undoBatch(ctx, text(b.batchId) ?? '')));
+
+  routes.post('/people/discard-project', answer((b) => {
+    const projectId = projectOf(b.projectId);
+    return discardProject(ctx, typeof projectId === 'number' ? projectId : -1);
+  }));
 
   routes.post('/people/describe', answer((b) => {
     const projectId = projectOf(b.projectId);

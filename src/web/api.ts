@@ -160,4 +160,5 @@ export const peopleApi = {
   describe: (body: { query: string; filters?: string[]; projectId?: number | null }) => post<Described>('/people/describe', body),
   connectApollo: (key: string) => post<{ connected: true }>('/apollo/connect', { key }),
   sample: (body: { offer: string; tone: Tone; batchId?: string; key?: string }) => post<HelloSample>('/people/sample', body),
+  discardProject: (projectId: number) => post<{ discarded: boolean }>('/people/discard-project', { projectId }),
 };

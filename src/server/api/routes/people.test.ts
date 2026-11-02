@@ -65,8 +65,15 @@ describe('people routes', () => {
     const found = await post('/people/describe', { query: 'heads of finance in Accra', filters: [] });
     expect(found.status).toBe(200);
     const d = found.json as unknown as Described;
-    expect(d.narrow).toEqual(['Seed to Series A', '20 to 200 people', 'Accra only']);
+    expect(d.narrow).toEqual(['20 to 200 people', 'Accra only']);
     expect(d.people).toHaveLength(3);
+  });
+
+  it('discards a project that never started and got nobody', async () => {
+    const idle = s.ctx.repo.insertProject({ name: 'Invoicing' });
+    expect((await post('/people/discard-project', { projectId: idle.id })).json).toEqual({ discarded: true });
+    expect((await post('/people/discard-project', { projectId: idle.id })).json).toEqual({ discarded: false });
+    expect((await post('/people/discard-project', {})).json).toEqual({ discarded: false });
   });
 
   it('writes a sample hello for a project that is still being set up', async () => {

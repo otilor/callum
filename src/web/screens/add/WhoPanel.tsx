@@ -208,7 +208,7 @@ export function WhoPanel({ finder, order = ['csv', 'paste', 'link', 'describe'],
                       <input id="ap-key" type="password" autoComplete="off" className="ap-soft ap-key" value={finder.apollo.key} onChange={(e) => finder.setApolloKey(e.target.value)} placeholder="Apollo API key" />
                       <button type="submit" className="ap-btn ap-btn-ink ap-btn-sm" aria-busy={finder.apollo.busy} disabled={finder.apollo.busy || finder.apollo.key.trim() === ''}>Connect</button>
                     </div>
-                    <span className="ap-note">Find it in Apollo under Settings, then API. Callum only uses it to search for people.</span>
+                    <span className="ap-note">Find it in Apollo under Settings, then API. Callum uses it to find people and their emails. Adding people uses Apollo credits.</span>
                   </form>
                 )}
               </div>

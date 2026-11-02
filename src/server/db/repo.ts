@@ -145,6 +145,14 @@ export class Repo {
     return this.require(this.getProject(id), 'project', id);
   }
 
+  /** Removes a project that never started and has nobody in it. Returns whether it was removed. */
+  deleteEmptyProject(id: number): boolean {
+    const res = this.db.prepare(
+      'DELETE FROM projects WHERE id = ? AND started_at IS NULL AND NOT EXISTS (SELECT 1 FROM people WHERE project_id = ?)',
+    ).run(id, id);
+    return Number(res.changes) > 0;
+  }
+
   getProject(id: number): Project | null {
     return this.selectOne<Project>('SELECT * FROM projects WHERE id = ?', [id]);
   }
@@ -266,9 +274,16 @@ export class Repo {
     return { sql: where.length ? ` WHERE ${where.join(' AND ')}` : '', params };
   }
 
-  /** Removes a person with their messages and outbox items. */
-  deletePerson(id: number): void {
-    this.db.prepare('DELETE FROM people WHERE id = ?').run(id);
+  /** Removes a person and their outbox items, unless Callum has a message with them. Returns whether they were removed. */
+  deletePerson(id: number): boolean {
+    return this.transaction(() => {
+      const res = this.db
+        .prepare('DELETE FROM people WHERE id = ? AND NOT EXISTS (SELECT 1 FROM messages WHERE person_id = ?)')
+        .run(id, id);
+      if (Number(res.changes) === 0) return false;
+      this.db.prepare('UPDATE incidents SET person_id = NULL WHERE person_id = ?').run(id);
+      return true;
+    });
   }
 
   findPersonByHandle(h: { email?: string | null; linkedinUrl?: string | null; xHandle?: string | null }): Person | null {

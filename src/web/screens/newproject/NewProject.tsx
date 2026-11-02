@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AddCommit, AppState, Project, Tone } from '../../../shared/types.js';
-import { api, peopleApi, type HelloSample } from '../../api.js';
+import { api, ApiError, peopleApi, type HelloSample } from '../../api.js';
 import { formatSlot, joinNames, suggestProjectName } from '../../ui/format.js';
 import { Marble } from '../../ui/Marble.js';
 import { useToast } from '../../ui/Toast.js';
@@ -8,7 +8,7 @@ import { Wordmark } from '../../ui/Wordmark.js';
 import { River } from '../add/River.js';
 import { messageOf, useWhoFinder } from '../add/useWhoFinder.js';
 import { AlertLine, WhoPanel } from '../add/WhoPanel.js';
-import { firstOf, seedOf } from '../add/words.js';
+import { credits, firstOf, seedOf } from '../add/words.js';
 import './NewProject.css';
 
 export const EXAMPLE_OFFER = 'You help growing teams in Lagos and Accra run payroll without spreadsheets.';
@@ -147,13 +147,35 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
       if (words !== undefined && words !== made.sample) made = await api.updateProject(made.id, { sample: words });
       let added = imported;
       if (!added && found) {
-        added = await peopleApi.commit({ batchId: found.batchId, projectId: made.id, drop: finder.dropped });
+        const drop = finder.dropped;
+        try {
+          added = await peopleApi.commit({ batchId: found.batchId, projectId: made.id, drop });
+        } catch (e) {
+          if (!(e instanceof ApiError && e.status === 410)) throw e;
+          // Callum forgot the list while the person was setting up. Reading it again costs nothing, so try once more.
+          const again = await finder.rerun();
+          if (!again) return lostList();
+          try {
+            added = await peopleApi.commit({ batchId: again.batchId, projectId: made.id, drop });
+          } catch (e2) {
+            if (e2 instanceof ApiError && e2.status === 410) return lostList();
+            throw e2;
+          }
+        }
         if (added.added.length === 0) {
-          setPhase('flow');
-          setStep(1);
-          finder.reset();
-          setError(`Nobody new joined ${made.name}. Choose another list or search to go on.`);
-          return;
+          // A project with nobody in it should not stay behind. If it does have people, an earlier try got them in.
+          const verdict = await peopleApi.discardProject(made.id).catch(() => null);
+          if (verdict === null || verdict.discarded) {
+            if (verdict?.discarded) {
+              setProject(null);
+              void refresh();
+            }
+            setPhase('flow');
+            setStep(1);
+            finder.reset();
+            setError(`Nobody new joined ${made.name}. Choose another list or search to go on.`);
+            return;
+          }
         }
         setImported(added);
       }
@@ -165,6 +187,13 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
       setPhase('flow');
       setError(messageOf(e));
     }
+  };
+
+  const lostList = () => {
+    setPhase('flow');
+    setStep(1);
+    finder.reset();
+    setError('Callum lost that list while you were setting up. Choose who to meet again.');
   };
 
   const open = async () => {
@@ -349,6 +378,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
               </span>
               <span>{channelLine}</span>
             </div>
+            {finder.found?.apollo && chosen > 0 ? <p className="np-quiet np-credits">{`Adding uses about ${credits(chosen)}.`}</p> : null}
             {error ? <AlertLine>{error}</AlertLine> : null}
             <div className="np-actions">
               <button type="button" className="np-btn np-btn-quiet np-btn-lg" disabled={imported !== null} onClick={() => go(1)}>Back</button>

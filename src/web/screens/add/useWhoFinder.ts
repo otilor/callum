@@ -62,8 +62,8 @@ export interface WhoFinder {
   error: string;
   /** Back to the empty way, as if nothing had been read. */
   reset(): void;
-  /** Reads the same thing again for a fresh batch, keeping who was left out. Used after Undo. */
-  rerun(): Promise<void>;
+  /** Reads the same thing again for a fresh batch, keeping who was left out. Used after Undo, or when a batch was forgotten. */
+  rerun(): Promise<Found | null>;
 
   fileName: string;
   readTotal: number;
@@ -119,7 +119,7 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
 
   // An answer that arrives after the person moved on is ignored.
   const ticket = useRef(0);
-  const last = useRef<(() => Promise<void>) | null>(null);
+  const last = useRef<((again: boolean) => Promise<Found | null>) | null>(null);
 
   const clear = useCallback(() => {
     ticket.current++;
@@ -138,28 +138,31 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
   }, [clear]);
 
   /** Runs a request that brings up a batch of people. */
-  const bring = useCallback(async (request: () => Promise<{ batchId: string; people: PreviewPerson[]; groups: SkipGroup[] }>, word: string, nextPhase: Phase = 'reading') => {
+  const bring = useCallback(async (request: () => Promise<{ batchId: string; people: PreviewPerson[]; groups: SkipGroup[] }>, word: string, nextPhase: Phase = 'reading'): Promise<Found | null> => {
     const mine = ++ticket.current;
     setError('');
     setPhase(nextPhase);
     try {
       const res = await request();
-      if (mine !== ticket.current) return;
-      setFound({ batchId: res.batchId, people: res.people, groups: res.groups, apollo: false, word });
+      if (mine !== ticket.current) return null;
+      const next: Found = { batchId: res.batchId, people: res.people, groups: res.groups, apollo: false, word };
+      setFound(next);
       setPhase('preview');
+      return next;
     } catch (e) {
-      if (mine !== ticket.current) return;
+      if (mine !== ticket.current) return null;
       setError(messageOf(e));
       setPhase('idle');
+      return null;
     }
   }, []);
 
-  const fresh = useCallback((run: () => Promise<void>) => {
+  const fresh = useCallback((run: (again: boolean) => Promise<Found | null>) => {
     last.current = run;
     setDropped([]);
     setPeekKey(null);
     setFound(null);
-    return run();
+    return run(false);
   }, []);
 
   const chooseFile = useCallback((file: File | undefined) => {
@@ -211,31 +214,36 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
     }, 'people from the search'));
   }, [bring, fresh, linkText, projectId]);
 
-  const lookFor = useCallback(async (query: string, filters: string[], keepRows = false) => {
+  const lookFor = useCallback(async (query: string, filters: string[], keepRows = false): Promise<Found | null> => {
     const mine = ++ticket.current;
     setError('');
     setPhase('looking');
     try {
       const d = await peopleApi.describe({ query, filters, projectId });
-      if (mine !== ticket.current) return;
+      if (mine !== ticket.current) return null;
       if (!d.batchId || d.people.length === 0) {
         setNobodyLine(d.line);
         setPhase('nobody');
-      } else if (d.narrow && filters.length === 0 && !keepRows) {
+        return null;
+      }
+      if (d.narrow && filters.length === 0 && !keepRows) {
         setNarrow({ described: d, selected: [] });
         setPhase('narrow');
-      } else {
-        setFound({ batchId: d.batchId, people: d.people, groups: [], apollo: true, word: 'close fits' });
-        setPhase('preview');
+        return null;
       }
+      const next: Found = { batchId: d.batchId, people: d.people, groups: [], apollo: true, word: 'close fits' };
+      setFound(next);
+      setPhase('preview');
+      return next;
     } catch (e) {
-      if (mine !== ticket.current) return;
+      if (mine !== ticket.current) return null;
       if (e instanceof ApiError && isNoApollo(e.detail)) {
         setPhase('nosource');
-        return;
+        return null;
       }
       setError(messageOf(e));
       setPhase('idle');
+      return null;
     }
   }, [projectId]);
 
@@ -247,7 +255,7 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
     }
     setDescText(text);
     setNarrow(null);
-    void fresh(() => lookFor(text, []));
+    void fresh((again) => lookFor(text, [], again));
   }, [descText, fresh, lookFor]);
 
   const toggleNarrow = useCallback((chip: string) => {
@@ -265,7 +273,7 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
       return;
     }
     const filters = narrow.selected;
-    void fresh(() => lookFor(descText.trim(), filters));
+    void fresh((again) => lookFor(descText.trim(), filters, again));
   }, [descText, fresh, lookFor, narrow]);
 
   const connectApollo = useCallback(() => {
@@ -296,11 +304,11 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
     setDescText('');
   }, [clear]);
 
-  const rerun = useCallback(async () => {
+  const rerun = useCallback(async (): Promise<Found | null> => {
     const again = last.current;
-    if (!again) return;
+    if (!again) return null;
     setFound(null);
-    await again();
+    return again(true);
   }, []);
 
   const kept = useMemo(() => (found ? found.people.filter((p) => !dropped.includes(p.key)) : []), [found, dropped]);
