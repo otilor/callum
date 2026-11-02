@@ -327,6 +327,28 @@ describe('poll', () => {
     ]);
   });
 
+  it('reads the subject when a reply has no words of its own (the unsubscribe link sends "stop" and nothing else)', async () => {
+    const unsubscribe = mail({ from: 'Chidi Okeke <chidi@lagosledger.test>', id: '<unsub-1@lagosledger.test>', subject: 'stop', body: '' });
+    const reply = mail({ from: 'Tunde <tunde@iretilabs.test>', id: '<unsub-2@iretilabs.test>', subject: 'Re: Unsubscribe', body: '' });
+    const words = mail({ from: 'Kemi Okoye <kemi@okopay.test>', id: '<unsub-3@okopay.test>', subject: 'Stop', body: 'Thursday works.' });
+    const box: FakeBox = {
+      path: 'INBOX',
+      messages: [
+        { uid: 1, internalDate: '2026-11-02T10:00:00Z', source: unsubscribe, messageId: '<unsub-1@lagosledger.test>', from: 'chidi@lagosledger.test' },
+        { uid: 2, internalDate: '2026-11-02T10:01:00Z', source: reply, messageId: '<unsub-2@iretilabs.test>', from: 'tunde@iretilabs.test' },
+        { uid: 3, internalDate: '2026-11-02T10:02:00Z', source: words, messageId: '<unsub-3@okopay.test>', from: 'kemi@okopay.test' },
+      ],
+    };
+    const { adapter } = makeAdapter([box]);
+    const events = await adapter.poll(new Date('2026-11-02T09:00:00Z'));
+    expect(events.map((e) => (e.type === 'reply' ? [e.from.email, e.text] : null))).toEqual([
+      ['chidi@lagosledger.test', 'stop'],
+      ['tunde@iretilabs.test', 'Unsubscribe'],
+      // Words in the body win over the subject.
+      ['kemi@okopay.test', 'Thursday works.'],
+    ]);
+  });
+
   it('does not emit the same message twice', async () => {
     const { adapter } = makeAdapter([inbox]);
     expect(await adapter.poll(null)).toHaveLength(2);

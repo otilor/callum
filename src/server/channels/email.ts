@@ -81,6 +81,11 @@ const BATCH = 50;
 const SOURCE_CAP = 256 * 1024;
 const MICROSOFT_LOGIN_HOST = 'login.microsoftonline.com';
 
+/** A subject without the Re: and Fwd: in front of it. */
+function bareSubject(subject: string | undefined): string {
+  return (subject ?? '').replace(/^\s*(?:(?:re|fwd?)\s*:\s*)+/i, '').trim();
+}
+
 function isLocal(host: string): boolean {
   return host === 'localhost' || host === '127.0.0.1' || host === '::1';
 }
@@ -390,10 +395,13 @@ export function createEmailAdapter(secret: Record<string, string> | null, deps: 
           for (const bounced of bouncedAddresses(parsed, msg.source, own)) events.push({ type: 'bounce', email: bounced, at, externalId });
           continue;
         }
+        // The unsubscribe link in a mail program opens a message to the List-Unsubscribe address with the subject "stop" and
+        // nothing in the body. A message with no words of its own says what its subject says.
+        const words = stripQuoted(parsed.text ?? '') || bareSubject(parsed.subject);
         events.push({
           type: 'reply',
           from: { email, ...(sender?.name ? { name: sender.name } : {}) },
-          text: stripQuoted(parsed.text ?? ''),
+          text: words,
           at,
           externalId,
         });
