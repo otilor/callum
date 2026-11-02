@@ -1,0 +1,346 @@
+/* The project anchor and its sheet, after V4Projects. */
+.psw {
+  position: relative;
+  display: inline-flex;
+}
+.psw-anchor {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 10px 0 12px;
+  border: none;
+  border-radius: 21px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.psw-anchor:hover,
+.psw-anchor.is-open {
+  background: var(--mist);
+}
+.psw-name {
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.psw-chev {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--mist);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.psw-anchor:hover .psw-chev,
+.psw-anchor.is-open .psw-chev {
+  background: #ffffff;
+}
+.psw-anchor.is-open .psw-chev svg {
+  transform: rotate(180deg);
+}
+.psw-chev svg {
+  transition: transform 0.25s ease;
+}
+.psw-sheet {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 10px);
+  z-index: 40;
+  width: 452px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 30px;
+  background: #ffffff;
+  box-shadow: 0 30px 70px -28px rgba(29, 33, 64, 0.4), 0 0 0 1px rgba(29, 33, 64, 0.06);
+}
+.psw-rowwrap {
+  position: relative;
+}
+.psw-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 24px;
+}
+.psw-row.is-current {
+  background: var(--mist);
+}
+.psw-pick {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 6px 14px 18px;
+  border: none;
+  border-radius: 24px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.psw-row:not(.is-current) .psw-pick:hover {
+  background: var(--mist);
+}
+.psw-pick-name {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.psw-strip {
+  display: flex;
+  padding-left: 9px;
+  min-height: 32px;
+}
+.psw-strip span {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  margin-left: -9px;
+  box-sizing: border-box;
+  border: 2.5px solid #ffffff;
+  border-radius: 50%;
+}
+.psw-line {
+  font-size: 14px;
+  color: var(--slate);
+}
+.psw-dots {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: 44px;
+  height: 44px;
+  margin: 10px 10px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.psw-dots:hover,
+.psw-dots[aria-expanded='true'] {
+  background: #ffffff;
+}
+.psw-row:not(.is-current) .psw-dots:hover,
+.psw-row:not(.is-current) .psw-dots[aria-expanded='true'] {
+  background: var(--mist);
+}
+.psw-menu {
+  position: absolute;
+  right: 10px;
+  top: 58px;
+  z-index: 5;
+  width: 260px;
+  box-sizing: border-box;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px -24px rgba(29, 33, 64, 0.45), 0 0 0 1px rgba(29, 33, 64, 0.07);
+}
+.psw-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.psw-item:hover {
+  background: var(--mist);
+}
+.psw-item[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: default;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.psw-item[aria-disabled='true']:hover {
+  background: transparent;
+}
+.psw-item-text {
+  display: flex;
+  flex-direction: column;
+}
+.psw-item-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--slate);
+}
+.psw-confirm {
+  margin: 2px 6px 8px;
+  padding: 14px 14px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-radius: 20px;
+  background: var(--mist);
+}
+.psw-confirm p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.psw-confirm-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.psw-save,
+.psw-white,
+.psw-quiet {
+  min-height: 42px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 21px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.psw-save {
+  background: var(--ink);
+  color: #ffffff;
+}
+.psw-white {
+  background: #ffffff;
+  color: var(--ink);
+}
+.psw-quiet {
+  background: transparent;
+  color: var(--slate);
+  padding: 0 14px;
+}
+.psw-save:disabled,
+.psw-white:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.psw-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 14px 10px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.psw-label {
+  font-size: 14px;
+  color: var(--slate);
+}
+.psw-rename-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.psw-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 46px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 16px;
+  background: var(--mist);
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 500;
+}
+.psw-input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.psw-rename .psw-save {
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 23px;
+  font-size: 15px;
+}
+.psw-cancel {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+}
+.psw-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--error-tint);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.psw-error-pad {
+  margin: 4px 6px;
+}
+.psw-new {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 60px;
+  margin-top: 2px;
+  padding: 0 18px 0 14px;
+  border: none;
+  border-radius: 24px;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  background: transparent;
+  box-shadow: inset 0 1px 0 #e7e9f0;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.psw-new:hover {
+  background: var(--mist);
+}
+.psw-plus {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--ink);
+}
+@media (max-width: 760px) {
+  .psw-anchor {
+    font-size: 18px;
+  }
+  .psw-sheet {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    top: 64px;
+    width: auto;
+    max-width: none;
+  }
+}

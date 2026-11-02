@@ -69,10 +69,10 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: 'Callum reaches out for you.' })).toBeInTheDocument();
   });
 
-  it('shows the home placeholder with the project beside the wordmark', async () => {
+  it('shows Home with the project beside the wordmark', async () => {
     mocks.state.mockResolvedValue(appState());
     const { container } = render(<App />);
-    expect(await screen.findByTestId('project-anchor')).toHaveTextContent('Reconciliation');
+    expect(await screen.findByRole('button', { name: 'Projects, now showing Reconciliation' })).toHaveTextContent('Reconciliation');
     expect(container.querySelector('main')).toHaveAttribute('data-screen', 'home');
   });
 

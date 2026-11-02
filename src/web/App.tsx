@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { DayOne } from './screens/dayone/DayOne.js';
 import { FirstRun } from './screens/firstrun/FirstRun.js';
+import { Home } from './screens/home/Home.js';
+import { ProjectSwitcher } from './screens/home/ProjectSwitcher.js';
 import { SignInCard } from './screens/signin/SignInCard.js';
 import type { AppState, Project } from '../shared/types.js';
 import type { AccountSlots } from './ui/AccountMenu.js';
@@ -27,7 +29,7 @@ export function screenFor(state: AppState, current: Project | null): ScreenName 
   return 'home';
 }
 
-function Placeholder({ screen, state, project }: { screen: Exclude<ScreenName, 'first-run' | 'day-one'>; state: AppState; project: Project | null }) {
+function Placeholder({ screen, state, project }: { screen: Exclude<ScreenName, 'first-run' | 'day-one' | 'home'>; state: AppState; project: Project | null }) {
   return (
     <main className="shell" data-screen={screen}>
       <header className="shell-bar">
@@ -102,9 +104,24 @@ export function App() {
   } else if (screen === 'first-run') {
     body = <FirstRun state={state} refresh={refresh} />;
   } else if (currentProject && (screen === 'day-one' || (screen === 'home' && dayOneFor === currentProject.id))) {
-    body = <DayOne key={currentProject.id} state={state} project={currentProject} refresh={refresh} account={account} onLeave={() => setDayOneFor(null)} />;
+    const several = state.projects.filter((p) => p.state !== 'wrapped').length > 1;
+    body = (
+      <DayOne
+        key={currentProject.id}
+        state={state}
+        project={currentProject}
+        refresh={refresh}
+        account={account}
+        onLeave={() => setDayOneFor(null)}
+        {...(several ? { switcher: <ProjectSwitcher state={state} project={currentProject} refresh={refresh} /> } : {})}
+      />
+    );
+  } else if (currentProject && screen !== 'wrapped') {
+    // Slots for the later tasks: incident, quiet, overlay, onAddPeople, onNewProject, onOpenPerson, and the
+    // account entries (onYourCallum, onLeave, onWeekly). See the header of Home.tsx.
+    body = <Home state={state} project={currentProject} refresh={refresh} account={account} />;
   } else {
-    body = <Placeholder screen={screen === 'day-one' ? 'home' : screen} state={state} project={currentProject} />;
+    body = <Placeholder screen="wrapped" state={state} project={currentProject} />;
   }
 
   return (
