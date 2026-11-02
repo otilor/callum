@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  SELECTORS, clampNote, hasWeeklyLimitText, humanDelayMs, isBlockedStatus, isCheckpointUrl, isOwnSnippet, isSignInUrl,
+  SELECTORS, clampNote, headerNameCandidates, isUnavailableProfileText, normalizeText, snippetMatches, hasWeeklyLimitText, humanDelayMs, isBlockedStatus, isCheckpointUrl, isOwnSnippet, isSignInUrl,
   cleanName, parseListTimestamp, profileUrlFromHref, splitHeadline,
 } from './linkedin-detect.js';
 
@@ -21,6 +21,8 @@ describe('isCheckpointUrl', () => {
       'https://www.linkedin.com/feed/',
       'https://www.linkedin.com/in/kemi-okoye/',
       'https://www.linkedin.com/in/login-larry/',
+      'https://www.linkedin.com/in/challenger-bank/',
+      'https://www.linkedin.com/in/challenge-ada/',
       'https://www.linkedin.com/in/checkpoint-charlie/',
       'https://www.linkedin.com/messaging/thread/2-abc/',
       'https://www.linkedin.com/search/results/people/?keywords=login',
@@ -146,6 +148,30 @@ describe('thread helpers', () => {
   });
 });
 
+describe('page text helpers', () => {
+  it('recognises a profile LinkedIn no longer shows', () => {
+    expect(isUnavailableProfileText('This page doesn’t exist')).toBe(true);
+    expect(isUnavailableProfileText('This profile is not available')).toBe(true);
+    expect(isUnavailableProfileText('Head of Payments at Okopay')).toBe(false);
+  });
+  it('matches a shortened preview against the opened thread, so a stale panel is never read', () => {
+    expect(normalizeText('  a \n b  ')).toBe('a b');
+    expect(snippetMatches('Yes, Thursday at 9:00 works for me.', 'Yes, Thursday at 9:00 works for me.')).toBe(true);
+    expect(snippetMatches('Yes, Thursday at 9:00 wor…', 'Yes, Thursday at 9:00 works for me.')).toBe(true);
+    expect(snippetMatches('Yes, Thursday at 9:00 wor...', 'Yes, Thursday at 9:00 works for me.')).toBe(true);
+    expect(snippetMatches('Sounds good', 'Not right now, thanks.')).toBe(false);
+    expect(snippetMatches('', 'anything')).toBe(true);
+  });
+});
+
+describe('headerNameCandidates', () => {
+  it('offers the full name first, then the name without credentials', () => {
+    expect(headerNameCandidates('Ada Obi')).toEqual(['Ada Obi']);
+    expect(headerNameCandidates(' Ada  Obi, MBA ')).toEqual(['Ada Obi, MBA', 'Ada Obi']);
+    expect(headerNameCandidates('')).toEqual([]);
+  });
+});
+
 describe('pacing and blocks', () => {
   it('waits between 4 and 11 seconds', () => {
     expect(humanDelayMs(() => 0)).toBe(4000);
@@ -159,7 +185,12 @@ describe('pacing and blocks', () => {
 });
 
 describe('SELECTORS', () => {
-  it('holds only non-empty strings', () => {
-    for (const [name, value] of Object.entries(SELECTORS)) expect(typeof value === 'string' && value.length > 0, name).toBe(true);
+  it('holds only non-empty lists of non-empty alternatives', () => {
+    for (const [name, value] of Object.entries(SELECTORS)) {
+      expect(Array.isArray(value) && value.length > 0 && value.every((v) => typeof v === 'string' && v.length > 0), name).toBe(true);
+    }
+  });
+  it('has no comma unions: alternatives are separate entries', () => {
+    for (const [name, list] of Object.entries(SELECTORS)) for (const sel of list) expect(sel.includes(', '), `${name}: ${sel}`).toBe(false);
   });
 });

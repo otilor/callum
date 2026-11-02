@@ -45,6 +45,20 @@ describe('x connect', () => {
     expect(f.calls[0]?.headers.authorization).toBe('Bearer tok1');
   });
 
+  it('keeps a client secret in the secret and checks the token can read messages', async () => {
+    const f = fakeFetch((c) => (c.url.includes('/dm_events') ? json(200, { meta: { result_count: 0 } }) : json(200, { data: { id: '100', username: 'founder' } })));
+    const out = await createXAdapter(null, { fetch: f.fetch }).connect({ accessToken: 'tok1', refreshToken: 'ref1', clientId: 'cid', clientSecret: 'shh' });
+    expect(out.secret).toMatchObject({ clientSecret: 'shh' });
+    expect(f.calls.map((c) => c.url)).toEqual(['https://api.x.com/2/users/me', 'https://api.x.com/2/dm_events?max_results=1']);
+  });
+
+  it('refuses a token without Direct Messages access in plain words', async () => {
+    const f = fakeFetch((c) => (c.url.includes('/dm_events') ? json(403, { title: 'Forbidden', status: 403 }) : json(200, { data: { id: '100', username: 'founder' } })));
+    await expect(createXAdapter(null, { fetch: f.fetch }).connect({ accessToken: 'tok1' })).rejects.toThrow(
+      "This X token can't read messages. Give the app Direct Messages read and write access, then connect again.",
+    );
+  });
+
   it('asks for an access token when none is given', async () => {
     const f = fakeFetch(() => json(200, {}));
     await expect(createXAdapter(null, { fetch: f.fetch }).connect({})).rejects.toBeInstanceOf(ConnectError);
@@ -116,6 +130,7 @@ describe('x send', () => {
     expect(dmAttempts).toBe(2);
     const refresh = f.calls.find((c) => c.url.endsWith('/oauth2/token'));
     expect(refresh?.url).toBe('https://api.x.com/2/oauth2/token');
+    expect(refresh?.headers.authorization).toBeUndefined(); // a public app sends only its client id
     expect(refresh?.headers['content-type']).toBe('application/x-www-form-urlencoded');
     expect(new URLSearchParams(refresh?.body ?? '').get('grant_type')).toBe('refresh_token');
     expect(new URLSearchParams(refresh?.body ?? '').get('refresh_token')).toBe('ref1');
@@ -249,7 +264,8 @@ describe('x poll', () => {
 
   it('throws a clear error when X refuses the poll', async () => {
     await expect(adapterWith(fakeFetch(() => json(429, {}))).poll(null)).rejects.toThrow(/daily limit/);
-    await expect(adapterWith(fakeFetch(() => json(401, {}))).poll(null)).rejects.toBeInstanceOf(ConnectError);
+    await expect(adapterWith(fakeFetch(() => json(401, {}))).poll(null)).rejects.toMatchObject({ code: 'auth', message: 'X signed Callum out. Connect X again from Your Callum.' });
+    await expect(createXAdapter(null, { fetch: fakeFetch(() => json(200, {})).fetch }).poll(null)).rejects.toBeInstanceOf(ConnectError);
     await expect(adapterWith(fakeFetch(() => json(500, {}))).poll(null)).rejects.toThrow(/X/);
   });
 });

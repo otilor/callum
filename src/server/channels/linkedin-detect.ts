@@ -8,7 +8,7 @@ export function isCheckpointUrl(url: string): boolean {
   } catch {
     return false;
   }
-  return /^\/(?:checkpoint\/|authwall|uas\/login|login(?:\/|$))/.test(path) || path.includes('/challenge');
+  return /^\/(?:checkpoint\/|authwall|uas\/login|login(?:\/|$))/.test(path) || /(?:^|\/)challenge(?:\/|$)/.test(path);
 }
 
 /** LinkedIn's status for "we think you are a bot". */
@@ -43,6 +43,29 @@ export function clampNote(text: string): string {
   const lastSpace = head.search(/\s\S*$/);
   const cut = fits || lastSpace <= 0 ? head : head.slice(0, lastSpace);
   return cut.replace(/[\s,;:\-–—]+$/, '');
+}
+
+/** Text of a page that LinkedIn shows for a profile that is gone or hidden. */
+export function isUnavailableProfileText(text: string): boolean {
+  return /this page doesn['\u2019]t exist|profile (?:is )?(?:not available|unavailable)|this profile is not available/i.test(text);
+}
+
+/** The names a chat window header may show for a profile: the full name, then without credentials such as ", MBA". */
+export function headerNameCandidates(profileName: string): string[] {
+  const full = normalizeText(profileName);
+  const short = normalizeText(full.split(/[,(|]/)[0] ?? '');
+  return [...new Set([full, short].filter(Boolean))];
+}
+
+export function normalizeText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+/** A thread preview is shortened with an ellipsis, so it matches when it is the start of the open thread's last message. */
+export function snippetMatches(snippet: string, lastMessage: string): boolean {
+  const preview = normalizeText(snippet.replace(/^\s*you\s*:/i, '')).replace(/(?:\u2026|\.{3})$/, '').trim();
+  if (!preview) return true;
+  return normalizeText(lastMessage).toLowerCase().startsWith(preview.toLowerCase());
 }
 
 export function humanDelayMs(random: () => number): number {
@@ -131,53 +154,62 @@ export function parseListTimestamp(text: string, now: Date): Date | null {
 }
 
 /**
- * Every selector the LinkedIn adapter uses. LinkedIn changes its markup often; fix a broken step here.
- * Comma lists are fallbacks: the aria-label rules are the stable ones, the class names are older markup.
+ * Every selector the LinkedIn adapter uses, in one place, so a markup change is fixed here.
+ * Each entry is a list of alternatives, tried in order, most specific first: the first one that
+ * finds something visible wins. (A CSS comma list would be a union in page order, and a broad
+ * alternative could win over the specific one.) Prefer aria-labels; class names are older markup.
  */
 export const SELECTORS = {
   // Signed-in header and the "Me" menu that holds the user's name.
-  meMenu: 'button.global-nav__primary-link-me-menu-trigger, button[aria-label^="Me" i], .global-nav__me button',
-  meName: '.global-nav__me-content .t-bold, .global-nav__me-content h3, .artdeco-dropdown__content .t-16.t-bold',
-  feedName: '.feed-identity-module__actor-meta .t-16, .profile-card-member-details h3, [data-view-name="profile-card-name"]',
+  meMenu: ['button.global-nav__primary-link-me-menu-trigger', 'button[aria-label^="Me" i]', '.global-nav__me button'],
+  meName: ['.global-nav__me-content .t-bold', '.global-nav__me-content h3', '.artdeco-dropdown__content .t-16.t-bold'],
+  feedName: ['.feed-identity-module__actor-meta .t-16', '.profile-card-member-details h3', '[data-view-name="profile-card-name"]'],
 
   // Profile page. Everything is scoped to the top card so "People also viewed" is never clicked.
-  topCard: 'main section:has(h1)',
-  connectButton: '[aria-label^="Invite"][aria-label$="to connect"]',
-  moreButton: 'button[aria-label="More actions"], button[aria-label^="More actions" i], button[id$="profile-overflow-action"]',
-  moreMenuConnect: '[role="menu"] [aria-label^="Invite"][aria-label$="to connect"], .artdeco-dropdown__content [aria-label^="Invite"][aria-label$="to connect"]',
-  pendingMarker: '[aria-label^="Pending"], button:text-is("Pending")',
-  messageButton: '[aria-label^="Message"], a:text-is("Message"), button:text-is("Message")',
+  topCard: ['main section:has(h1)', 'section:has(h1)'],
+  profileName: ['h1'],
+  connectButton: ['[aria-label^="Invite"][aria-label$="to connect"]', 'button:text-is("Connect")', 'a:text-is("Connect")'],
+  moreButton: ['button[aria-label="More actions"]', 'button[aria-label^="More actions" i]', 'button[id$="profile-overflow-action"]'],
+  moreMenuConnect: ['[role="menu"] [aria-label^="Invite"][aria-label$="to connect"]', '.artdeco-dropdown__content [aria-label^="Invite"][aria-label$="to connect"]'],
+  pendingMarker: ['[aria-label^="Pending"]', 'button:text-is("Pending")'],
+  followButton: ['[aria-label^="Follow"]', 'button:text-is("Follow")'],
+  messageButton: ['[aria-label^="Message"]', 'a:text-is("Message")', 'button:text-is("Message")'],
 
   // Invitation dialog.
-  dialog: '[role="dialog"], .artdeco-modal',
-  addNoteButton: '[role="dialog"] button[aria-label="Add a note"], [role="dialog"] button:text-is("Add a note")',
-  noteTextarea: '[role="dialog"] textarea#custom-message, [role="dialog"] textarea[name="message"], [role="dialog"] textarea',
-  sendInviteButton:
-    '[role="dialog"] button[aria-label="Send invitation"], [role="dialog"] button[aria-label="Send now"], [role="dialog"] button:text-is("Send")',
-  sendWithoutNoteButton:
-    '[role="dialog"] button[aria-label="Send without a note"], [role="dialog"] button[aria-label="Send now"], [role="dialog"] button:text-is("Send without a note")',
-  dialogDismiss: '[role="dialog"] button[aria-label="Dismiss"], [role="dialog"] button:text-is("Got it"), [role="dialog"] button:text-is("Close")',
+  dialog: ['[role="dialog"]', '.artdeco-modal'],
+  addNoteButton: ['[role="dialog"] button[aria-label="Add a note"]', '[role="dialog"] button:text-is("Add a note")'],
+  noteTextarea: ['[role="dialog"] textarea#custom-message', '[role="dialog"] textarea[name="message"]', '[role="dialog"] textarea'],
+  sendInviteButton: ['[role="dialog"] button[aria-label="Send invitation"]', '[role="dialog"] button[aria-label="Send now"]', '[role="dialog"] button:text-is("Send")'],
+  sendWithoutNoteButton: ['[role="dialog"] button[aria-label="Send without a note"]', '[role="dialog"] button[aria-label="Send now"]', '[role="dialog"] button:text-is("Send without a note")'],
+  dialogDismiss: ['[role="dialog"] button[aria-label="Dismiss"]', '[role="dialog"] button:text-is("Got it")', '[role="dialog"] button:text-is("Close")'],
+  premiumUpsell: ['[role="dialog"]:has-text("Premium")'],
+  // Where LinkedIn shows notices such as the weekly limit. Only these are read for limit text.
+  notices: ['[role="dialog"]', '[role="alert"]', '.artdeco-toast-item'],
 
-  // Message composer opened from a profile.
-  composer: 'div.msg-form__contenteditable[contenteditable="true"], [role="textbox"][aria-label^="Write a message"]',
-  composerSend: 'button.msg-form__send-button, button[type="submit"]:text-is("Send")',
+  // Message bubbles (the chat windows at the bottom of the page) and their composer.
+  messageBubble: ['.msg-overlay-conversation-bubble'],
+  bubbleHeader: ['.msg-overlay-bubble-header', 'header'],
+  bubbleClose: ['button[aria-label^="Close your conversation"]', '.msg-overlay-bubble-header__control--close-btn'],
+  composer: ['div.msg-form__contenteditable[contenteditable="true"]', '[role="textbox"][aria-label^="Write a message"]'],
+  composerSend: ['button.msg-form__send-button', 'button[type="submit"]:text-is("Send")'],
 
   // Connections page.
-  connectionLink: '.mn-connection-card__link, main li a[href*="/in/"]',
+  connectionLink: ['.mn-connection-card__link', 'main li a[href*="/in/"]'],
 
-  // Messaging list and an open thread.
-  conversation: 'li.msg-conversation-listitem, li.msg-conversations-container__convo-item',
-  conversationLink: 'a.msg-conversation-listitem__link, a[href*="/messaging/thread/"]',
-  conversationName: '.msg-conversation-card__participant-names, h3',
-  conversationSnippet: '.msg-conversation-card__message-snippet, .msg-conversation-card__message-snippet-body',
-  conversationTime: 'time, .msg-conversation-listitem__time-stamp',
-  threadProfileLink: 'a.msg-thread__link-to-profile, .msg-entity-lockup a[href*="/in/"], .msg-title-bar a[href*="/in/"]',
-  threadMessage: '.msg-s-event-listitem__body',
+  // Messaging list and an open thread. A row's link may be an anchor or a div that opens the thread on click.
+  conversation: ['li.msg-conversation-listitem', 'li.msg-conversations-container__convo-item'],
+  conversationLink: ['.msg-conversation-listitem__link', 'a[href*="/messaging/thread/"]'],
+  conversationName: ['.msg-conversation-card__participant-names', 'h3'],
+  conversationSnippet: ['.msg-conversation-card__message-snippet', '.msg-conversation-card__message-snippet-body'],
+  conversationTime: ['time', '.msg-conversation-listitem__time-stamp'],
+  threadPanel: ['.msg-s-message-list-container', '.msg-thread', 'main'],
+  threadProfileLink: ['a.msg-thread__link-to-profile', '.msg-entity-lockup a[href*="/in/"]', '.msg-title-bar a[href*="/in/"]'],
+  threadMessage: ['.msg-s-event-listitem__body'],
 
   // People search results.
-  searchResult: 'li.reusable-search__result-container, [data-view-name="search-entity-result-universal-template"], main ul[role="list"] > li:has(a[href*="/in/"])',
-  searchEmpty: '.search-reusable-search-no-results, [data-view-name="search-no-results"]',
-  searchLink: 'a[href*="/in/"]',
-  searchName: 'span[aria-hidden="true"]', // inside the result's own profile link, never a "mutual connection" link
-  searchHeadline: '.entity-result__primary-subtitle, div.t-14.t-black.t-normal',
-} as const;
+  searchResult: ['li.reusable-search__result-container', '[data-view-name="search-entity-result-universal-template"]', 'main ul[role="list"] > li:has(a[href*="/in/"])'],
+  searchEmpty: ['.search-reusable-search-no-results', '[data-view-name="search-no-results"]'],
+  searchLink: ['a[href*="/in/"]'],
+  searchName: ['span[aria-hidden="true"]'], // inside the result's own profile link, never a "mutual connection" link
+  searchHeadline: ['.entity-result__primary-subtitle', 'div.t-14.t-black.t-normal'],
+} as const satisfies Record<string, readonly string[]>;

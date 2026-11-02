@@ -3,7 +3,8 @@ export interface Recipient { name: string; email: string | null; linkedinUrl: st
 export interface OutboundMessage { to: Recipient; kind: OutKind; subject: string | null; body: string; inReplyTo: string | null }
 export type ChannelErrorCode = 'auth' | 'checkpoint' | 'weekly_limit' | 'rate_limit' | 'bounce' | 'invalid_recipient' | 'temporary' | 'unknown';
 export interface ChannelError { code: ChannelErrorCode; message: string }
-export type SendResult = { ok: true; externalId: string | null } | { ok: false; error: ChannelError };
+/** `noteDropped` is set when an invitation went out without its note, so the app records what was really delivered. */
+export type SendResult = { ok: true; externalId: string | null; noteDropped?: true } | { ok: false; error: ChannelError };
 export type InboundEvent =
   | { type: 'reply'; from: { email?: string; linkedinUrl?: string; xHandle?: string; name?: string }; text: string; at: string; externalId: string | null }
   | { type: 'accepted'; linkedinUrl: string; at: string }
@@ -12,7 +13,12 @@ export type InboundEvent =
   /** `externalId` is the Message-ID of the sent mail, so the runner can ignore Callum's own sends. */
   | { type: 'outbound_seen'; email: string; at: string; externalId: string | null }
   | { type: 'checkpoint'; at: string };
-export class ConnectError extends Error {}
+/** `message` is always plain words for the person; `code` lets callers tell a signed-out channel apart. */
+export class ConnectError extends Error {
+  constructor(message: string, readonly code?: ChannelErrorCode) {
+    super(message);
+  }
+}
 export interface ChannelAdapter {
   readonly channel: Channel;
   connect(input: Record<string, string>): Promise<{ identity: string; secret: Record<string, string> }>;

@@ -24,6 +24,7 @@ const state = {
   lookups: [] as string[],
   dms: [] as Array<{ to: string; text: string; auth: string | undefined; contentType: string | undefined }>,
   refreshes: [] as URLSearchParams[],
+  refreshAuth: [] as Array<string | undefined>,
   limited: false,
   dmEvents: [] as DmEvent[],
   eventRequests: [] as URLSearchParams[],
@@ -31,11 +32,12 @@ const state = {
 };
 
 function reset(): void {
-  state.validTokens = new Set(['good-token']);
+  state.validTokens = new Set(['good-token', 'no-dm-token']);
   state.refreshTokens = new Set(['refresh-1']);
   state.lookups = [];
   state.dms = [];
   state.refreshes = [];
+  state.refreshAuth = [];
   state.limited = false;
   state.dmEvents = [];
   state.eventRequests = [];
@@ -63,7 +65,13 @@ beforeAll(async () => {
       const form = new URLSearchParams(await readBody(req));
       state.refreshes.push(form);
       const refresh = form.get('refresh_token') ?? '';
-      if (req.headers['content-type'] !== 'application/x-www-form-urlencoded' || form.get('grant_type') !== 'refresh_token' || form.get('client_id') !== 'client-123' || !state.refreshTokens.delete(refresh)) {
+      const clientId = form.get('client_id') ?? '';
+      state.refreshAuth.push(req.headers.authorization);
+      // A confidential app ("Web App, Automated App or Bot") must authenticate with Basic client_id:client_secret.
+      if (clientId === 'conf-client' && req.headers.authorization !== `Basic ${Buffer.from('conf-client:s3cret').toString('base64')}`) {
+        return send(401, { error: 'unauthorized_client', error_description: 'Missing valid authorization header' });
+      }
+      if (req.headers['content-type'] !== 'application/x-www-form-urlencoded' || form.get('grant_type') !== 'refresh_token' || !['client-123', 'conf-client'].includes(clientId) || !state.refreshTokens.delete(refresh)) {
         return send(400, { error: 'invalid_request', error_description: 'Value passed for the token was invalid.' });
       }
       const n = ++state.issued;
@@ -78,6 +86,11 @@ beforeAll(async () => {
     }
 
     if (url.pathname === '/2/users/me') return send(200, { data: ME });
+
+    // A token whose app lacks the Direct Messages permission can read the profile but nothing about messages.
+    if (token === 'no-dm-token' && url.pathname.includes('dm_')) {
+      return send(403, { title: 'Forbidden', type: 'about:blank', status: 403, detail: 'Forbidden' });
+    }
 
     const byUsername = /^\/2\/users\/by\/username\/([^/]+)$/.exec(url.pathname);
     if (byUsername) {
@@ -149,6 +162,13 @@ describe('x adapter against a local X API v2 server', () => {
     });
   });
 
+  it('refuses a token that cannot read messages, in plain words', async () => {
+    const adapter = createXAdapter(null, { baseUrl });
+    await expect(adapter.connect({ accessToken: 'no-dm-token' })).rejects.toThrow(
+      "This X token can't read messages. Give the app Direct Messages read and write access, then connect again.",
+    );
+  });
+
   it('turns a rejected token into a plain connect error', async () => {
     const adapter = createXAdapter(null, { baseUrl });
     await expect(adapter.connect({ accessToken: 'nope' })).rejects.toBeInstanceOf(ConnectError);
@@ -192,6 +212,26 @@ describe('x adapter against a local X API v2 server', () => {
     const restarted = createXAdapter(saved[0] ?? null, { baseUrl });
     expect(await restarted.send({ ...HELLO, body: 'After restart' })).toMatchObject({ ok: true });
     expect(state.refreshes).toHaveLength(1);
+  });
+
+  it('refreshes a confidential app with Basic authentication and keeps the client secret in the secret', async () => {
+    const saved: Array<Record<string, string>> = [];
+    const adapter = createXAdapter(null, { baseUrl, onSecretChange: (s) => saved.push(s) });
+    const connected = await adapter.connect({ accessToken: 'expired', refreshToken: 'refresh-1', clientId: 'conf-client', clientSecret: 's3cret' });
+    expect(connected.secret).toMatchObject({ accessToken: 'access-1', refreshToken: 'refresh-2', clientId: 'conf-client', clientSecret: 's3cret' });
+    expect(state.refreshAuth).toEqual([`Basic ${Buffer.from('conf-client:s3cret').toString('base64')}`]);
+
+    // Later refreshes (the token expires every two hours) keep working from the stored secret.
+    state.validTokens.delete('access-1');
+    const later = createXAdapter(connected.secret, { baseUrl, onSecretChange: (s) => saved.push(s) });
+    expect(await later.send(HELLO)).toMatchObject({ ok: true });
+    expect(state.refreshAuth).toHaveLength(2);
+    expect(saved.at(-1)).toMatchObject({ accessToken: 'access-2', refreshToken: 'refresh-3', clientSecret: 's3cret' });
+  });
+
+  it('a confidential app without its secret cannot refresh and is told to connect again', async () => {
+    const adapter = createXAdapter(secretFor({ accessToken: 'expired', refreshToken: 'refresh-1', clientId: 'conf-client' }), { baseUrl });
+    expect(await adapter.send(HELLO)).toMatchObject({ ok: false, error: { code: 'auth', message: 'X signed Callum out. Connect X again from Your Callum.' } });
   });
 
   it('shares one refresh between two requests that fail at the same time', async () => {
@@ -270,7 +310,7 @@ describe('x adapter against a local X API v2 server', () => {
 
     it('raises a clear error when X refuses', async () => {
       const adapter = createXAdapter(secretFor({ accessToken: 'expired' }), { baseUrl, clock });
-      await expect(adapter.poll(null)).rejects.toBeInstanceOf(ConnectError);
+      await expect(adapter.poll(null)).rejects.toMatchObject({ code: 'auth', message: 'X signed Callum out. Connect X again from Your Callum.' });
     });
   });
 

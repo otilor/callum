@@ -129,6 +129,54 @@ describe('AdapterRegistry', () => {
     expect(scopes).toContain('channels');
   });
 
+  it('closes the cached adapter before building the one that replaces it, so two browsers never share a profile', async () => {
+    const order: string[] = [];
+    let n = 0;
+    const factory: AdapterFactory = (ch) => {
+      const id = ++n;
+      order.push(`build ${id}`);
+      return stubAdapter(ch, { close: vi.fn(async () => { order.push(`close ${id}`); }) });
+    };
+    const registry = new AdapterRegistry(repo, factory, bus);
+    await registry.connect('linkedin', { address: 'a' }, clock.now());
+    await registry.connect('linkedin', { address: 'b' }, clock.now());
+    expect(order).toEqual(['build 1', 'close 1', 'build 2']);
+  });
+
+  it('ignores a late secret save from an adapter that was replaced or disconnected', async () => {
+    const saves: Array<(s: Record<string, string>) => void> = [];
+    const registry = new AdapterRegistry(repo, (ch, _secret, hooks) => {
+      saves.push(hooks?.saveSecret ?? (() => undefined));
+      return stubAdapter(ch);
+    }, bus);
+    await registry.connect('x', { address: 'first' }, clock.now());
+    await registry.connect('x', { address: 'second' }, clock.now());
+    saves[0]?.({ stale: 'from the replaced adapter' });
+    expect(repo.getChannelSecret('x')).toEqual({ address: 'second' });
+    saves[1]?.({ address: 'second', accessToken: 'rotated' });
+    expect(repo.getChannelSecret('x')).toEqual({ address: 'second', accessToken: 'rotated' });
+    await registry.disconnect('x');
+    saves[1]?.({ stale: 'in-flight refresh finishing after disconnect' });
+    expect(repo.getChannelSecret('x')).toBeNull();
+  });
+
+  it('keeps the working adapter and its saves when a new connect fails', async () => {
+    let saveSecret: ((s: Record<string, string>) => void) | undefined;
+    let built = 0;
+    const registry = new AdapterRegistry(repo, (ch, _secret, hooks) => {
+      built++;
+      if (built === 1) {
+        saveSecret = hooks?.saveSecret;
+        return stubAdapter(ch);
+      }
+      return stubAdapter(ch, { connect: async () => { throw new ConnectError('nope'); } });
+    }, bus);
+    await registry.connect('x', { address: 'first' }, clock.now());
+    await expect(registry.connect('x', { address: 'second' }, clock.now())).rejects.toThrow('nope');
+    saveSecret?.({ address: 'first', accessToken: 'rotated' });
+    expect(repo.getChannelSecret('x')).toEqual({ address: 'first', accessToken: 'rotated' });
+  });
+
   it('closeAll closes every built adapter once', async () => {
     const adapters = new Map<string, ChannelAdapter>();
     const registry = new AdapterRegistry(repo, (ch) => {

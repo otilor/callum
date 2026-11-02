@@ -32,8 +32,20 @@ export class AdapterRegistry {
     private readonly bus: Bus,
   ) {}
 
-  private hooks(ch: Channel): AdapterHooks {
-    return { saveSecret: (secret) => this.repo.setChannelSecret(ch, secret) };
+  // Bumped whenever a channel's adapter is replaced or the channel is disconnected, so that a
+  // late save from an adapter that no longer owns the secret (an in-flight token refresh) is dropped.
+  private readonly generation = new Map<Channel, number>();
+
+  private generationOf(ch: Channel): number {
+    return this.generation.get(ch) ?? 0;
+  }
+
+  private hooks(ch: Channel, generation: number): AdapterHooks {
+    return {
+      saveSecret: (secret) => {
+        if (this.generationOf(ch) === generation) this.repo.setChannelSecret(ch, secret);
+      },
+    };
   }
 
   /** The adapter for a connected or paused channel, built from its stored secret on first use. */
@@ -42,13 +54,18 @@ export class AdapterRegistry {
     if (cached) return cached;
     const status = this.repo.getChannel(ch).status;
     if (status !== 'connected' && status !== 'paused') return null;
-    const adapter = this.factory(ch, this.repo.getChannelSecret(ch), this.hooks(ch));
+    const adapter = this.factory(ch, this.repo.getChannelSecret(ch), this.hooks(ch, this.generationOf(ch)));
     this.adapters.set(ch, adapter);
     return adapter;
   }
 
   async connect(ch: Channel, input: Record<string, string>, now: Date): Promise<ChannelAccount> {
-    const adapter = this.factory(ch, null, this.hooks(ch));
+    // Close the old adapter first: two browsers must never open one LinkedIn profile folder. If connecting
+    // fails it stays cached; every adapter reopens what it needs on its next use.
+    const previous = this.adapters.get(ch);
+    await previous?.close().catch(() => undefined);
+    const next = this.generationOf(ch) + 1;
+    const adapter = this.factory(ch, null, this.hooks(ch, next));
     let connected: { identity: string; secret: Record<string, string> };
     try {
       connected = await adapter.connect(input);
@@ -56,9 +73,8 @@ export class AdapterRegistry {
       await adapter.close().catch(() => undefined);
       throw err;
     }
-    const previous = this.adapters.get(ch);
+    this.generation.set(ch, next);
     this.adapters.set(ch, adapter);
-    if (previous && previous !== adapter) await previous.close().catch(() => undefined);
 
     this.repo.setChannelSecret(ch, connected.secret);
     const account = this.repo.updateChannel(ch, {
@@ -83,7 +99,8 @@ export class AdapterRegistry {
 
   async disconnect(ch: Channel): Promise<ChannelAccount> {
     // Build one even for a channel in an error state, so a saved browser session is still cleared.
-    const adapter = this.adapters.get(ch) ?? this.factory(ch, this.repo.getChannelSecret(ch), this.hooks(ch));
+    const adapter = this.adapters.get(ch) ?? this.factory(ch, this.repo.getChannelSecret(ch), this.hooks(ch, this.generationOf(ch)));
+    this.generation.set(ch, this.generationOf(ch) + 1);
     this.adapters.delete(ch);
     await adapter.forget?.().catch(() => undefined);
     await adapter.close().catch(() => undefined);

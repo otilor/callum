@@ -28,4 +28,7 @@
       content.hidden = !content.hidden;
     });
   </script>
+  <script>
+    fetch('/__env', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ webdriver: navigator.webdriver, userAgent: navigator.userAgent }) });
+  </script>
 </body></html>

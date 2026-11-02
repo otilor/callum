@@ -11,25 +11,41 @@ const read = (file: string) => readFileSync(new URL(file, DIR), 'utf8');
 export const VALID_COOKIE = 'valid-li-at';
 export const FIXTURE_USER = 'Gabriel Femi';
 
-type Variant = 'connect' | 'more' | 'message' | 'pending' | 'follow';
-interface Profile { name: string; headline: string; variant: Variant; limit?: 'on-connect' | 'on-send' }
+type Variant = 'connect' | 'more' | 'message' | 'pending' | 'follow' | 'nothing';
+interface Profile {
+  name: string;
+  headline: string;
+  variant: Variant;
+  limit?: 'on-connect' | 'on-send';
+  /** Free account that has used its personalised notes: "Add a note" opens a Premium offer. */
+  notes?: 'upsell';
+  /** A chat window restored from earlier, for someone else. A sticky one ignores its close button. */
+  bubble?: 'closable' | 'sticky';
+  /** What the server answers when the page posts the invitation or message. */
+  send?: 'error';
+}
 
 export const PROFILES: Record<string, Profile> = {
   kemi: { name: 'Kemi Okoye', headline: 'Head of Payments at Okopay', variant: 'connect' },
   tunde: { name: 'Tunde Bello', headline: 'Founder at Lagos Labs', variant: 'more' },
-  ada: { name: 'Ada Obi', headline: 'Product lead at Fernhill', variant: 'message' },
+  ada: { name: 'Ada Obi', headline: 'Product lead at Fernhill', variant: 'message', bubble: 'closable' },
+  bola: { name: 'Bola Ade', headline: 'Designer at Fernhill', variant: 'message', bubble: 'sticky' },
+  flaky: { name: 'Flo Flaky', headline: 'Writer', variant: 'message', send: 'error' },
+  freebie: { name: 'Free Bie', headline: 'Analyst at Okopay', variant: 'connect', notes: 'upsell' },
+  toast: { name: 'Toa St', headline: 'Analyst at Okopay', variant: 'connect', send: 'error' },
+  odd: { name: 'Odd Page', headline: 'Writer', variant: 'nothing' },
   pia: { name: 'Pia Pending', headline: 'Designer', variant: 'pending' },
   celeb: { name: 'Cleo Famous', headline: 'Author and speaker', variant: 'follow' },
   capped: { name: 'Cap Ed', headline: 'Engineer at Ceiling Co', variant: 'connect', limit: 'on-connect' },
   limited: { name: 'Lim Ited', headline: 'Engineer at Ceiling Co', variant: 'connect', limit: 'on-send' },
 };
 
-interface Thread { id: string; slug: string; name: string; time: string; snippet: string; messages: string[] }
+interface Thread { id: string; slug: string; name: string; time: string; snippet: string; messages: string[]; link: boolean }
 const THREADS: Thread[] = [
-  { id: '2-ada', slug: 'ada', name: 'Ada Obi', time: '10:32 AM', snippet: 'Yes, Thursday at 9:00 works for me.', messages: ['Hi Ada, thanks for connecting.', 'Yes, Thursday at 9:00 works for me.'] },
-  { id: '2-kemi', slug: 'kemi', name: 'Kemi Okoye', time: '10:05 AM', snippet: 'You: Thanks for connecting, Kemi.', messages: ['Thanks for connecting, Kemi.'] },
-  { id: '2-ben', slug: 'ben-ward', name: 'Ben Ward', time: 'Sun', snippet: 'Sounds good, send me the details.', messages: ['Hi Ben, quick hello.', 'Sounds good, send me the details.'] },
-  { id: '2-tunde', slug: 'tunde', name: 'Tunde Bello', time: 'Oct 28', snippet: 'Not right now, thanks.', messages: ['Hi Tunde, quick hello.', 'Not right now, thanks.'] },
+  { id: '2-ada', slug: 'ada', name: 'Ada Obi', time: '10:32 AM', snippet: 'Yes, Thursday at 9:00 works for me.', messages: ['Hi Ada, thanks for connecting.', 'Yes, Thursday at 9:00 works for me.'], link: true },
+  { id: '2-kemi', slug: 'kemi', name: 'Kemi Okoye', time: '10:05 AM', snippet: 'You: Thanks for connecting, Kemi.', messages: ['Thanks for connecting, Kemi.'], link: false },
+  { id: '2-ben', slug: 'ben-ward', name: 'Ben Ward', time: 'Sun', snippet: 'Sounds good, send me the details.', messages: ['Hi Ben, quick hello.', 'Sounds good, send me the details.'], link: false },
+  { id: '2-tunde', slug: 'tunde', name: 'Tunde Bello', time: 'Oct 28', snippet: 'Not right now, thanks.', messages: ['Hi Tunde, quick hello.', 'Not right now, thanks.'], link: false },
 ];
 
 const SEARCH: Array<Array<{ slug: string; name: string; headline: string }>> = [
@@ -52,6 +68,10 @@ export interface LinkedinFixture {
   messages: Array<{ slug: string; text: string }>;
   /** Every request path, for checking which pages the adapter visited. */
   hits: string[];
+  /** The User-Agent header of every request. */
+  userAgents: string[];
+  /** What pages saw of the browser: `navigator.webdriver` and the user agent. */
+  env: Array<{ webdriver: boolean | null; userAgent: string }>;
   /** Redirect the connections and messaging pages to a security check. */
   challengeLists: boolean;
   close(): Promise<void>;
@@ -80,7 +100,16 @@ function signedIn(req: IncomingMessage): boolean {
 function profilePage(slug: string, p: Profile): string {
   const first = p.name.split(' ')[0] ?? p.name;
   const actions = fill(read(`actions-${p.variant}.html`), { name: esc(p.name), first: esc(first) });
-  return fill(read('profile.html'), { slug: esc(slug), name: esc(p.name), headline: esc(p.headline), actions, limit: p.limit ?? '' });
+  return fill(read('profile.html'), {
+    slug: esc(slug),
+    name: esc(p.name),
+    headline: esc(p.headline),
+    actions,
+    limit: p.limit ?? '',
+    notes: p.notes ?? '',
+    bubble: p.bubble ?? '',
+    send: p.send ?? '',
+  });
 }
 
 function searchPage(pageNo: number): string {
@@ -105,12 +134,34 @@ function searchPage(pageNo: number): string {
   return fill(read('search.html'), { results: `    <ul role="list">\n${items}\n    </ul>` });
 }
 
+function threadPanel(t: Thread | null): string {
+  if (!t) return '';
+  const messages = t.messages.map((m) => `      <li class="msg-s-message-list__event"><div class="msg-s-event-listitem__body">${esc(m)}</div></li>`).join('\n');
+  return `      <header class="msg-title-bar"><a class="msg-thread__link-to-profile" href="/in/${esc(t.slug)}/">${esc(t.name)}</a></header>\n      <ul class="msg-s-message-list">\n${messages}\n      </ul>`;
+}
+
+/** The messaging page. Most rows are divs that open their thread on click; one is a link (the fast path). */
+function messagingPage(open: Thread | null): string {
+  const threads = THREADS.map((t) => {
+    const inner = `<h3 class="msg-conversation-listitem__participant-names msg-conversation-card__participant-names"><span class="truncate">${esc(t.name)}</span></h3>
+          <time class="msg-conversation-listitem__time-stamp">${esc(t.time)}</time>
+          <p class="msg-conversation-card__message-snippet">${esc(t.snippet)}</p>`;
+    const link = t.link
+      ? `<a class="msg-conversation-listitem__link" href="/messaging/thread/${t.id}/">${inner}</a>`
+      : `<div class="msg-conversation-listitem__link" role="button" tabindex="0" data-thread="${t.id}">${inner}</div>`;
+    return `      <li class="msg-conversation-listitem">${link}</li>`;
+  }).join('\n');
+  return fill(read('messaging.html'), { threads, panel: threadPanel(open) });
+}
+
 export async function startLinkedinFixture(): Promise<LinkedinFixture> {
   const fixture: LinkedinFixture = {
     baseUrl: '',
     invites: [],
     messages: [],
     hits: [],
+    userAgents: [],
+    env: [],
     challengeLists: false,
     close: async () => undefined,
   };
@@ -119,6 +170,7 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
     const url = new URL(req.url ?? '/', 'http://fixture');
     const path = url.pathname;
     fixture.hits.push(`${req.method} ${path}`);
+    fixture.userAgents.push(String(req.headers['user-agent'] ?? ''));
 
     if (path === '/site.js') {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
@@ -136,8 +188,14 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
 
     if (path === '/feed/') return html(res, 200, fill(read('feed.html'), { me: esc(FIXTURE_USER) }));
 
+    if (path === '/__env' && req.method === 'POST') {
+      fixture.env.push(JSON.parse(await bodyOf(req)) as { webdriver: boolean | null; userAgent: string });
+      return html(res, 200, 'ok');
+    }
+
     if (path === '/__invite' || path === '/__message') {
       const payload = JSON.parse(await bodyOf(req)) as { slug: string; note?: string; text?: string };
+      if (PROFILES[payload.slug]?.send === 'error') return html(res, 500, 'error');
       if (path === '/__invite') {
         if (PROFILES[payload.slug]?.limit === 'on-send') return html(res, 429, 'weekly invitation limit');
         fixture.invites.push({ slug: payload.slug, note: payload.note ?? '' });
@@ -151,24 +209,14 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
     if (profile) {
       const slug = profile[1] ?? '';
       if (slug === 'blocked') return redirect(res, '/checkpoint/challenge/AQxyz');
+      if (slug === 'ghost') return html(res, 200, read('unavailable.html'));
       const data = PROFILES[slug];
       return data ? html(res, 200, profilePage(slug, data)) : html(res, 404, '<!doctype html><title>Page not found</title><h1>This page doesn&rsquo;t exist</h1>');
     }
 
     if (path === '/mynetwork/invite-connect/connections/' || path === '/messaging/') {
       if (fixture.challengeLists) return redirect(res, '/checkpoint/challenge/AQlists');
-      if (path === '/messaging/') {
-        const threads = THREADS.map(
-          (t) => `      <li class="msg-conversation-listitem">
-        <a class="msg-conversation-listitem__link" href="/messaging/thread/${t.id}/">
-          <h3 class="msg-conversation-listitem__participant-names msg-conversation-card__participant-names"><span class="truncate">${esc(t.name)}</span></h3>
-          <time class="msg-conversation-listitem__time-stamp">${esc(t.time)}</time>
-          <p class="msg-conversation-card__message-snippet">${esc(t.snippet)}</p>
-        </a>
-      </li>`,
-        ).join('\n');
-        return html(res, 200, fill(read('messaging.html'), { threads }));
-      }
+      if (path === '/messaging/') return html(res, 200, messagingPage(null));
       const people = [
         { slug: 'ada', name: 'Ada Obi', when: 'Connected 2 days ago' },
         { slug: 'ben-ward', name: 'Ben Ward', when: 'Connected 3 weeks ago' },
@@ -184,9 +232,15 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
     const thread = /^\/messaging\/thread\/([^/]+)\/?$/.exec(path);
     if (thread) {
       const t = THREADS.find((x) => x.id === thread[1]);
+      return t ? html(res, 200, messagingPage(t)) : html(res, 404, 'not found');
+    }
+
+    const threadData = /^\/__thread\/([^/]+)$/.exec(path);
+    if (threadData) {
+      const t = THREADS.find((x) => x.id === threadData[1]);
       if (!t) return html(res, 404, 'not found');
-      const messages = t.messages.map((m) => `      <li class="msg-s-message-list__event"><div class="msg-s-event-listitem__body">${esc(m)}</div></li>`).join('\n');
-      return html(res, 200, fill(read('thread.html'), { slug: esc(t.slug), name: esc(t.name), messages }));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return void res.end(JSON.stringify({ slug: t.slug, name: t.name, messages: t.messages }));
     }
 
     if (path === '/search/results/people/') return html(res, 200, searchPage(Number(url.searchParams.get('page') ?? '1') || 1));

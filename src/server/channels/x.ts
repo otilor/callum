@@ -21,10 +21,11 @@ const PAGE_SIZE = 100;
 
 const RATE_LIMIT_MESSAGE = "X stopped accepting Callum's messages because your X plan's daily limit is reached. DMs resume tomorrow.";
 const NO_CREDITS_MESSAGE = "X stopped accepting Callum's messages because your X developer account is out of credits. Add credits in the X developer portal.";
-const SIGNED_OUT_MESSAGE = 'X signed Callum out. Connect X again in settings.';
+const SIGNED_OUT_MESSAGE = 'X signed Callum out. Connect X again from Your Callum.';
+const NO_READ_MESSAGE = "This X token can't read messages. Give the app Direct Messages read and write access, then connect again.";
 const NO_DM_ACCESS_MESSAGE = "X didn't accept Callum's access. Check that your X plan includes direct messages.";
 
-interface Tokens { accessToken: string; refreshToken: string | null; clientId: string | null }
+interface Tokens { accessToken: string; refreshToken: string | null; clientId: string | null; clientSecret: string | null }
 interface Account extends Tokens { userId: string; username: string }
 interface XResponse { status: number; body: Record<string, unknown> }
 
@@ -56,6 +57,7 @@ function secretOf(account: Account): Record<string, string> {
     accessToken: account.accessToken,
     ...(account.refreshToken ? { refreshToken: account.refreshToken } : {}),
     ...(account.clientId ? { clientId: account.clientId } : {}),
+    ...(account.clientSecret ? { clientSecret: account.clientSecret } : {}),
     userId: account.userId,
     username: account.username,
   };
@@ -67,6 +69,7 @@ function loadAccount(secret: Record<string, string> | null): Account | null {
     accessToken: secret.accessToken,
     refreshToken: secret.refreshToken || null,
     clientId: secret.clientId || null,
+    clientSecret: secret.clientSecret || null,
     userId: secret.userId,
     username: secret.username ?? '',
   };
@@ -84,9 +87,10 @@ export function createXAdapter(secret: Record<string, string> | null, deps: XDep
   // Direct messages already reported by this adapter instance (polls overlap by design).
   const seen = new Set<string>();
 
-  async function raw(method: string, url: string, token: string | null, payload?: { json?: unknown; form?: URLSearchParams }): Promise<XResponse> {
+  async function raw(method: string, url: string, token: string | null, payload?: { json?: unknown; form?: URLSearchParams; basic?: string }): Promise<XResponse> {
     const headers: Record<string, string> = {};
     if (token) headers.authorization = `Bearer ${token}`;
+    if (payload?.basic) headers.authorization = `Basic ${payload.basic}`;
     let body: string | undefined;
     if (payload?.json !== undefined) {
       headers['content-type'] = 'application/json';
@@ -113,6 +117,8 @@ export function createXAdapter(secret: Record<string, string> | null, deps: XDep
       try {
         const res = await raw('POST', tokenUrl, null, {
           form: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: tokens.refreshToken ?? '', client_id: tokens.clientId ?? '' }),
+          // An app of type "Web App, Automated App or Bot" is a confidential client and must prove it with its secret.
+          ...(tokens.clientSecret ? { basic: Buffer.from(`${tokens.clientId}:${tokens.clientSecret}`).toString('base64') } : {}),
         });
         const access = str(res.body.access_token);
         if (res.status !== 200 || !access) return false;
@@ -147,7 +153,7 @@ export function createXAdapter(secret: Record<string, string> | null, deps: XDep
     }
     if (res.status === 404) return { code: 'invalid_recipient', message: `${who} wasn't found on X.` };
     if (res.status >= 500) return { code: 'temporary', message: 'X is not answering right now. Callum will try again.' };
-    return { code: 'unknown', message: `X refused the message (${res.status}). ${detail(res.body)}`.trim() };
+    return { code: 'unknown', message: `X refused the message. ${detail(res.body)}`.trim() };
   }
 
   async function resolveUserId(tokens: Tokens, handle: string, who: string): Promise<{ id: string } | { error: ChannelError }> {
@@ -163,7 +169,7 @@ export function createXAdapter(secret: Record<string, string> | null, deps: XDep
   }
 
   function requireAccount(): Account {
-    if (!account) throw new ConnectError('auth');
+    if (!account) throw new ConnectError(SIGNED_OUT_MESSAGE, 'auth');
     return account;
   }
 
@@ -173,7 +179,12 @@ export function createXAdapter(secret: Record<string, string> | null, deps: XDep
     async connect(input) {
       const accessToken = (input.accessToken ?? '').trim();
       if (!accessToken) throw new ConnectError('Add the X access token.');
-      const tokens: Tokens = { accessToken, refreshToken: input.refreshToken?.trim() || null, clientId: input.clientId?.trim() || null };
+      const tokens: Tokens = {
+        accessToken,
+        refreshToken: input.refreshToken?.trim() || null,
+        clientId: input.clientId?.trim() || null,
+        clientSecret: input.clientSecret?.trim() || null,
+      };
       let res: XResponse;
       try {
         res = await authed(tokens, 'GET', '/users/me');
@@ -188,6 +199,16 @@ export function createXAdapter(secret: Record<string, string> | null, deps: XDep
       const id = str(me.id);
       const username = str(me.username)?.toLowerCase();
       if (res.status !== 200 || !id || !username) throw new ConnectError("Couldn't sign in to X. Check the access token.");
+      // /users/me needs only read scopes; check the token can read messages too, or every send would later fail.
+      let probe: XResponse;
+      try {
+        probe = await authed(tokens, 'GET', '/dm_events?max_results=1');
+      } catch {
+        throw new ConnectError("Couldn't reach X. Check your connection and try again.");
+      }
+      if (probe.status === 403) throw new ConnectError(NO_READ_MESSAGE);
+      if (probe.status === 401) throw new ConnectError("Couldn't sign in to X. Check the access token.");
+      if (probe.status >= 500) throw new ConnectError("Couldn't reach X right now. Try again in a few minutes.");
       account = { ...tokens, userId: id, username };
       handleIds.clear();
       return { identity: `@${username}`, secret: secretOf(account) };
@@ -228,10 +249,10 @@ export function createXAdapter(secret: Record<string, string> | null, deps: XDep
         } catch {
           throw new Error("Couldn't reach X to check for replies.");
         }
-        if (res.status === 401) throw new ConnectError('auth');
+        if (res.status === 401) throw new ConnectError(SIGNED_OUT_MESSAGE, 'auth');
         if (res.status === 429) throw new Error(RATE_LIMIT_MESSAGE);
         if (res.status === 402) throw new Error(NO_CREDITS_MESSAGE);
-        if (res.status !== 200) throw new Error(`X didn't answer Callum's check for replies (${res.status}).`);
+        if (res.status !== 200) throw new Error("X didn't answer Callum's check for replies.");
 
         const users = new Map(list(record(res.body.includes).users).flatMap((u) => (str(u.id) ? [[str(u.id) as string, u] as const] : [])));
         let reachedOld = false;
