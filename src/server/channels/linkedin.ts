@@ -6,7 +6,7 @@ import type { PersonLead } from '../../shared/types.js';
 import { systemClock, type Clock } from '../engine/clock.js';
 import {
   SELECTORS, clampNote, cleanName, hasWeeklyLimitText, headerNameCandidates, humanDelayMs, isBlockedStatus, isCheckpointUrl,
-  hasSendFailureText, isOwnSnippet, isSignInUrl, isUnavailableProfileText, normalizeText, parseListTimestamp, profileUrlFromHref,
+  hasSendFailureText, isOwnSnippet, lastSender, isSignInUrl, isUnavailableProfileText, normalizeText, parseListTimestamp, profileUrlFromHref,
   sameParticipant, snippetMatches, splitHeadline,
 } from './linkedin-detect.js';
 import { ConnectError, type ChannelAdapter, type ChannelError, type InboundEvent, type OutboundMessage, type SendResult } from './types.js';
@@ -176,6 +176,8 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
   const profileDir = join(deps.dataDir, PROFILE_DIR);
 
   let session: Record<string, string> | null = secret;
+  // Who the signed-in user is, to tell their messages from the other person's. Read at connect, or at the first poll.
+  let self: { name: string | null; url: string | null } | null = null;
   let context: BrowserContext | null = null;
   let contextHeadless = headless;
   // The user agent to force, per mode, once a probe has shown the browser announces itself as headless.
@@ -304,19 +306,24 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     }
   }
 
-  async function readName(page: Page): Promise<string | null> {
+  /** The signed-in user's name and profile address, from the "Me" menu on a LinkedIn page that has the header. */
+  async function readSelf(page: Page): Promise<{ name: string | null; url: string | null }> {
+    let name: string | null = null;
+    let profile: string | null = null;
     const me = await locate(page, SELECTORS.meMenu, 5000);
     if (me) {
       await me.click().catch(() => undefined);
-      const name = await locate(page, SELECTORS.meName, 3000);
-      if (name) {
-        const found = cleanName((await name.innerText().catch(() => '')) || '');
-        await page.keyboard.press('Escape').catch(() => undefined);
-        if (found) return found;
-      }
+      const label = await locate(page, SELECTORS.meName, 3000);
+      if (label) name = cleanName((await label.innerText().catch(() => '')) || '');
+      const link = await locate(page, SELECTORS.meProfileLink);
+      profile = profileUrlFromHref((await link?.getAttribute('href').catch(() => null)) ?? '');
+      await page.keyboard.press('Escape').catch(() => undefined);
     }
-    const card = await locate(page, SELECTORS.feedName, 1500);
-    return card ? cleanName((await card.innerText().catch(() => '')) || '') : null;
+    if (!name) {
+      const card = await locate(page, SELECTORS.feedName, 1500);
+      name = card ? cleanName((await card.innerText().catch(() => '')) || '') : null;
+    }
+    return { name, url: profile };
   }
 
   /** Types into a rich-text box, keeping line breaks as soft breaks so Enter never sends early. */
@@ -353,8 +360,8 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     return top;
   }
 
-  async function pollUntil(page: Page, done: () => Promise<boolean>): Promise<boolean> {
-    const deadline = Date.now() + settleMs;
+  async function pollUntil(page: Page, done: () => Promise<boolean>, withinMs = settleMs): Promise<boolean> {
+    const deadline = Date.now() + withinMs;
     for (;;) {
       if (await done()) return true;
       if (Date.now() >= deadline) return false;
@@ -442,18 +449,20 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     if (!send) throw unexpectedPage('find the Send button');
     await send.click();
     // Success is a Pending button on the profile, whatever dialogs are still open: an error toast closes the dialog too.
-    const started = Date.now();
-    let lastMenuCheck = started;
-    let confirmed = await pollUntil(page, async () => {
+    // The top card first. If it never shows Pending, look in the More menu once, after a pause like a person's.
+    let confirmed = await pollUntil(
+      page,
+      async () => {
+        await stopIfBlocked(page);
+        return (await locate(top, SELECTORS.pendingMarker)) !== null;
+      },
+      Math.min(settleMs, 3000),
+    );
+    if (!confirmed) {
       await stopIfBlocked(page);
-      if (await locate(top, SELECTORS.pendingMarker)) return true;
-      if (Date.now() - lastMenuCheck >= 1500 && Date.now() - started >= 600) {
-        lastMenuCheck = Date.now();
-        return pendingInMoreMenu();
-      }
-      return false;
-    });
-    if (!confirmed) confirmed = (await locate(top, SELECTORS.pendingMarker)) !== null || (await pendingInMoreMenu());
+      await pause();
+      confirmed = await pendingInMoreMenu();
+    }
     await stopIfBlocked(page);
     if (!confirmed) throw new Stop(fail('unknown', "LinkedIn didn't confirm the invitation. Callum will check before trying again."));
     if (await locate(page, SELECTORS.dialog)) await dismissDialog(page);
@@ -503,19 +512,47 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     return 0;
   }
 
-  /** The text of the newest message together with whatever LinkedIn shows beside it ("Failed to send", "Retry"). */
-  async function newestMessageWithMarks(scope: Locator): Promise<string> {
+  /** The newest message's text element in a conversation. */
+  async function newestBody(scope: Locator): Promise<Locator | null> {
     for (const selector of SELECTORS.threadMessage) {
       const items = scope.locator(selector);
       const count = await items.count().catch(() => 0);
-      if (count > 0) {
-        return items
-          .nth(count - 1)
-          .evaluate((node, container) => ((node.closest(container) ?? node.parentElement ?? node) as HTMLElement).innerText, SELECTORS.messageItem.join(', '))
-          .catch(() => '');
-      }
+      if (count > 0) return items.nth(count - 1);
     }
-    return '';
+    return null;
+  }
+
+  /**
+   * Whether LinkedIn marks the newest message as failed. Only failure UI counts: an error element or flag next to the
+   * message text, a Retry button, or a toast. The words of the message itself are never read for this.
+   */
+  async function newestMessageFailed(page: Page, scope: Locator): Promise<boolean> {
+    const body = await newestBody(scope);
+    if (body) {
+      const flagged = await body
+        .evaluate(
+          (node, a) => {
+            const item = node.closest(a.container) ?? node.parentElement;
+            if (!item) return false;
+            const hit = (el: Element) => a.failure.some((selector) => el.matches(selector));
+            return hit(item) || [...item.querySelectorAll('*')].some((el) => el !== node && !node.contains(el) && hit(el));
+          },
+          { container: SELECTORS.messageItem.join(', '), failure: SELECTORS.messageFailure },
+        )
+        .catch(() => false);
+      if (flagged) return true;
+      const item = body.locator('xpath=ancestor::li[1]');
+      if (await locate(item, SELECTORS.retryButton)) return true;
+    }
+    const toasts = await Promise.all(
+      SELECTORS.toasts.map((selector) =>
+        page
+          .locator(selector)
+          .evaluateAll((els) => els.map((el) => (el as HTMLElement).innerText).join('\n'))
+          .catch(() => ''),
+      ),
+    );
+    return hasSendFailureText(toasts.join('\n'));
   }
 
   async function sendDirectMessage(page: Page, msg: OutboundMessage, step: { name: string }): Promise<SendResult> {
@@ -562,7 +599,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     const failed = new Stop(fail('unknown', "LinkedIn couldn't send the message. Callum will check before trying again."));
     const watchEnd = Date.now() + watchMs;
     for (;;) {
-      if (hasSendFailureText(await newestMessageWithMarks(bubble)) || hasSendFailureText(await noticeText(page))) throw failed;
+      if (await newestMessageFailed(page, bubble)) throw failed;
       if (Date.now() >= watchEnd) break;
       await realSleep(100);
     }
@@ -617,6 +654,25 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
       const link = await locate(page, SELECTORS.threadProfileLink);
       return { panel, text: await lastMessageIn(panel), name: link ? await link.innerText().catch(() => '') : '' };
     };
+    const readSenderMarks = async (panel: Locator) => {
+      const body = await newestBody(panel);
+      const marks = await body
+        ?.evaluate(
+          (node, a) => {
+            const item = node.closest(a.event.join(', '));
+            const group = node.closest(a.group.join(', '));
+            const nameEl = group ? a.name.map((s) => group.querySelector(s)).find((el) => el) : null;
+            return {
+              itemClass: item ? item.className : null,
+              groupName: nameEl?.textContent ?? null,
+              groupHref: group?.querySelector('a[href*="/in/"]')?.getAttribute('href') ?? null,
+            };
+          },
+          { event: [...SELECTORS.messageEvent], group: [...SELECTORS.messageGroup], name: [...SELECTORS.messageGroupName] },
+        )
+        .catch(() => null);
+      return marks ?? { itemClass: null, groupName: null, groupHref: null };
+    };
     const panelShows = async (row: { name: string; snippet: string }) => {
       const open = await readPanel();
       return open.text !== '' && sameParticipant(row.name, open.name) && snippetMatches(row.snippet, open.text);
@@ -640,6 +696,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
         // Rows without a link open the thread when clicked; the list has to be on screen to click one.
         if (!onList) {
           await open(page, '/messaging/');
+          if (await blocker(page)) return [...events, checkpoint()];
           onList = true;
           if (!(await locateList(page, SELECTORS.conversation, [], 5000))) break;
         }
@@ -654,7 +711,10 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
           if (id !== null && id !== before) return true;
           return id !== null && (await panelShows(row));
         });
-        if (!reached) continue;
+        if (!reached) {
+          if (await blocker(page)) return [...events, checkpoint()];
+          continue;
+        }
         await pause();
       }
 
@@ -668,6 +728,15 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
         return true;
       });
       if (!threadId || !matched) continue;
+      // Who wrote the newest message comes from the thread's own markers, never from the preview text. When the
+      // page does not say, the thread is skipped (and not marked as seen), so the next poll looks at it again.
+      const current = await readPanel();
+      const sender = lastSender(await readSenderMarks(current.panel), {
+        participantName: current.name || row.name,
+        selfName: self?.name ?? null,
+        selfUrl: self?.url ?? null,
+      });
+      if (sender !== 'other') continue;
       const profile = await locate(page, SELECTORS.threadProfileLink, 3000);
       const linkedinUrl = profileUrlFromHref((await profile?.getAttribute('href').catch(() => null)) ?? '');
       if (!linkedinUrl) continue;
@@ -710,7 +779,9 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
           throw new ConnectError(NO_BROWSER_MESSAGE);
         }
         const offline = (err: unknown) => (err instanceof ConnectError ? err : new ConnectError(OFFLINE_MESSAGE, 'temporary'));
-        let identity: string | null;
+        const finishFailure = (err: unknown) =>
+          err instanceof ConnectError ? err : new ConnectError("Couldn't finish connecting to LinkedIn. Try connecting again.", 'temporary');
+        let identity: { name: string | null; url: string | null };
         let stored: Record<string, string>;
         if (liAt) {
           await ctx.clearCookies({ name: 'li_at' });
@@ -724,7 +795,11 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
             if (isCheckpointUrl(page.url())) {
               throw new ConnectError("LinkedIn didn't accept that cookie. Copy li_at again from a browser where you're signed in.");
             }
-            return readName(page);
+            try {
+              return await readSelf(page);
+            } catch (err) {
+              throw finishFailure(err);
+            }
           });
           stored = { liAt };
         } else {
@@ -747,18 +822,23 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
               throw new ConnectError(WINDOW_CLOSED_MESSAGE);
             }
             if (outcome === 'gave up') throw new ConnectError("LinkedIn sign-in didn't finish in 5 minutes. Connect LinkedIn again when you're ready.");
-            await page.waitForLoadState('domcontentloaded').catch(() => undefined);
-            identity = await readName(page);
-            // Keep the session cookie in the secret so the working browser can restore it if its profile loses it.
-            const cookie = (await ctx.cookies(baseUrl)).find((c) => c.name === 'li_at');
-            stored = cookie ? { liAt: cookie.value } : { session: 'browser' };
+            try {
+              await page.waitForLoadState('domcontentloaded').catch(() => undefined);
+              identity = await readSelf(page);
+              // Keep the session cookie in the secret so the working browser can restore it if its profile loses it.
+              const cookie = (await ctx.cookies(baseUrl)).find((c) => c.name === 'li_at');
+              stored = cookie ? { liAt: cookie.value } : { session: 'browser' };
+            } catch (err) {
+              throw finishFailure(err);
+            }
           } finally {
             // The sign-in window has done its job; the next action reopens the same profile without a window.
             if (showWindow) await closeContext();
           }
         }
         session = stored;
-        return { identity: identity ?? 'LinkedIn', secret: stored };
+        self = identity;
+        return { identity: identity.name ?? 'LinkedIn', secret: stored };
       });
     },
 
@@ -800,6 +880,12 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
             const status = await open(page, '/mynetwork/invite-connect/connections/');
             if (await blocker(page, status)) return [{ type: 'checkpoint' as const, at }];
             const events = await collectAccepted(page, at);
+            if (!self) {
+              // Needed to tell the user's own messages from the other person's; the header is on the feed.
+              await open(page, '/feed/');
+              if (await blocker(page)) return [...events, { type: 'checkpoint' as const, at }];
+              self = await readSelf(page);
+            }
             const messaging = await open(page, '/messaging/');
             if (await blocker(page, messaging)) return [...events, { type: 'checkpoint' as const, at }];
             return [...events, ...(await collectReplies(page, from, now))];

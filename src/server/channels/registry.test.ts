@@ -200,6 +200,19 @@ describe('AdapterRegistry', () => {
     expect(built).toBe(2);
   });
 
+  it('keeps the channel unavailable until every overlapping connect has finished', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const registry = new AdapterRegistry(repo, (ch) => stubAdapter(ch, { connect: async () => { await gate; return { identity: 'who', secret: {} }; } }), bus);
+    const first = registry.connect('linkedin', {}, clock.now());
+    const second = registry.connect('linkedin', {}, clock.now());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(registry.get('linkedin')).toBeNull();
+    release();
+    await Promise.all([first, second]);
+    expect(registry.get('linkedin')).not.toBeNull();
+  });
+
   it('closeAll closes every built adapter once', async () => {
     const adapters = new Map<string, ChannelAdapter>();
     const registry = new AdapterRegistry(repo, (ch) => {

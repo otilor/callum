@@ -89,9 +89,37 @@ export function sameParticipant(listName: string, panelName: string): boolean {
   return a === b || a.includes(b) || b.includes(a);
 }
 
-/** Text LinkedIn shows next to a message, or in a toast, when it could not be delivered. */
+/**
+ * Wording of LinkedIn's own failure notices (toasts and alerts). Only ever applied to those: a message's own text
+ * ("happy to retry Thursday") says nothing about whether it was delivered.
+ */
 export function hasSendFailureText(text: string): boolean {
-  return /failed to send|couldn['\u2019]t send|could not send|not sent|send failed|message wasn['\u2019]t sent|\bretry\b/i.test(text);
+  return /failed to send|couldn['\u2019]t send|could not send|not sent|send failed|message wasn['\u2019]t sent/i.test(text);
+}
+
+/** The class LinkedIn puts on a message that someone else wrote. */
+export const INCOMING_ITEM_CLASS = 'msg-s-event-listitem--other';
+
+export type Sender = 'other' | 'self' | 'unknown';
+
+/**
+ * Who wrote the newest message of an open thread, from the page's own markers rather than the preview text:
+ * the "other" class on the item, and the sender's name or profile link on the message group.
+ * 'unknown' means the page does not say, and the thread must not be reported.
+ */
+export function lastSender(
+  info: { itemClass: string | null; groupName: string | null; groupHref: string | null },
+  who: { participantName: string; selfName: string | null; selfUrl: string | null },
+): Sender {
+  if (info.itemClass?.split(/\s+/).includes(INCOMING_ITEM_CLASS)) return 'other';
+  const group = normalizeText(info.groupName ?? '').toLowerCase();
+  const groupUrl = info.groupHref ? profileUrlFromHref(info.groupHref) : null;
+  if (groupUrl && who.selfUrl && groupUrl === profileUrlFromHref(who.selfUrl)) return 'self';
+  if (group && who.selfName && group === normalizeText(who.selfName).toLowerCase()) return 'self';
+  if (group && sameParticipant(who.participantName, group) && normalizeText(who.participantName) !== '') return 'other';
+  // LinkedIn marks only incoming items, so a recognised item without the mark is the user's own.
+  if (info.itemClass !== null && info.itemClass.includes('msg-s-event-listitem')) return 'self';
+  return 'unknown';
 }
 
 export function humanDelayMs(random: () => number): number {
@@ -218,6 +246,14 @@ export const SELECTORS = {
   bubbleHeader: ['.msg-overlay-bubble-header', 'header'],
   bubbleClose: ['button[aria-label^="Close your conversation"]', '.msg-overlay-bubble-header__control--close-btn'],
   messageItem: ['li.msg-s-message-list__event', 'li'],
+  // Failure UI that LinkedIn renders beside a message, never inside its text.
+  messageFailure: ['.msg-s-event-listitem__error', '[class*="--failed"]', '[class*="send-failed"]', '[aria-label*="failed" i]', '[data-test-failed]'],
+  retryButton: ['button:text-is("Retry")', '[role="button"]:text-is("Retry")'],
+  toasts: ['[role="alert"]', '.artdeco-toast-item'],
+  messageGroup: ['.msg-s-message-group'],
+  messageGroupName: ['.msg-s-message-group__name', '.msg-s-message-group__profile-link'],
+  messageEvent: ['.msg-s-event-listitem'],
+  meProfileLink: ['.global-nav__me-content a[href*="/in/"]', '.artdeco-dropdown__content a[href*="/in/"]'],
   composer: ['div.msg-form__contenteditable[contenteditable="true"]', '[role="textbox"][aria-label^="Write a message"]'],
   composerSend: ['button.msg-form__send-button', 'button[type="submit"]:text-is("Send")'],
 

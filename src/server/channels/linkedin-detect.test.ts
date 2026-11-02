@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  SELECTORS, clampNote, hasSendFailureText, sameParticipant, headerNameCandidates, isUnavailableProfileText, normalizeText, snippetMatches, hasWeeklyLimitText, humanDelayMs, isBlockedStatus, isCheckpointUrl, isOwnSnippet, isSignInUrl,
+  SELECTORS, clampNote, lastSender, hasSendFailureText, sameParticipant, headerNameCandidates, isUnavailableProfileText, normalizeText, snippetMatches, hasWeeklyLimitText, humanDelayMs, isBlockedStatus, isCheckpointUrl, isOwnSnippet, isSignInUrl,
   cleanName, parseListTimestamp, profileUrlFromHref, splitHeadline,
 } from './linkedin-detect.js';
 
@@ -183,12 +183,36 @@ describe('sameParticipant', () => {
   });
 });
 
+describe('lastSender', () => {
+  const who = { participantName: 'Ada Obi', selfName: 'Gabriel Femi', selfUrl: 'https://www.linkedin.com/in/gabriel' };
+  const none = { itemClass: null, groupName: null, groupHref: null };
+  it('reads incoming items by the "other" class', () => {
+    expect(lastSender({ ...none, itemClass: 'msg-s-event-listitem msg-s-event-listitem--other' }, who)).toBe('other');
+  });
+  it('uses the group header: the user\'s name or profile link means self, the participant\'s name means other', () => {
+    expect(lastSender({ ...none, groupName: 'Gabriel Femi' }, who)).toBe('self');
+    expect(lastSender({ ...none, groupHref: '/in/gabriel/' }, who)).toBe('self');
+    expect(lastSender({ ...none, groupName: 'Ada Obi' }, who)).toBe('other');
+    expect(lastSender({ ...none, groupName: 'Ada Obi', groupHref: '/in/ada/' }, who)).toBe('other');
+  });
+  it('treats a recognised item without the "other" class as the user\'s own', () => {
+    expect(lastSender({ ...none, itemClass: 'msg-s-event-listitem' }, who)).toBe('self');
+  });
+  it('says unknown when the page does not tell, so nothing is reported', () => {
+    expect(lastSender(none, who)).toBe('unknown');
+    expect(lastSender({ ...none, groupName: 'Someone Else' }, who)).toBe('unknown');
+    expect(lastSender({ ...none, itemClass: 'something-new' }, who)).toBe('unknown');
+    expect(lastSender({ ...none, groupName: 'Ada Obi' }, { ...who, participantName: '' })).toBe('unknown');
+  });
+});
+
 describe('hasSendFailureText', () => {
   it('spots LinkedIn failure marks next to a message', () => {
-    expect(hasSendFailureText('Hello\nFailed to send. Retry')).toBe(true);
+    expect(hasSendFailureText('Message failed to send. Try again.')).toBe(true);
     expect(hasSendFailureText("We couldn’t send your message")).toBe(true);
-    expect(hasSendFailureText('Hello there, thanks for the retry on the demo')).toBe(true);
     expect(hasSendFailureText('Hello there, thanks for connecting')).toBe(false);
+    // A bare "retry" is ordinary wording; it is never read from a message anyway.
+    expect(hasSendFailureText('Hello there, thanks for the retry on the demo')).toBe(false);
   });
 });
 

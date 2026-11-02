@@ -26,7 +26,7 @@ export function defaultFactory(opts: { demo: boolean; clock: Clock; dataDir: str
 export class AdapterRegistry {
   private readonly adapters = new Map<Channel, ChannelAdapter>();
   // Channels with a connect in progress: nothing may use (or rebuild) their adapter until it finishes.
-  private readonly connecting = new Set<Channel>();
+  private readonly connecting = new Map<Channel, number>();
 
   constructor(
     private readonly repo: Repo,
@@ -37,6 +37,12 @@ export class AdapterRegistry {
   // Bumped whenever a channel's adapter is replaced or the channel is disconnected, so that a
   // late save from an adapter that no longer owns the secret (an in-flight token refresh) is dropped.
   private readonly generation = new Map<Channel, number>();
+
+  private endConnecting(ch: Channel): void {
+    const left = (this.connecting.get(ch) ?? 1) - 1;
+    if (left > 0) this.connecting.set(ch, left);
+    else this.connecting.delete(ch);
+  }
 
   private generationOf(ch: Channel): number {
     return this.generation.get(ch) ?? 0;
@@ -52,7 +58,7 @@ export class AdapterRegistry {
 
   /** The adapter for a connected or paused channel, built from its stored secret on first use. */
   get(ch: Channel): ChannelAdapter | null {
-    if (this.connecting.has(ch)) return null;
+    if ((this.connecting.get(ch) ?? 0) > 0) return null;
     const cached = this.adapters.get(ch);
     if (cached) return cached;
     const status = this.repo.getChannel(ch).status;
@@ -68,7 +74,7 @@ export class AdapterRegistry {
     // every adapter reopens what it needs on its next use.
     const previous = this.adapters.get(ch);
     this.adapters.delete(ch);
-    this.connecting.add(ch);
+    this.connecting.set(ch, (this.connecting.get(ch) ?? 0) + 1);
     await previous?.close().catch(() => undefined);
     const next = this.generationOf(ch) + 1;
     let adapter: ChannelAdapter | null = null;
@@ -79,12 +85,12 @@ export class AdapterRegistry {
     } catch (err) {
       await adapter?.close().catch(() => undefined);
       if (previous) this.adapters.set(ch, previous);
-      this.connecting.delete(ch);
+      this.endConnecting(ch);
       throw err;
     }
     this.generation.set(ch, next);
     this.adapters.set(ch, adapter);
-    this.connecting.delete(ch);
+    this.endConnecting(ch);
 
     this.repo.setChannelSecret(ch, connected.secret);
     const account = this.repo.updateChannel(ch, {

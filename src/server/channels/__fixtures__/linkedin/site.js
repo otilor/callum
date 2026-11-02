@@ -123,11 +123,15 @@
       const item = addItem(text);
       const res = await fetch('/__message', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ slug, text }) });
       if (res.status !== 200) {
-        const mark = document.createElement('span');
-        mark.className = 'msg-s-event-listitem--failed';
-        mark.textContent = 'Failed to send. Retry';
-        item.appendChild(mark);
-        return toast('Message failed to send. Try again.');
+        // LinkedIn renders a failure beside the message text, as its own element.
+        if (body.dataset.send !== 'error-quiet') {
+          const mark = document.createElement('div');
+          mark.className = 'msg-s-event-listitem__error';
+          mark.innerHTML = '<span>Failed to send</span> <button type="button">Retry</button>';
+          item.appendChild(mark);
+        }
+        if (body.dataset.send !== 'error-mark') toast('Message failed to send. Try again.');
+        return;
       }
       window.__sent = { slug, text };
     });
@@ -135,13 +139,7 @@
 
   // Messaging page: rows without links open their thread in the panel and move the address.
   function renderPanel(thread) {
-    const panel = document.getElementById('thread-panel');
-    panel.innerHTML =
-      '<header class="msg-title-bar"><a class="msg-thread__link-to-profile" href="/in/' + thread.slug + '/">' + thread.name + '</a></header>' +
-      '<ul class="msg-s-message-list">' +
-      thread.messages.map((m) => '<li class="msg-s-message-list__event"><div class="msg-s-event-listitem__body"></div></li>').join('') +
-      '</ul>';
-    panel.querySelectorAll('.msg-s-event-listitem__body').forEach((el, i) => { el.textContent = thread.messages[i]; });
+    document.getElementById('thread-panel').innerHTML = thread.panel;
   }
 
   document.addEventListener('click', async (e) => {

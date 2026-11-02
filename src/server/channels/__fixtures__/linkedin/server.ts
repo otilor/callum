@@ -22,7 +22,7 @@ interface Profile {
   /** A chat window restored from earlier, for someone else. A sticky one ignores its close button. */
   bubble?: 'closable' | 'sticky';
   /** What the server answers when the page posts the invitation or message. */
-  send?: 'error' | 'silent';
+  send?: 'error' | 'error-mark' | 'error-quiet' | 'silent';
   /** Messages already in the chat window when it opens. */
   history?: string[];
 }
@@ -32,7 +32,8 @@ export const PROFILES: Record<string, Profile> = {
   tunde: { name: 'Tunde Bello', headline: 'Founder at Lagos Labs', variant: 'more' },
   ada: { name: 'Ada Obi', headline: 'Product lead at Fernhill', variant: 'message', bubble: 'closable' },
   bola: { name: 'Bola Ade', headline: 'Designer at Fernhill', variant: 'message', bubble: 'sticky' },
-  flaky: { name: 'Flo Flaky', headline: 'Writer', variant: 'message', send: 'error' },
+  flaky: { name: 'Flo Flaky', headline: 'Writer', variant: 'message', send: 'error-mark' },
+  toasty: { name: 'Toa Sty', headline: 'Writer', variant: 'message', send: 'error-quiet' },
   freebie: { name: 'Free Bie', headline: 'Analyst at Okopay', variant: 'connect', notes: 'upsell' },
   toast: { name: 'Toa St', headline: 'Analyst at Okopay', variant: 'connect', send: 'error' },
   echo: { name: 'Eko Echo', headline: 'Editor', variant: 'message', history: ['Hello Echo.'] },
@@ -45,13 +46,19 @@ export const PROFILES: Record<string, Profile> = {
   limited: { name: 'Lim Ited', headline: 'Engineer at Ceiling Co', variant: 'connect', limit: 'on-send' },
 };
 
-interface Thread { id: string; slug: string; name: string; time: string; snippet: string; messages: string[]; link: boolean }
+/** One message in a thread. `plain` messages carry none of LinkedIn's sender markers. */
+interface ThreadMessage { text: string; self?: true; plain?: true }
+interface Thread { id: string; slug: string; name: string; time: string; snippet: string; messages: ThreadMessage[]; link: boolean }
+const mine = (text: string): ThreadMessage => ({ text, self: true });
+const theirs = (text: string): ThreadMessage => ({ text });
 const THREADS: Thread[] = [
-  { id: '2-zoe', slug: 'zoe', name: 'Zoe Zed', time: '11:15 AM', snippet: 'Can we talk Thursday at 9:00?', messages: ['Hi Zoe, quick hello.', 'Can we talk Thursday at 9:00?'], link: false },
-  { id: '2-ada', slug: 'ada', name: 'Ada Obi', time: '10:32 AM', snippet: 'Yes, Thursday at 9:00 works for me.', messages: ['Hi Ada, thanks for connecting.', 'Yes, Thursday at 9:00 works for me.'], link: true },
-  { id: '2-kemi', slug: 'kemi', name: 'Kemi Okoye', time: '10:05 AM', snippet: 'You: Thanks for connecting, Kemi.', messages: ['Thanks for connecting, Kemi.'], link: false },
-  { id: '2-ben', slug: 'ben-ward', name: 'Ben Ward', time: 'Sun', snippet: 'Ben Ward: Sounds good, send me the details.', messages: ['Hi Ben, quick hello.', 'Sounds good, send me the details.'], link: false },
-  { id: '2-tunde', slug: 'tunde', name: 'Tunde Bello', time: 'Oct 28', snippet: 'Not right now, thanks.', messages: ['Hi Tunde, quick hello.', 'Not right now, thanks.'], link: false },
+  { id: '2-zoe', slug: 'zoe', name: 'Zoe Zed', time: '11:15 AM', snippet: 'Can we talk Thursday at 9:00?', messages: [mine('Hi Zoe, quick hello.'), theirs('Can we talk Thursday at 9:00?')], link: false },
+  { id: '2-ada', slug: 'ada', name: 'Ada Obi', time: '10:32 AM', snippet: 'Yes, Thursday at 9:00 works for me.', messages: [mine('Hi Ada, thanks for connecting.'), theirs('Yes, Thursday at 9:00 works for me.')], link: true },
+  { id: '2-kemi', slug: 'kemi', name: 'Kemi Okoye', time: '10:05 AM', snippet: 'You: Thanks for connecting, Kemi.', messages: [theirs('Glad to connect, Gabriel.'), mine('Thanks for connecting, Kemi.')], link: false },
+  { id: '2-ben', slug: 'ben-ward', name: 'Ben Ward', time: 'Sun', snippet: 'Ben Ward: Sounds good, send me the details.', messages: [mine('Hi Ben, quick hello.'), theirs('Sounds good, send me the details.')], link: false },
+  { id: '2-tunde', slug: 'tunde', name: 'Tunde Bello', time: 'Oct 28', snippet: 'Not right now, thanks.', messages: [mine('Hi Tunde, quick hello.'), theirs('Not right now, thanks.')], link: false },
+  // A thread whose page says nothing about who wrote what.
+  { id: '2-mia', slug: 'mia', name: 'Mia Mystery', time: '9:00 AM', snippet: 'See you then.', messages: [{ text: 'See you then.', plain: true }], link: false },
 ];
 
 const SEARCH: Array<Array<{ slug: string; name: string; headline: string }>> = [
@@ -80,6 +87,8 @@ export interface LinkedinFixture {
   env: Array<{ webdriver: boolean | null; userAgent: string }>;
   /** Redirect the connections and messaging pages to a security check. */
   challengeLists: boolean;
+  /** Leave the preview text out of the messaging list, as if LinkedIn's markup for it had changed. */
+  hidePreviews: boolean;
   close(): Promise<void>;
 }
 
@@ -142,18 +151,25 @@ function searchPage(pageNo: number): string {
   return fill(read('search.html'), { results: `    <ul role="list">\n${items}\n    </ul>` });
 }
 
+function messageHtml(t: Thread, m: ThreadMessage): string {
+  if (m.plain) return `      <li class="msg-s-message-list__event"><div class="msg-s-event-listitem__body">${esc(m.text)}</div></li>`;
+  // LinkedIn groups messages by sender: the group says who wrote them, and incoming items carry the "other" class.
+  const who = m.self ? { name: FIXTURE_USER, slug: 'me', cls: 'msg-s-event-listitem' } : { name: t.name, slug: t.slug, cls: 'msg-s-event-listitem msg-s-event-listitem--other' };
+  return `      <li class="msg-s-message-list__event"><div class="msg-s-message-group"><a class="msg-s-message-group__profile-link" href="/in/${esc(who.slug)}/"><span class="msg-s-message-group__name">${esc(who.name)}</span></a><div class="${who.cls}"><div class="msg-s-event-listitem__body">${esc(m.text)}</div></div></div></li>`;
+}
+
 function threadPanel(t: Thread | null): string {
   if (!t) return '';
-  const messages = t.messages.map((m) => `      <li class="msg-s-message-list__event"><div class="msg-s-event-listitem__body">${esc(m)}</div></li>`).join('\n');
+  const messages = t.messages.map((m) => messageHtml(t, m)).join('\n');
   return `      <header class="msg-title-bar"><a class="msg-thread__link-to-profile" href="/in/${esc(t.slug)}/">${esc(t.name)}</a></header>\n      <ul class="msg-s-message-list">\n${messages}\n      </ul>`;
 }
 
 /** The messaging page. Most rows are divs that open their thread on click; one is a link (the fast path). */
-function messagingPage(open: Thread | null, landing = false): string {
+function messagingPage(fixture: LinkedinFixture, open: Thread | null, landing = false): string {
   const threads = THREADS.map((t) => {
     const inner = `<h3 class="msg-conversation-listitem__participant-names msg-conversation-card__participant-names"><span class="truncate">${esc(t.name)}</span></h3>
           <time class="msg-conversation-listitem__time-stamp">${esc(t.time)}</time>
-          <p class="msg-conversation-card__message-snippet">${esc(t.snippet)}</p>`;
+          ${fixture.hidePreviews ? '' : `<p class="msg-conversation-card__message-snippet">${esc(t.snippet)}</p>`}`;
     const link = t.link
       ? `<a class="msg-conversation-listitem__link" href="/messaging/thread/${t.id}/">${inner}</a>`
       : `<div class="msg-conversation-listitem__link" role="button" tabindex="0" data-thread="${t.id}">${inner}</div>`;
@@ -171,6 +187,7 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
     userAgents: [],
     env: [],
     challengeLists: false,
+    hidePreviews: false,
     close: async () => undefined,
   };
 
@@ -203,7 +220,7 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
 
     if (path === '/__invite' || path === '/__message') {
       const payload = JSON.parse(await bodyOf(req)) as { slug: string; note?: string; text?: string };
-      if (PROFILES[payload.slug]?.send === 'error') return html(res, 500, 'error');
+      if (PROFILES[payload.slug]?.send?.startsWith('error')) return html(res, 500, 'error');
       if (path === '/__invite') {
         if (PROFILES[payload.slug]?.limit === 'on-send') return html(res, 429, 'weekly invitation limit');
         fixture.invites.push({ slug: payload.slug, note: payload.note ?? '' });
@@ -225,7 +242,7 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
     if (path === '/mynetwork/invite-connect/connections/' || path === '/messaging/') {
       if (fixture.challengeLists) return redirect(res, '/checkpoint/challenge/AQlists');
       // Like the real site, the newest conversation is already open when the messaging page loads.
-      if (path === '/messaging/') return html(res, 200, messagingPage(THREADS[0] ?? null, true));
+      if (path === '/messaging/') return html(res, 200, messagingPage(fixture, THREADS[0] ?? null, true));
       const people = [
         { slug: 'ada', name: 'Ada Obi', when: 'Connected 2 days ago' },
         { slug: 'ben-ward', name: 'Ben Ward', when: 'Connected 3 weeks ago' },
@@ -241,7 +258,7 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
     const thread = /^\/messaging\/thread\/([^/]+)\/?$/.exec(path);
     if (thread) {
       const t = THREADS.find((x) => x.id === thread[1]);
-      return t ? html(res, 200, messagingPage(t)) : html(res, 404, 'not found');
+      return t ? html(res, 200, messagingPage(fixture, t)) : html(res, 404, 'not found');
     }
 
     const threadData = /^\/__thread\/([^/]+)$/.exec(path);
@@ -249,7 +266,7 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
       const t = THREADS.find((x) => x.id === threadData[1]);
       if (!t) return html(res, 404, 'not found');
       res.writeHead(200, { 'content-type': 'application/json' });
-      return void res.end(JSON.stringify({ slug: t.slug, name: t.name, messages: t.messages }));
+      return void res.end(JSON.stringify({ panel: threadPanel(t) }));
     }
 
     if (path === '/search/results/people/') return html(res, 200, searchPage(Number(url.searchParams.get('page') ?? '1') || 1));
