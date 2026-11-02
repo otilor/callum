@@ -149,7 +149,7 @@ class Collector {
 
   add(parts: Parts, row: number): void {
     const name = parts.name ?? fallbackName(parts) ?? parts.company ?? `Row ${row}`;
-    const person: PersonLead = { name, source: this.source };
+    const person: PersonLead = { name, source: this.source, row };
     if (parts.first) person.firstName = parts.first;
     if (parts.company) person.company = parts.company;
     if (parts.role) person.role = parts.role;
@@ -193,12 +193,12 @@ const ALIASES: Record<Field, string[]> = {
     'account name', 'associated company', 'employer', 'current company',
   ],
   role: [
-    'title', 'role', 'job title', 'position', 'headline', 'organization title', 'organization 1 title', 'current title',
+    'job title', 'position', 'title', 'role', 'headline', 'organization title', 'organization 1 title', 'current title',
     'job role', 'occupation',
   ],
   linkedin: [
     'linkedin', 'linkedin url', 'linkedin profile', 'linkedin profile url', 'linkedin link', 'person linkedin url', 'profile',
-    'profile url', 'profile link', 'url', 'website 1 value', 'website 2 value', 'website 3 value',
+    'profile url', 'default profile url', 'profile link', 'url', 'website 1 value', 'website 2 value', 'website 3 value',
   ],
   x: ['x', 'twitter', 'x handle', 'twitter handle', 'x username', 'twitter username', 'x profile', 'twitter profile'],
   timezone: ['timezone', 'time zone', 'tz'],
@@ -210,8 +210,11 @@ for (const [field, names] of Object.entries(ALIASES) as Array<[Field, string[]]>
   names.forEach((n, rank) => ALIAS_LOOKUP.set(n, { field, rank }));
 }
 
-function normalizeHeader(cell: string): string {
-  return cell.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const squashHeader = (s: string): string => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/** The known field for a heading, trying it as written first ("LinkedIn") and then split at camelCase ("profileUrl"). */
+function lookupHeader(cell: string): { field: Field; rank: number } | undefined {
+  return ALIAS_LOOKUP.get(squashHeader(cell)) ?? ALIAS_LOOKUP.get(squashHeader(cell.replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, '$1 $2')));
 }
 
 const looksLikeData = (cell: string): boolean => {
@@ -226,7 +229,7 @@ function readHeader(cells: string[]): { columns: Columns; score: number } | null
   const found: Array<{ field: Field; rank: number; index: number }> = [];
   cells.forEach((cell, index) => {
     if (looksLikeData(cell)) return;
-    const hit = ALIAS_LOOKUP.get(normalizeHeader(cell));
+    const hit = lookupHeader(cell);
     if (hit) found.push({ ...hit, index });
   });
   if (!found.some((f) => IDENTITY.includes(f.field))) return null;
@@ -239,7 +242,7 @@ function readHeader(cells: string[]): { columns: Columns; score: number } | null
 
 // ---- tables ------------------------------------------------------------------------------
 
-const DELIMITERS = [',', ';', '\t'] as const;
+const DELIMITERS = [',', ';', '\t', '|'] as const;
 type Delimiter = (typeof DELIMITERS)[number];
 const HEADER_SEARCH_ROWS = 60;
 
@@ -295,7 +298,7 @@ const NO_HEADER =
 
 interface Table { delimiter: Delimiter; headerAt: number; columns: Columns }
 
-function findTable(text: string): { table: Table } | { error: ImportFileError } {
+function findTable(text: string): { table: Table } | { error: ImportFileError; noHeader: boolean } {
   let best: (Table & { score: number }) | null = null;
   let readError: unknown = null;
   for (const delimiter of DELIMITERS) {
@@ -314,18 +317,21 @@ function findTable(text: string): { table: Table } | { error: ImportFileError } 
     }
   }
   if (best) return { table: best };
-  const quoteLine = readError ? unclosedQuoteLine(text, ',') ?? unclosedQuoteLine(text, ';') ?? unclosedQuoteLine(text, '\t') : null;
-  if (quoteLine) return { error: quoteError(quoteLine) };
-  return { error: new ImportFileError(NO_HEADER) };
+  const quoteLine = readError ? DELIMITERS.map((d) => unclosedQuoteLine(text, d)).find((n) => n !== null) ?? null : null;
+  if (quoteLine) return { error: quoteError(quoteLine), noHeader: false };
+  return { error: new ImportFileError(NO_HEADER), noHeader: true };
 }
 
 const quoteError = (line: number): ImportFileError =>
   new ImportFileError(`A quote that opens near line ${line} is never closed, so Callum can't tell where that row ends. Close it or take it out, and try again.`);
 
-function pick(cells: string[], cols: number[]): string | null {
+/** A "Title" of Mr. / Ms. / Dr. (Outlook) is a salutation, not a job title. */
+const HONORIFIC = /^(?:mr|mrs|ms|miss|mx|dr|prof|sir|madam|mister|master|rev|hon)\.?$/i;
+
+function pick(cells: string[], cols: number[], accept: (v: string) => boolean = () => true): string | null {
   for (const c of cols) {
     const v = cleanText(cells[c]);
-    if (v) return v;
+    if (v && accept(v)) return v;
   }
   return null;
 }
@@ -334,7 +340,13 @@ function readTable(raw: string, source: LeadSource): ParseResult {
   const text = stripBom(raw);
   if (text.trim() === '') return { people: [], skipped: [] };
   const found = findTable(text);
-  if ('error' in found) throw found.error;
+  if ('error' in found) {
+    if (!found.noHeader) throw found.error;
+    // No heading row: read it as one person per line, as a paste. If that finds nobody either, say what is missing.
+    const lines = parseLines(text, source);
+    if (lines.people.length === 0) throw found.error;
+    return lines;
+  }
   const { delimiter, headerAt, columns } = found.table;
 
   let records: Rec[];
@@ -346,8 +358,9 @@ function readTable(raw: string, source: LeadSource): ParseResult {
     throw new ImportFileError(`Callum could not read this file: ${e instanceof Error ? e.message : String(e)}`);
   }
 
+  const rows = records.slice(headerAt + 1);
   const out = new Collector(source);
-  for (const rec of records.slice(headerAt + 1)) {
+  for (const rec of rows) {
     const cells = rec.cells;
     if (cells.every((c) => c.trim() === '')) continue;
     const first = pick(cells, columns.first);
@@ -364,7 +377,7 @@ function readTable(raw: string, source: LeadSource): ParseResult {
         first,
         email,
         company: pick(cells, columns.company),
-        role: pick(cells, columns.role),
+        role: pick(cells, columns.role, (v) => !HONORIFIC.test(v)),
         linkedinUrl,
         xHandle,
         timezone: cleanTimezone(pick(cells, columns.timezone)),
@@ -383,7 +396,7 @@ export function parseCsv(text: string): ParseResult {
 // ---- paste ------------------------------------------------------------------------------------
 
 function splitLine(line: string): string[] {
-  const delimiter = line.includes('\t') ? '\t' : line.includes(',') ? ',' : line.includes(';') ? ';' : null;
+  const delimiter = line.includes('\t') ? '\t' : line.includes('|') ? '|' : line.includes(',') ? ',' : line.includes(';') ? ';' : null;
   if (!delimiter) return [line];
   const fields: string[] = [];
   let cur = '';
@@ -443,11 +456,10 @@ function startsWithHeader(text: string): boolean {
   });
 }
 
-/** Names and handles pasted from anywhere: a few lines, a spreadsheet selection, or a CSV with a header row. */
-export function parsePaste(raw: string): ParseResult {
+/** One person per line. */
+function parseLines(raw: string, source: LeadSource): ParseResult {
   const text = stripBom(raw);
-  if (startsWithHeader(text)) return readTable(text, 'paste');
-  const out = new Collector('paste');
+  const out = new Collector(source);
   text.split(/\r?\n/).forEach((line, i) => {
     if (line.trim() === '') return;
     const row = i + 1;
@@ -459,4 +471,10 @@ export function parsePaste(raw: string): ParseResult {
     out.add(parsePasteLine(line), row);
   });
   return out.result();
+}
+
+/** Names and handles pasted from anywhere: a few lines, a spreadsheet selection, or a CSV with a header row. */
+export function parsePaste(raw: string): ParseResult {
+  const text = stripBom(raw);
+  return startsWithHeader(text) ? readTable(text, 'paste') : parseLines(text, 'paste');
 }

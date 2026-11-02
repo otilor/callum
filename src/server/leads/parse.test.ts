@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { decodeLeadFile, ImportFileError, parseCsv, parsePaste } from './parse.js';
+import type { PersonLead } from '../../shared/types.js';
+import { decodeLeadFile, ImportFileError, parseCsv as parseCsvWithRows, parsePaste as parsePasteWithRows, type ParseResult } from './parse.js';
+
+/** Most tests compare people without the line they came from; the `rows` describe checks that. */
+const withoutRows = (r: ParseResult): ParseResult => ({ ...r, people: r.people.map(({ row: _row, ...p }): PersonLead => p) });
+const parseCsv = (text: string) => withoutRows(parseCsvWithRows(text));
+const parsePaste = (text: string) => withoutRows(parsePasteWithRows(text));
 
 const fixture = (name: string) => readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), 'utf8');
 
@@ -224,10 +230,46 @@ describe('parseCsv: headers', () => {
     expect(parseCsv('Name,Email\n')).toEqual({ people: [], skipped: [] });
   });
 
-  it('says plainly when there is no header, and when a quote is never closed', () => {
-    expect(() => parseCsv('Kemi Eze,kemi@okopay.com,Oko Pay\nFemi Ade,femi@ledgerly.io,Ledgerly\n')).toThrow(ImportFileError);
-    expect(() => parseCsv('Kemi Eze,kemi@okopay.com,Oko Pay\n')).toThrow(/column for names, emails or LinkedIn/);
+  it('reads a file with no header row one person per line, keeping source csv', () => {
+    const { people, skipped } = parseCsv('Kemi Eze,kemi@okopay.com,Oko Pay\nFemi Ade\tfemi@ledgerly.io\tLedgerly\nTunde Bakare, Paystack\n');
+    expect(people).toEqual([
+      { name: 'Kemi Eze', email: 'kemi@okopay.com', company: 'Oko Pay', source: 'csv' },
+      { name: 'Femi Ade', email: 'femi@ledgerly.io', company: 'Ledgerly', source: 'csv' },
+    ]);
+    expect(skipped).toEqual([{ name: 'Tunde Bakare', reason: 'no_channel', row: 3 }]);
+  });
+
+  it('says plainly when there is neither a header nor anyone to reach, and when a quote is never closed', () => {
+    expect(() => parseCsv('Kemi Eze,Oko Pay\nFemi Ade,Ledgerly\n')).toThrow(ImportFileError);
+    expect(() => parseCsv('Kemi Eze,Oko Pay\n')).toThrow(/column for names, emails or LinkedIn/);
     expect(() => parseCsv('Name,Email\n"Kemi Eze,kemi@okopay.com\nFemi Ade,femi@ledgerly.io\n')).toThrow(/quote.*line 2/i);
+  });
+
+  it('reads a pipe-separated file', () => {
+    const { people } = parseCsv('Name|Email|Company\nKemi Eze|kemi@okopay.com|Oko Pay, Lagos\n');
+    expect(people).toEqual([{ name: 'Kemi Eze', email: 'kemi@okopay.com', company: 'Oko Pay, Lagos', source: 'csv' }]);
+  });
+
+  it('puts Job Title and Position ahead of Title, and ignores a Title column of Mr. and Ms.', () => {
+    const outlook = 'Title,First Name,Last Name,E-mail Address,Company,Job Title\nMr.,Kemi,Eze,kemi@okopay.com,Oko Pay,Head of Finance\nMs,Femi,Ade,femi@ledgerly.io,Ledgerly,\nDr.,Ada,Okafor,ada@okafor.dev,,CTO\n';
+    expect(parseCsv(outlook).people.map((p) => p.role)).toEqual(['Head of Finance', undefined, 'CTO']);
+    const onlyTitle = 'Title,Name,Email\nMr.,Kemi Eze,kemi@okopay.com\nMs.,Femi Ade,femi@ledgerly.io\n';
+    expect(parseCsv(onlyTitle).people.map((p) => p.role)).toEqual([undefined, undefined]);
+    const real = 'Title,Name,Email\nHead of Finance,Kemi Eze,kemi@okopay.com\nMr.,Femi Ade,femi@ledgerly.io\n';
+    expect(parseCsv(real).people.map((p) => p.role)).toEqual(['Head of Finance', undefined]);
+    const both = 'Position,Title,Name,Email\nCFO,Mr.,Kemi Eze,kemi@okopay.com\n';
+    expect(parseCsv(both).people[0]?.role).toBe('CFO');
+  });
+
+  it('reads camelCase headings, as a Phantombuster export writes them', () => {
+    const csv =
+      'profileUrl,fullName,firstName,lastName,companyName,title,defaultProfileUrl\n' +
+      'https://www.linkedin.com/in/kemi-eze-5a2b1c,Kemi Eze,Kemi,Eze,Oko Pay,Head of Finance,https://www.linkedin.com/in/ACoAAB123\n' +
+      'https://www.linkedin.com/sales/lead/ACwAAA,Femi Ade,Femi,Ade,Ledgerly,CTO,https://www.linkedin.com/in/femi-ade\n';
+    expect(parseCsv(csv).people).toEqual([
+      { name: 'Kemi Eze', firstName: 'Kemi', company: 'Oko Pay', role: 'Head of Finance', linkedinUrl: 'https://www.linkedin.com/in/kemi-eze-5a2b1c', source: 'csv' },
+      { name: 'Femi Ade', firstName: 'Femi', company: 'Ledgerly', role: 'CTO', linkedinUrl: 'https://www.linkedin.com/in/femi-ade', source: 'csv' },
+    ]);
   });
 
   it('copes with rows that are shorter or longer than the header', () => {
@@ -241,6 +283,19 @@ describe('parseCsv: headers', () => {
     const { people, skipped } = parseCsv(['Name,Email,Company', ...rows].join('\r\n'));
     expect(people).toHaveLength(20000);
     expect(skipped).toEqual([]);
+  });
+});
+
+describe('rows', () => {
+  it('each parsed person carries the line it came from, counting notes, blank lines and multi-line cells', () => {
+    expect(parseCsvWithRows(fixture('linkedin-connections.csv')).people.map((p) => [p.name, p.row])).toEqual([
+      ['Kemi Eze', 5], ['Femi Ade', 6], ['Zoë Müller', 7], ['Ada Okafor', 10],
+    ]);
+    expect(parseCsvWithRows(fixture('google-contacts.csv')).people.map((p) => p.row)).toEqual([2, 4, 5]);
+  });
+
+  it('paste lines carry their line numbers too', () => {
+    expect(parsePasteWithRows('Kemi Eze, kemi@okopay.com\n\nFemi Ade, femi@ledgerly.io').people.map((p) => p.row)).toEqual([1, 3]);
   });
 });
 

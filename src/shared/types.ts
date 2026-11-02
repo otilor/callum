@@ -42,8 +42,8 @@ export interface Person {
   createdAt: string; updatedAt: string;
 }
 export type NewPerson = Pick<Person, 'name' | 'source' | 'projectId'> & Partial<Omit<Person, 'id' | 'name' | 'source' | 'projectId' | 'createdAt' | 'updatedAt'>>;
-/** A person found by a lead source, before it is imported into a project. */
-export type PersonLead = Omit<NewPerson, 'projectId'>;
+/** A person found by a lead source, before it is imported into a project. `row` is the line of the list they came from, when there is one. */
+export type PersonLead = Omit<NewPerson, 'projectId'> & { row?: number };
 
 export interface Message {
   id: number; personId: number; channel: Channel; direction: 'out' | 'in'; kind: MessageKind;

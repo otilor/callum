@@ -3,19 +3,71 @@ import { cleanEmail } from './parse.js';
 
 const APOLLO_URL = 'https://api.apollo.io';
 const SEARCH_PATH = '/api/v1/mixed_people/api_search';
-/** Apollo returns at most this many people per page. */
+const ENRICH_PATH = '/api/v1/people/bulk_match';
+/** People API Search returns at most this many people per page. */
 const PAGE_MAX = 100;
+/** Bulk People Enrichment takes at most this many people per call. */
+const ENRICH_BATCH = 10;
 /** A search for a few hundred people never needs more requests than this. */
 const MAX_PAGES = 10;
 const TIMEOUT_MS = 20_000;
+/** Emails Apollo stands behind; anything else is a guess and would bounce. */
+const TRUSTED_EMAIL_STATUS = new Set(['verified', 'likely_to_engage']);
 
+export type ApolloErrorCode = 'bad_key' | 'not_allowed' | 'bad_search' | 'rate_limited' | 'failed';
+
+/** A failed Apollo call, with a message that is already plain words and never contains the key. */
+export class ApolloError extends Error {
+  /** For `enrich`: what earlier batches already found and cost before this one failed. */
+  partial?: ApolloEnrichment;
+  constructor(readonly code: ApolloErrorCode, readonly status: number | null) {
+    super(MESSAGES[code]);
+    this.name = 'ApolloError';
+  }
+}
+
+const MESSAGES: Record<ApolloErrorCode, string> = {
+  bad_key: "Apollo didn't accept the API key. Check it in Your Callum.",
+  not_allowed: "This Apollo key can't search people. Use a master key or allow People Search.",
+  bad_search: "Apollo couldn't understand that search. Try fewer words.",
+  rate_limited: "Apollo's hourly search limit is reached. Try again in an hour.",
+  failed: 'Apollo search failed.',
+};
+
+const CODE_BY_STATUS: Record<number, ApolloErrorCode> = { 401: 'bad_key', 403: 'not_allowed', 422: 'bad_search', 429: 'rate_limited' };
+
+/** A free search result: enough to choose from, not enough to write to. */
+export interface ApolloPreview {
+  apolloId: string;
+  firstName: string;
+  /** Apollo hides most of the last name, for example "Ez***". */
+  lastNameObfuscated: string;
+  title: string | null;
+  company: string | null;
+  hasEmail: boolean;
+}
 export interface ApolloQuery { query: string | null; titles: string[]; count: number }
-export interface ApolloResult { total: number; people: PersonLead[] }
+export interface ApolloSearchResult { total: number; previews: ApolloPreview[] }
+export interface ApolloEnrichment { people: PersonLead[]; creditsUsed: number }
 
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
 const record = (v: unknown): Record<string, unknown> => (v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 
-/** One entry of Apollo's `people` list. Apollo hides the last name (`last_name_obfuscated`) on search-only results; that is never used. */
+function toPreview(raw: unknown): ApolloPreview | null {
+  const p = record(raw);
+  const apolloId = text(p.id);
+  if (!apolloId) return null;
+  return {
+    apolloId,
+    firstName: text(p.first_name) ?? '',
+    lastNameObfuscated: text(p.last_name_obfuscated) ?? '',
+    title: text(p.title),
+    company: text(record(p.organization).name),
+    hasEmail: p.has_email === true,
+  };
+}
+
+/** One entry of `matches` from bulk_match. Null when Apollo knows no such person. */
 function toLead(raw: unknown): PersonLead | null {
   const p = record(raw);
   const first = text(p.first_name);
@@ -30,12 +82,17 @@ function toLead(raw: unknown): PersonLead | null {
   if (company) lead.company = company;
   const linkedin = text(p.linkedin_url);
   if (linkedin) lead.linkedinUrl = linkedin;
-  const email = cleanEmail(text(p.email));
+  const status = text(p.email_status);
+  const email = status && TRUSTED_EMAIL_STATUS.has(status) ? cleanEmail(text(p.email)) : null;
   if (email) lead.email = email;
   return lead;
 }
 
-/** Apollo's people search (api.apollo.io). The key goes in the `x-api-key` header and is never part of an error message. */
+/**
+ * Apollo (api.apollo.io). `search` is People API Search: free, returns previews with no email or LinkedIn.
+ * `enrich` is Bulk People Enrichment: about one credit per person found, returns the email and LinkedIn.
+ * The key goes in the `x-api-key` header and is never part of an error.
+ */
 export class ApolloSource {
   private readonly fetchImpl: typeof fetch;
 
@@ -43,53 +100,77 @@ export class ApolloSource {
     this.fetchImpl = fetchImpl ?? ((input, init) => fetch(input, init));
   }
 
-  async search(q: ApolloQuery): Promise<ApolloResult> {
+  async search(q: ApolloQuery): Promise<ApolloSearchResult> {
     const want = Math.max(1, Math.floor(q.count));
     const perPage = Math.min(want, PAGE_MAX);
-    const people: PersonLead[] = [];
+    const previews: ApolloPreview[] = [];
     let total = 0;
     for (let page = 1; page <= MAX_PAGES; page++) {
-      const data = await this.request({
-        ...(q.query ? { q_keywords: q.query } : {}),
-        ...(q.titles.length > 0 ? { person_titles: q.titles } : {}),
-        per_page: perPage,
-        page,
-      });
+      // Apollo's examples write the brackets of array parameters as they are, so this is built by hand.
+      const params: string[] = [];
+      if (q.query) params.push(`q_keywords=${encodeURIComponent(q.query)}`);
+      for (const t of q.titles) params.push(`person_titles[]=${encodeURIComponent(t)}`);
+      params.push(`per_page=${perPage}`, `page=${page}`);
+      const data = await this.post(`${SEARCH_PATH}?${params.join('&')}`);
       const found = Array.isArray(data.people) ? data.people : [];
       const pagination = record(data.pagination);
       const entries = pagination.total_entries ?? data.total_entries;
       const pages = pagination.total_pages;
       for (const raw of found) {
-        const lead = toLead(raw);
-        if (lead) people.push(lead);
+        const preview = toPreview(raw);
+        if (preview) previews.push(preview);
       }
-      total = typeof entries === 'number' ? entries : people.length;
+      total = typeof entries === 'number' ? entries : previews.length;
       const lastPage = typeof pages === 'number' && page >= pages;
-      if (people.length >= want || found.length < perPage || lastPage) break;
+      if (previews.length >= want || found.length < perPage || lastPage) break;
     }
-    return { total, people: people.slice(0, want) };
+    return { total, previews: previews.slice(0, want) };
   }
 
-  private async request(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  /** Looks the chosen people up by their Apollo id, ten at a time. Spends credits. */
+  async enrich(ids: string[]): Promise<ApolloEnrichment> {
+    const unique = [...new Set(ids)];
+    const result: ApolloEnrichment = { people: [], creditsUsed: 0 };
+    for (let i = 0; i < unique.length; i += ENRICH_BATCH) {
+      let data: Record<string, unknown>;
+      try {
+        data = await this.post(ENRICH_PATH, { details: unique.slice(i, i + ENRICH_BATCH).map((id) => ({ id })) });
+      } catch (e) {
+        if (e instanceof ApolloError) e.partial = { people: [...result.people], creditsUsed: result.creditsUsed };
+        throw e;
+      }
+      for (const m of Array.isArray(data.matches) ? data.matches : []) {
+        const lead = toLead(m);
+        if (lead) result.people.push(lead);
+      }
+      if (typeof data.credits_consumed === 'number') result.creditsUsed += data.credits_consumed;
+    }
+    return result;
+  }
+
+  private async post(pathAndQuery: string, body?: Record<string, unknown>): Promise<Record<string, unknown>> {
     let res: Response;
     try {
-      res = await this.fetchImpl(`${this.baseUrl}${SEARCH_PATH}`, {
+      res = await this.fetchImpl(`${this.baseUrl}${pathAndQuery}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json', 'cache-control': 'no-cache', 'x-api-key': this.apiKey },
-        body: JSON.stringify(body),
+        headers: {
+          accept: 'application/json', 'cache-control': 'no-cache', 'x-api-key': this.apiKey,
+          ...(body ? { 'content-type': 'application/json' } : {}),
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-    } catch (e) {
-      throw new Error(`Apollo search failed: ${e instanceof Error && e.name === 'TimeoutError' ? 'no answer in time' : 'could not reach Apollo'}`);
+    } catch {
+      throw new ApolloError('failed', null);
     }
     if (!res.ok) {
       await res.body?.cancel().catch(() => undefined);
-      throw new Error(`Apollo search failed: ${res.status}`);
+      throw new ApolloError(CODE_BY_STATUS[res.status] ?? 'failed', res.status);
     }
     try {
       return record(await res.json());
     } catch {
-      throw new Error('Apollo search failed: unreadable answer');
+      throw new ApolloError('failed', res.status);
     }
   }
 }
