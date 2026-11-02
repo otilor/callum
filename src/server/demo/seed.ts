@@ -37,6 +37,7 @@ const IDENTITY: Record<Channel, string> = { email: SENDER_EMAIL, linkedin: 'Gabr
  */
 export function seedScene(ctx: Ctx, scene: Scene): void {
   ctx.repo.deleteAll();
+  ctx.reloadKeys();
   ctx.repo.transaction(() => {
     if (scene === 'fresh') seedFresh(ctx);
     else seedMorning(ctx);

@@ -72,6 +72,9 @@ export interface InboundFailure {
   event: string; error: string; attempts: number; createdAt: string; updatedAt: string;
 }
 
+/** The rows of `channel_secrets`: one per channel, and the Apollo and Claude keys. */
+export type SecretKey = Channel | 'apollo' | 'anthropic';
+
 export class DuplicateProjectName extends Error {
   constructor(name: string) {
     super(`You already have a project called ${name}. Pick another name.`);
@@ -149,6 +152,14 @@ export class Repo {
     return this.require(this.getProject(id), 'project', id);
   }
 
+  /** Removes a project that never started and has nobody in it. Returns whether it was removed. */
+  deleteEmptyProject(id: number): boolean {
+    const res = this.db.prepare(
+      'DELETE FROM projects WHERE id = ? AND started_at IS NULL AND NOT EXISTS (SELECT 1 FROM people WHERE project_id = ?)',
+    ).run(id, id);
+    return Number(res.changes) > 0;
+  }
+
   getProject(id: number): Project | null {
     return this.selectOne<Project>('SELECT * FROM projects WHERE id = ?', [id]);
   }
@@ -201,12 +212,12 @@ export class Repo {
     return next;
   }
 
-  getChannelSecret(ch: Channel): Record<string, string> | null {
+  getChannelSecret(ch: SecretKey): Record<string, string> | null {
     const row = this.db.prepare('SELECT data FROM channel_secrets WHERE channel = ?').get(ch) as { data: string } | undefined;
     return row ? (JSON.parse(row.data) as Record<string, string>) : null;
   }
 
-  setChannelSecret(ch: Channel, data: Record<string, string> | null): void {
+  setChannelSecret(ch: SecretKey, data: Record<string, string> | null): void {
     if (data === null) {
       this.db.prepare('DELETE FROM channel_secrets WHERE channel = ?').run(ch);
       return;
@@ -268,6 +279,18 @@ export class Repo {
     inList('status', filter.status);
     inList('stage', filter.stage);
     return { sql: where.length ? ` WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  /** Removes a person and their outbox items, unless Callum has a message with them. Returns whether they were removed. */
+  deletePerson(id: number): boolean {
+    return this.transaction(() => {
+      const res = this.db
+        .prepare('DELETE FROM people WHERE id = ? AND NOT EXISTS (SELECT 1 FROM messages WHERE person_id = ?)')
+        .run(id, id);
+      if (Number(res.changes) === 0) return false;
+      this.db.prepare('UPDATE incidents SET person_id = NULL WHERE person_id = ?').run(id);
+      return true;
+    });
   }
 
   findPersonByHandle(h: { email?: string | null; linkedinUrl?: string | null; xHandle?: string | null }): Person | null {

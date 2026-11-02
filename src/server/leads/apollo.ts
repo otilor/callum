@@ -56,7 +56,13 @@ export interface ApolloPreview {
   company: string | null;
   hasEmail: boolean;
 }
-export interface ApolloQuery { query: string | null; titles: string[]; count: number }
+export interface ApolloQuery {
+  query: string | null; titles: string[]; count: number;
+  /** Company sizes as Apollo writes them, `21,200`. */
+  employeeRanges?: string[];
+  /** Where the person is, `Accra`. */
+  personLocations?: string[];
+}
 export interface ApolloSearchResult { total: number; previews: ApolloPreview[] }
 export interface ApolloEnrichment { people: PersonLead[]; creditsUsed: number }
 
@@ -120,6 +126,8 @@ export class ApolloSource {
       const params: string[] = [];
       if (q.query) params.push(`q_keywords=${encodeURIComponent(q.query)}`);
       for (const t of q.titles) params.push(`person_titles[]=${encodeURIComponent(t)}`);
+      for (const r of q.employeeRanges ?? []) params.push(`organization_num_employees_ranges[]=${encodeURIComponent(r)}`);
+      for (const l of q.personLocations ?? []) params.push(`person_locations[]=${encodeURIComponent(l)}`);
       params.push(`per_page=${perPage}`, `page=${page}`);
       const data = await this.post('search', `${SEARCH_PATH}?${params.join('&')}`);
       const found = Array.isArray(data.people) ? data.people : [];

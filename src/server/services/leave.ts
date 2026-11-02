@@ -51,6 +51,8 @@ export function wrapUp(ctx: Ctx, opts: { deleteData: boolean }): { cancelledFoll
   });
   if (opts.deleteData) {
     ctx.repo.deleteAll();
+    // The saved Apollo and Claude keys went with it.
+    ctx.reloadKeys();
     // The wipe resets settings too; the wrap-up still stands.
     ctx.repo.updateSettings({ pauseState: 'wrapped' });
   }

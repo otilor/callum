@@ -77,6 +77,14 @@ describe('ApolloSource.search against a local Apollo-shaped server (real fetch)'
     expect(req.url).toContain('person_titles[]=Head%20of%20Finance&person_titles[]=CFO%20%26%20Co');
   });
 
+  it('sends company sizes and locations as Apollo filters', async () => {
+    await apollo().search({ ...find({ query: 'finance', count: 10 }), employeeRanges: ['21,200'], personLocations: ['Accra'] });
+    const req = seen[0]!;
+    expect(req.query.getAll('organization_num_employees_ranges[]')).toEqual(['21,200']);
+    expect(req.query.getAll('person_locations[]')).toEqual(['Accra']);
+    expect(req.url).toContain('organization_num_employees_ranges[]=21%2C200&person_locations[]=Accra');
+  });
+
   it('leaves out an empty keyword search and an empty titles list', async () => {
     await apollo().search(find({ count: 10 }));
     expect([...seen[0]!.query.entries()]).toEqual([['per_page', '10'], ['page', '1']]);

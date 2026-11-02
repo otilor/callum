@@ -139,3 +139,16 @@ export interface PersonFull {
   /** The name of the person's project. */
   projectName: string;
 }
+
+// Task 18: adding people
+/** People skipped for one reason, already worded: `2 already in Callum`. */
+export interface SkipGroup { reason: SkipReason; line: string; names: string[]; projectName?: string }
+/** A person on a preview. `key` names them in `drop` when the user says Not a fit. Apollo rows carry the id Apollo knows them by. */
+export type PreviewPerson = NewPerson & { key: string; apolloId?: string; hasEmail?: boolean };
+export interface AddPreview { batchId: string; added: PreviewPerson[]; groups: SkipGroup[] }
+export interface AddCommit {
+  added: Person[]; line: string; groups: SkipGroup[]; creditsUsed?: number; warning?: string;
+  /** People Apollo has not looked up yet, after a failure part way. Adding again looks up only these. */
+  remaining?: number;
+}
+export interface Described { batchId: string | null; total: number; people: PreviewPerson[]; narrow: string[] | null; line: string }
