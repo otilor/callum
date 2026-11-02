@@ -52,7 +52,7 @@ describe('a message with a blank in it', () => {
     const h = harness({ connected: ['email', 'linkedin'] });
     const ctx = ctxWith(h, { write: async () => BLANK });
     h.person({ ...FOLLOW_UP });
-    h.person({ ...FOLLOW_UP, email: null, channel: 'linkedin', linkedinState: 'connected', linkedinUrl: 'https://www.linkedin.com/in/ada-l' });
+    h.person({ ...FOLLOW_UP, email: null, channel: 'linkedin', linkedinState: 'connected', linkedinUrl: 'https://www.linkedin.com/in/ada-l', invitedAt: '2026-10-20T09:00:00.000Z' });
     const { runner } = runnerFor(h, ctx);
     await runner.tick();
     expect(open(h).map((i) => `${i.channel}: ${i.message}`).sort()).toEqual([
@@ -145,13 +145,15 @@ describe('a message that did not go', () => {
     const item = h.ctx.repo.listOutbox({ personId: p.id })[0]!;
     expect(item.state).toBe('failed');
     expect(open(h)).toMatchObject([{ kind: 'send_failed', message: "Callum couldn't send a follow-up by email today" }]);
-    expect(personDetail(h.ctx, p.id).next).toBe("A follow-up didn't go out");
+    // An unknown failure may have gone out (see channels/types failureDetail), so the user is asked first.
+    expect(personDetail(h.ctx, p.id).next).toBe("A follow-up may have gone out, and Callum couldn't confirm it");
 
     // The person is held while the message waits for the user: nothing else is written for them.
     await runner.tick();
     expect(h.ctx.repo.listOutbox({ personId: p.id })).toHaveLength(1);
 
-    const again = retry(h.ctx, item.id);
+    expect(() => retry(h.ctx, item.id)).toThrow('This may have gone out already. Send again?');
+    const again = retry(h.ctx, item.id, { again: true });
     expect(again).toMatchObject({ id: item.id, state: 'scheduled', error: null, detail: null });
     expect(open(h)).toEqual([]);
     await runner.tick();
