@@ -254,6 +254,13 @@ function uidValidity(imap: ImapLike): string {
   return String(box && typeof box === 'object' ? (box.uidValidity ?? 0) : 0);
 }
 
+const MAIL_SIGNED_OUT = "Your mail server didn't accept that password. Check the address and app password.";
+
+/** The sign-in failure a sending or reading call reports; the runner reads code 'auth' to ask for a reconnect. */
+function signedOut(cfg?: MailConfig | null): ConnectError {
+  return new ConnectError(cfg?.oauth ? `Couldn't sign in to ${cfg.address}. Sign in with Microsoft again.` : MAIL_SIGNED_OUT, 'auth');
+}
+
 const DELAY_NOTICE = /\bdelay(?:ed)?\b|will (?:keep|continue) (?:trying|retrying)|still trying/i;
 
 export function createEmailAdapter(secret: Record<string, string> | null, deps: EmailDeps = {}): ChannelAdapter {
@@ -268,7 +275,7 @@ export function createEmailAdapter(secret: Record<string, string> | null, deps: 
     try {
       config = parseConfig(secret);
     } catch (err) {
-      configError = err instanceof ConnectError ? err : new ConnectError('auth');
+      configError = err instanceof ConnectError ? err : signedOut();
     }
   }
   let transporter: ReturnType<typeof nodemailer.createTransport> | null = null;
@@ -281,7 +288,7 @@ export function createEmailAdapter(secret: Record<string, string> | null, deps: 
 
   function requireConfig(): MailConfig {
     if (config) return config;
-    throw configError ?? new ConnectError('auth');
+    throw configError ?? signedOut();
   }
 
   /** The OAuth access token, refreshed first when it is missing, about to expire or `force` is set. Null for password logins. */
@@ -323,7 +330,7 @@ export function createEmailAdapter(secret: Record<string, string> | null, deps: 
       try {
         token = await accessToken(cfg, { force, notify });
       } catch (err) {
-        throw err instanceof OAuthError ? new ConnectError('auth') : err;
+        throw err instanceof OAuthError ? signedOut(cfg) : err;
       }
       const imap = createImap(imapConfig(cfg, token));
       try {
@@ -335,7 +342,7 @@ export function createEmailAdapter(secret: Record<string, string> | null, deps: 
           force = true;
           continue;
         }
-        throw new ConnectError('auth');
+        throw signedOut(cfg);
       }
       try {
         return await fn(imap);

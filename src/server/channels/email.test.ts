@@ -443,11 +443,11 @@ describe('poll', () => {
     expect(imap.calls.logouts).toBe(1);
   });
 
-  it('throws ConnectError "auth" when the IMAP login fails', async () => {
+  it('throws a ConnectError with code auth and plain words when the IMAP login fails', async () => {
     const { adapter } = makeAdapter([inbox], { imapOpts: { connectErrors: [Object.assign(new Error('nope'), { authenticationFailed: true })] } });
     const failure = adapter.poll(null);
     await expect(failure).rejects.toBeInstanceOf(ConnectError);
-    await expect(failure).rejects.toThrow('auth');
+    await expect(failure).rejects.toMatchObject({ code: 'auth', message: "Your mail server didn't accept that password. Check the address and app password." });
   });
 
   it('passes other connection errors through unchanged', async () => {
@@ -456,9 +456,9 @@ describe('poll', () => {
     await expect(adapter.poll(null)).rejects.toBe(boom);
   });
 
-  it('throws ConnectError "auth" when never connected', async () => {
+  it('throws a ConnectError with code auth when never connected', async () => {
     const adapter = createEmailAdapter(null, { createImap: fakeImap([]).createImap });
-    await expect(adapter.poll(null)).rejects.toThrow('auth');
+    await expect(adapter.poll(null)).rejects.toMatchObject({ code: 'auth', message: "Your mail server didn't accept that password. Check the address and app password." });
   });
 });
 
@@ -682,10 +682,10 @@ describe('microsoft (OAuth2)', () => {
     ]);
   });
 
-  it('throws ConnectError "auth" when IMAP refuses a freshly refreshed token too', async () => {
+  it('throws a ConnectError with code auth when IMAP refuses a freshly refreshed token too', async () => {
     const refused = () => Object.assign(new Error('AUTHENTICATE failed'), { authenticationFailed: true });
     const { adapter, refresh } = msAdapter({ secret: SECRET, refreshes: [tokens(1), tokens(2)], imapErrors: [refused(), refused()] });
-    await expect(adapter.poll(null)).rejects.toThrow('auth');
+    await expect(adapter.poll(null)).rejects.toMatchObject({ code: 'auth', message: "Couldn't sign in to you@contoso.test. Sign in with Microsoft again." });
     expect(refresh).toHaveBeenCalledOnce();
   });
 });
