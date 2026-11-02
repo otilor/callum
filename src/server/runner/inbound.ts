@@ -3,7 +3,7 @@ import type { InboundEvent } from '../channels/types.js';
 import type { Ctx } from '../context.js';
 import { afterUserSent, chooseChannel, onAccepted, onInbound, personTz } from '../engine/lifecycle.js';
 import { importPeople } from '../leads/import.js';
-import { channelCheckpoint, handleBounce } from './incidents.js';
+import { INCIDENT_COPY, channelCheckpoint, handleBounce, openIncident } from './incidents.js';
 
 type Reply = Extract<InboundEvent, { type: 'reply' }>;
 
@@ -90,6 +90,40 @@ export function heldBackPeople(ctx: Ctx): Set<number> {
   return held;
 }
 
+const CHANNEL_NAME: Record<Channel, string> = { email: 'email', linkedin: 'LinkedIn', x: 'X' };
+
+/**
+ * A reply that cannot be read is never left silent: it is stored as it came, the person goes on the dock without a
+ * draft (nothing automatic reaches them there), and the user is told. Without a match only the notice is possible.
+ */
+function giveUp(ctx: Ctx, ch: Channel, event: InboundEvent): void {
+  if (event.type !== 'reply') return;
+  const { repo } = ctx;
+  const person = repo.findPersonByHandle({
+    email: event.from.email ?? null, linkedinUrl: event.from.linkedinUrl ?? null, xHandle: event.from.xHandle ?? null,
+  });
+  if (!person) {
+    openIncident(ctx, { channel: ch, kind: 'reply_unread', message: INCIDENT_COPY.reply_unread_unknown(CHANNEL_NAME[ch]) });
+    return;
+  }
+  const at = atOf(ctx, event.at);
+  repo.transaction(() => {
+    if (!(event.externalId && repo.hasMessageWithExternalId(ch, event.externalId, 'in'))) {
+      repo.insertMessage({
+        personId: person.id, channel: ch, direction: 'in', kind: 'inbound', subject: null, body: event.text,
+        at: at.toISOString(), externalId: event.externalId,
+      });
+    }
+    // Someone who said stop or was removed stays that way; everyone else is on the dock.
+    if (!finished(person)) {
+      repo.updatePerson(person.id, { status: 'waiting', draft: null, lastInbound: event.text, repliedAt: at.toISOString(), nextTouchAt: null });
+      ctx.outbox.cancelPending(person.id, ['auto']);
+    }
+  });
+  openIncident(ctx, { channel: ch, kind: 'reply_unread', message: INCIDENT_COPY.reply_unread(person.firstName), personId: person.id });
+  ctx.bus.emit('people');
+}
+
 /** Tries the kept events again, a little later each time, up to five attempts. */
 export async function retryFailedInbound(ctx: Ctx, report?: (err: unknown) => void): Promise<void> {
   const now = ctx.clock.now().getTime();
@@ -102,7 +136,14 @@ export async function retryFailedInbound(ctx: Ctx, report?: (err: unknown) => vo
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       ctx.repo.updateInboundFailure(f.id, { attempts: f.attempts + 1, error: message });
-      if (f.attempts + 1 >= MAX_INBOUND_ATTEMPTS) report?.(new Error(`Callum gave up on a ${f.channel} message after ${MAX_INBOUND_ATTEMPTS} tries: ${message}`));
+      if (f.attempts + 1 >= MAX_INBOUND_ATTEMPTS) {
+        report?.(new Error(`Callum gave up on a ${f.channel} message after ${MAX_INBOUND_ATTEMPTS} tries: ${message}`));
+        try {
+          giveUp(ctx, f.channel, JSON.parse(f.event) as InboundEvent);
+        } catch (err) {
+          report?.(err);
+        }
+      }
     }
   }
 }
@@ -199,7 +240,7 @@ function onOutboundSeen(ctx: Ctx, email: string, externalId: string | null, atIs
   // Callum's own sends show up in the Sent folder too.
   if (externalId && repo.hasMessageWithExternalId('email', externalId, 'out')) return;
   const person = repo.findPersonByHandle({ email });
-  if (!person || finished(person) || person.status === 'closed' || person.stage === 'talking') return;
+  if (!person || finished(person) || person.status === 'closed' || (person.stage === 'talking' && person.status !== 'waiting')) return;
   repo.transaction(() => {
     // Someone waiting on the dock was answered by hand: they are talking now, the draft goes, and so does anything
     // Callum or the user had lined up for them.

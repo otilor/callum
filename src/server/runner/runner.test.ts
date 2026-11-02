@@ -608,6 +608,27 @@ describe('Runner.tick: polling', () => {
     expect(h.ctx.repo.listMessages(p.id)).toHaveLength(1);
   });
 
+  it('tells the user a poll is not answering, and settles it when it does', async () => {
+    const h = harness();
+    h.adapters.email.delayMs = 60;
+    const { runner } = runnerFor(h, { pollTimeoutMs: 10 });
+    await runner.tick();
+    expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([{ channel: 'email', kind: 'not_answering', message: "Email isn't answering. Callum will keep trying." }]);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(h.ctx.repo.listIncidents({ open: true })).toEqual([]);
+  });
+
+  it('keeps the notice open for a poll that never settles, and lets a short shutdown cap pass', async () => {
+    const h = harness();
+    h.adapters.x.poll = () => new Promise(() => undefined);
+    const { runner } = runnerFor(h, { pollTimeoutMs: 10 });
+    await runner.tick();
+    expect(h.ctx.repo.listIncidents({ open: true }).map((i) => [i.channel, i.message])).toEqual([['x', "X isn't answering. Callum will keep trying."]]);
+    const began = Date.now();
+    await runner.stop({ timeoutMs: 30 });
+    expect(Date.now() - began).toBeLessThan(1000);
+  });
+
   it('does not wait for ever on a poll that never answers when stopping', async () => {
     const h = harness();
     h.adapters.x.poll = () => new Promise(() => undefined);
@@ -673,6 +694,34 @@ describe('Runner: planning limits', () => {
     });
     await new Runner(ctx).tick();
     expect(userSentWhenWriting).toBe(true);
+  });
+
+  it('does not let a paused project\'s lined-up messages use up the room of a running one', async () => {
+    const h = harness();
+    const other = h.ctx.repo.insertProject({ name: 'Payroll', offer: 'Payroll for small teams' });
+    h.ctx.repo.updateProject(other.id, { startedAt: '2026-11-02T10:00:00.000Z', approvalsLeft: 0 });
+    for (let i = 0; i < 20; i++) {
+      const p = h.person({ projectId: other.id, ...FOLLOW_UP });
+      h.ctx.outbox.queueAuto(p.id, 'follow_up', 'hi', 'x', new Date('2026-11-03T08:00:00Z'), false);
+    }
+    h.ctx.repo.updateProject(other.id, { state: 'paused', pausedUntil: null });
+    for (let i = 0; i < 5; i++) h.person({ ...FOLLOW_UP });
+    const { runner, errors } = runnerFor(h);
+    await runner.tick();
+    expect(errors).toEqual([]);
+    expect(h.adapters.email.sent).toHaveLength(5);
+  });
+
+  it('counts only what would really be sent: not people who are held, waiting or on a channel that is down', async () => {
+    const h = harness();
+    for (let i = 0; i < 7; i++) {
+      const p = h.person({ ...FOLLOW_UP, status: i < 3 ? 'held' : i < 5 ? 'waiting' : 'snoozed' });
+      h.ctx.outbox.queueAuto(p.id, 'follow_up', 'hi', 'x', new Date('2026-11-03T14:00:00Z'), false);
+    }
+    const counted = h.person({ ...FOLLOW_UP, nextTouchAt: '2026-11-10T08:00:00.000Z' });
+    h.ctx.outbox.queueAuto(counted.id, 'follow_up', 'hi', 'x', new Date('2026-11-03T14:00:00Z'), false);
+    for (let i = 0; i < 30; i++) h.person({ ...FOLLOW_UP });
+    expect(await planDue(h.ctx)).toBe(19); // 20 less the one that will really go
   });
 
   it('fills Day one ahead of the slot for the start button, without the time budget or the daily room', async () => {

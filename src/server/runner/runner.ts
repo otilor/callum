@@ -9,7 +9,7 @@ import { addLocalDays, startOfLocalDay } from '../engine/time.js';
 import { firstSlotAfterStart, isSendingTime, nextSendingTime } from '../engine/windows.js';
 import { capKinds, dispatchDue } from './dispatch.js';
 import { handleInbound, heldBackPeople, retryFailedInbound } from './inbound.js';
-import { channelSignedOut, refreshSignedOutCount, resolveChannelIncidents } from './incidents.js';
+import { INCIDENT_COPY, channelSignedOut, openIncident, refreshSignedOutCount, resolveChannelIncidents } from './incidents.js';
 
 export const POLL_EVERY_MS: Record<Channel, number> = { email: 120_000, x: 300_000, linkedin: 900_000 };
 export const DEFAULT_TICK_MS = 5_000;
@@ -134,6 +134,10 @@ export async function planDue(ctx: Ctx, opts: PlanOptions = {}): Promise<number>
   const dayStart = startOfLocalDay(now, userTz);
   const nextDay = addLocalDays(dayStart, 1, userTz).toISOString();
   const room = new Map<string, number>();
+  const takeable = (i: OutboxItem): boolean => {
+    const owner = repo.getPerson(i.personId);
+    return owner !== null && owner.status === 'active' && !held.has(owner.id) && repo.getProject(owner.projectId)?.state === 'running';
+  };
   const roomFor = (c: Candidate): { key: string; left: number } => {
     const kinds = capKinds(c.channel, c.kind);
     const key = `${c.channel}:${kinds.join(',')}`;
@@ -141,7 +145,9 @@ export async function planDue(ctx: Ctx, opts: PlanOptions = {}): Promise<number>
       const account = accounts.find((a) => a.channel === c.channel);
       const cap = account ? capFor(c.channel, c.kind, account, now) : 0;
       const sent = repo.countOut(c.channel, kinds, dayStart.toISOString());
-      const lined = open.filter((i) => i.state === 'scheduled' && i.origin === 'auto' && i.channel === c.channel && kinds.includes(i.kind) && i.sendAfter < nextDay).length;
+      // Only what dispatch would really send today: not a paused or wrapped project's, nor a person who is held or not active.
+      const lined = open.filter((i) => i.state === 'scheduled' && i.origin === 'auto' && i.channel === c.channel && kinds.includes(i.kind)
+        && i.sendAfter < nextDay && account?.status === 'connected' && takeable(i)).length;
       room.set(key, Math.max(0, cap - sent - lined));
     }
     return { key, left: room.get(key) ?? 0 };
@@ -217,15 +223,15 @@ export class Runner {
 
   /**
    * Stops ticking and resolves once the tick and the polls under way have settled (a poll that never answers is waited
-   * for no longer than the poll timeout), so the caller can close the database after it.
+   * for no longer than `timeoutMs`, by default the poll timeout), so the caller can close the database after it.
    */
-  async stop(): Promise<void> {
+  async stop(opts: { timeoutMs?: number } = {}): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     const settled = Promise.allSettled([this.running, ...this.inflight.values()].filter((p): p is Promise<void> => p !== null));
     let timer: NodeJS.Timeout | undefined;
     const giveUp = new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, this.pollTimeoutMs);
+      timer = setTimeout(resolve, opts.timeoutMs ?? this.pollTimeoutMs);
     });
     await Promise.race([settled, giveUp]);
     clearTimeout(timer);
@@ -336,6 +342,12 @@ export class Runner {
       this.inflight.set(ch, work);
       void work.finally(() => {
         if (this.inflight.get(ch) === work) this.inflight.delete(ch);
+        // It answered after all: the notice that it was not answering is settled.
+        try {
+          resolveChannelIncidents(this.ctx, ch, ['not_answering']);
+        } catch (err) {
+          this.onError(err);
+        }
       });
       await this.waitFor(work, ch);
     }
@@ -365,7 +377,11 @@ export class Runner {
     });
     const result = await Promise.race([work.then(() => 'done' as const), timedOut]);
     clearTimeout(timer);
-    if (result === 'late') this.onError(new Error(`${name} took too long to answer`));
+    if (result === 'late') {
+      this.onError(new Error(`${name} took too long to answer`));
+      // The user hears about it once; it closes by itself when the poll finally settles.
+      openIncident(this.ctx, { channel: ch, kind: 'not_answering', message: INCIDENT_COPY.not_answering(ch === 'email' ? 'Email' : ch === 'x' ? 'X' : 'LinkedIn') });
+    }
   }
 }
 

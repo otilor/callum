@@ -570,7 +570,7 @@ describe('dispatchDue: a send is never repeated', () => {
     };
     await dispatchDue(h.ctx);
     expect(during).toMatchObject({ state: 'sending', claimedAt: NOW });
-    expect(h.ctx.repo.getOutbox(id)?.state).toBe('sent');
+    expect(h.ctx.repo.getOutbox(id)).toMatchObject({ state: 'sent', claimedAt: null, detail: null });
   });
 
   it('puts the claim back when the channel says no', async () => {
@@ -597,6 +597,28 @@ describe('dispatchDue: a send is never repeated', () => {
     expect(h.ctx.repo.getOutbox(id)?.state).toBe('sent');
     expect(h.ctx.repo.listMessages(p.id)).toHaveLength(1);
     expect(h.ctx.repo.getPerson(p.id)?.touches).toBe(1);
+  });
+
+  it('writes a send down once even when a step after the commit fails, and says so', async () => {
+    const h = harness();
+    const p = h.person({ stage: 'talking', touches: 1 });
+    const item = h.ctx.outbox.queueUserSend(p.id, 'reply', 'Thanks, Tuesday works.');
+    h.clock.advance(60_000);
+    const real = h.ctx.outbox.cancelPending.bind(h.ctx.outbox);
+    let once = true;
+    h.ctx.outbox.cancelPending = (...a: Parameters<typeof real>) => {
+      if (once) { once = false; throw new Error('database is locked'); }
+      return real(...a);
+    };
+    h.ctx.repo.insertIncident({ channel: 'email', kind: 'send_failed', message: 'old', personId: p.id });
+    const errors: unknown[] = [];
+    expect(await dispatchDue(h.ctx, { onError: (e) => errors.push(e) })).toBe(1);
+    expect(h.adapters.email.sent).toHaveLength(1);
+    expect(h.ctx.repo.listMessages(p.id).filter((m) => m.direction === 'out')).toHaveLength(1);
+    expect(h.ctx.repo.getOutbox(item.id)?.state).toBe('sent');
+    expect(errors.map((e) => (e as Error).message)).toEqual(['database is locked']);
+    // The other follow-up step still ran.
+    expect(h.ctx.repo.listIncidents({ open: true })).toEqual([]);
   });
 
   it('fails an item that went out but could not be written down, and never sends it again', async () => {
@@ -657,6 +679,18 @@ describe('dispatchDue: a send is never repeated', () => {
       message: 'Callum was closed while your reply to Kemi was going out. It may have gone, so check your Sent folder before you try again.',
     }]);
     expect(recoverSending(h.ctx)).toBe(0);
+  });
+
+  it('leaves a claim alone while its send is under way in this process, as a second ctx starting would find it', async () => {
+    const h = harness();
+    const id = h.due(h.person().id, 'hello');
+    let recovered = -1;
+    h.adapters.email.onSend = () => {
+      recovered = recoverSending(h.ctx);
+    };
+    await dispatchDue(h.ctx);
+    expect(recovered).toBe(0);
+    expect(h.ctx.repo.getOutbox(id)?.state).toBe('sent');
   });
 
   it('does this when Callum starts, and never sends the item on its own afterwards', async () => {
@@ -720,6 +754,17 @@ describe('dispatchDue: a mailbox at its own limit', () => {
     h.clock.set('2026-11-04T08:00:00Z');
     expect(await dispatchDue(h.ctx)).toBe(1);
     expect(h.ctx.repo.listIncidents({ open: true })).toEqual([]);
+  });
+
+  it('says the time in the user\'s zone, not the person\'s', async () => {
+    const h = harness();
+    const p = h.person({ firstName: 'Kemi', status: 'waiting', stage: 'talking', timezone: 'America/New_York' });
+    h.ctx.outbox.queueUserSend(p.id, 'reply', 'Yes.');
+    h.clock.advance(11_000);
+    h.adapters.email.results.push({ ok: false, error: { code: 'rate_limit', message: 'quota' } });
+    await dispatchDue(h.ctx);
+    // 9:00 in New York is 15:00 in Lagos.
+    expect(h.ctx.repo.listIncidents({ open: true })[0]?.message).toBe("Your reply to Kemi goes Wednesday at 15:00. Your mailbox reached today's limit.");
   });
 });
 

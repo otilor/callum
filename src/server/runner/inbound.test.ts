@@ -245,6 +245,15 @@ describe('handleInbound: a user who answered by hand', () => {
   });
 });
 
+describe('handleInbound: the user answered someone already in conversation', () => {
+  it('takes them off the dock even when they were already talking', async () => {
+    const h = harness();
+    const p = h.person({ email: 'kemi@okopay.com', status: 'waiting', stage: 'talking', touches: 1, draft: 'Hi Kemi, yes.', replyKind: 'question' });
+    await handleInbound(h.ctx, 'email', [{ type: 'outbound_seen', email: 'kemi@okopay.com', at: NOW, externalId: '<hand@x>' }]);
+    expect(h.ctx.repo.getPerson(p.id)).toMatchObject({ status: 'active', stage: 'talking', draft: null });
+  });
+});
+
 describe('handleInbound: an event that cannot be handled', () => {
   it('keeps it, reports it, and carries on with the rest', async () => {
     const h = harness();
@@ -294,6 +303,47 @@ describe('handleInbound: an event that cannot be handled', () => {
     expect(errors.map((e) => (e as Error).message)).toEqual(['Callum gave up on a email message after 5 tries: model down']);
     // Once given up, the person is no longer held back.
     expect(heldBackPeople(ctx).has(bad.id)).toBe(false);
+  });
+
+  it('puts the person on the dock with the reply as it came, and tells the user, when it gives up', async () => {
+    const h = harness();
+    const p = h.person({ email: 'kemi@okopay.com', firstName: 'Kemi', touches: 1, stage: 'hello', nextTouchAt: '2026-11-05T08:00:00.000Z' });
+    const auto = h.ctx.outbox.queueAuto(p.id, 'follow_up', 'x', 'S', new Date('2026-11-05T08:00:00Z'), false);
+    const ctx = ctxWith(h, { classify: async () => { throw new Error('model down'); } });
+    await handleInbound(ctx, 'email', [reply({ from: { email: 'kemi@okopay.com' }, externalId: '<1@x>', text: 'Yes, call me Thursday' })]);
+    expect(h.ctx.repo.listMessages(p.id)).toEqual([]);
+    for (let i = 0; i < 10; i++) {
+      h.clock.advance(6 * 60_000);
+      await retryFailedInbound(ctx);
+    }
+    expect(h.ctx.repo.getPerson(p.id)).toMatchObject({ status: 'waiting', draft: null, lastInbound: 'Yes, call me Thursday' });
+    expect(h.ctx.repo.listMessages(p.id)).toMatchObject([{ direction: 'in', body: 'Yes, call me Thursday', externalId: '<1@x>' }]);
+    expect(h.ctx.repo.getOutbox(auto.id)?.state).toBe('cancelled');
+    expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([{ kind: 'reply_unread', personId: p.id, message: "Callum couldn't read a reply from Kemi. It's on your dock." }]);
+  });
+
+  it('opens a notice with the channel when the sender can no longer be matched', async () => {
+    const h = harness();
+    const p = h.person({ email: null, channel: 'linkedin', linkedinUrl: 'https://www.linkedin.com/in/ghost' });
+    // The person's address is taken away while the last attempt is under way, so there is nobody to put on the dock.
+    const ctx = ctxWith(h, { classify: async () => { h.ctx.repo.updatePerson(p.id, { linkedinUrl: null }); throw new Error('model down'); } });
+    const event = reply({ from: { linkedinUrl: 'https://www.linkedin.com/in/ghost' }, externalId: 'li2' });
+    h.ctx.repo.insertInboundFailure({ channel: 'linkedin', externalId: 'li2', personId: p.id, event: JSON.stringify(event), error: 'x' });
+    h.ctx.repo.updateInboundFailure(1, { attempts: MAX_INBOUND_ATTEMPTS - 1, error: 'x' });
+    h.clock.advance(60 * 60_000);
+    await retryFailedInbound(ctx);
+    expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([{ channel: 'linkedin', kind: 'reply_unread', personId: null, message: "Callum couldn't read a reply on LinkedIn. Check it by hand." }]);
+  });
+
+  it('leaves someone who said stop stopped when it gives up on a later reply', async () => {
+    const h = harness();
+    const p = h.person({ email: 'kemi@okopay.com', status: 'stopped' });
+    h.ctx.repo.insertInboundFailure({ channel: 'email', externalId: '<z@x>', personId: p.id, event: JSON.stringify(reply({ from: { email: 'kemi@okopay.com' }, externalId: '<z@x>' })), error: 'x' });
+    h.ctx.repo.updateInboundFailure(1, { attempts: MAX_INBOUND_ATTEMPTS - 1, error: 'x' });
+    const ctx = ctxWith(h, { classify: async () => { throw new Error('model down'); } });
+    h.clock.advance(60 * 60_000);
+    await retryFailedInbound(ctx);
+    expect(h.ctx.repo.getPerson(p.id)?.status).toBe('stopped');
   });
 
   it('is dropped once it has been handled, and a copy that arrives later is not recorded twice', async () => {

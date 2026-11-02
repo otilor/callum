@@ -37,6 +37,11 @@ export const INCIDENT_COPY = {
     `Your reply to ${first} didn't go out: ${reason.trim().replace(/\.+$/, '')}. It's saved here.`,
   /** The mailbox's own daily limit stopped a reply; it goes at the next slot. */
   send_deferred: (first: string, slot: string): string => `Your reply to ${first} goes ${slot}. Your mailbox reached today's limit.`,
+  /** A reply could not be read after several tries; it is on the dock as it came. */
+  reply_unread: (first: string): string => `Callum couldn't read a reply from ${first}. It's on your dock.`,
+  reply_unread_unknown: (channel: string): string => `Callum couldn't read a reply on ${channel}. Check it by hand.`,
+  /** A channel's check for new messages has stopped answering. */
+  not_answering: (channel: string): string => `${channel} isn't answering. Callum will keep trying.`,
   /** Callum was closed while a reply was on its way, so nobody knows whether it left. */
   send_unsure: (first: string): string =>
     `Callum was closed while your reply to ${first} was going out. It may have gone, so check your Sent folder before you try again.`,
@@ -66,7 +71,7 @@ function findOpen(ctx: Ctx, i: NewIncident): Incident | null {
     if (i.kind === 'bounces') {
       if (parseBounceDetail(open.detail)?.domain !== parseBounceDetail(i.detail ?? null)?.domain || !sameUtcDay(open.createdAt, now)) continue;
     }
-    if (i.kind === 'send_failed' && open.personId !== (i.personId ?? null)) continue;
+    if ((i.kind === 'send_failed' || i.kind === 'reply_unread') && open.personId !== (i.personId ?? null)) continue;
     return open;
   }
   return null;
@@ -101,7 +106,7 @@ export function resolveChannelIncidents(ctx: Ctx, ch: Channel, kinds: Incident['
 
 /**
  * The user finished whatever stopped the channel. Back to connected, at half pace for a week when asked. Settles the
- * incidents that were about the channel being stopped; a weekly limit or a saved reply is still true afterwards.
+ * incidents that were about the channel being stopped or signed out; a weekly limit or a saved reply is still true afterwards.
  */
 export function resumeChannel(ctx: Ctx, ch: Channel, pace: 'half' | 'full'): ChannelAccount {
   const now = ctx.clock.now();
@@ -110,7 +115,7 @@ export function resumeChannel(ctx: Ctx, ch: Channel, pace: 'half' | 'full'): Cha
     pausedUntil: null,
     halfPaceUntil: pace === 'half' ? new Date(now.getTime() + 7 * DAY_MS).toISOString() : null,
   });
-  resolveIncidents(ctx, ch, ['linkedin_check', 'x_limit']);
+  resolveIncidents(ctx, ch, ['linkedin_check', 'x_limit', 'mailbox_signed_out', 'x_signed_out', 'linkedin_signed_out']);
   ctx.bus.emit('channels');
   return account;
 }
@@ -198,7 +203,8 @@ export function sendFailed(ctx: Ctx, item: OutboxItem, person: Person, reason: s
 
 /** A reply the mailbox's limit held back: say exactly when it goes. */
 export function replyDeferred(ctx: Ctx, item: OutboxItem, person: Person, slot: Date): Incident {
-  const tz = personTz(person, ctx.repo.getSettings().timezone);
+  // The user reads this, so the time is in the user's own zone, whatever zone the person is in.
+  const tz = ctx.repo.getSettings().timezone;
   return openIncident(ctx, {
     channel: item.channel,
     kind: 'send_failed',

@@ -81,6 +81,15 @@ describe('resumeChannel', () => {
     expect(resumeChannel(h.ctx, 'linkedin', 'full')).toMatchObject({ status: 'connected', halfPaceUntil: null });
   });
 
+  it('settles a sign-out notice when the channel is back', () => {
+    const h = harness();
+    for (const [channel, kind] of [['email', 'mailbox_signed_out'], ['x', 'x_signed_out'], ['linkedin', 'linkedin_signed_out']] as const) {
+      openIncident(h.ctx, { channel, kind, message: 'out' });
+      resumeChannel(h.ctx, channel, 'full');
+    }
+    expect(h.ctx.repo.listIncidents({ open: true })).toEqual([]);
+  });
+
   it('leaves a saved reply that did not go out', () => {
     const h = harness();
     openIncident(h.ctx, { channel: 'email', kind: 'send_failed', message: 's', personId: 1 });

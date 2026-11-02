@@ -28,6 +28,11 @@ function sendingSet(ctx: Ctx): Set<number> {
   return set;
 }
 
+// Claims of sends under way in this process, across every ctx on any database. A ctx created while one is in flight
+// (a second one on the same file) must not mistake it for a claim left by a crashed run.
+const liveClaims = new Set<string>();
+const claimKey = (item: { id: number; claimedAt: string | null }): string => `${item.id}@${item.claimedAt ?? ''}`;
+
 const NEVER_MESSAGE: ReadonlySet<Person['status']> = new Set(['stopped', 'closed', 'removed', 'held']);
 
 /** Kinds that count against the same daily cap as this one. LinkedIn invites have their own; everything else shares. */
@@ -74,7 +79,7 @@ export async function dispatchDue(ctx: Ctx, opts: DispatchOptions = {}): Promise
     if (opts.origin && due.origin !== opts.origin) continue;
     if (sendingSet(ctx).has(due.id)) continue;
     try {
-      if (await dispatchOne(ctx, due.id, held)) sent++;
+      if (await dispatchOne(ctx, due.id, held, report)) sent++;
     } catch (err) {
       report(err);
     }
@@ -87,7 +92,7 @@ export async function dispatchDue(ctx: Ctx, opts: DispatchOptions = {}): Promise
  * are never sent again on their own: they become failed, marked `maybeSent`, and the user decides.
  */
 export function recoverSending(ctx: Ctx): number {
-  const items = ctx.repo.listOutbox({ state: ['sending'] });
+  const items = ctx.repo.listOutbox({ state: ['sending'] }).filter((i) => !liveClaims.has(claimKey(i)));
   for (const item of items) {
     ctx.repo.updateOutbox(item.id, { state: 'failed', error: CLOSED_WHILE_SENDING, detail: JSON.stringify({ maybeSent: true }) });
     const person = item.origin === 'user' ? ctx.repo.getPerson(item.personId) : null;
@@ -97,7 +102,7 @@ export function recoverSending(ctx: Ctx): number {
   return items.length;
 }
 
-async function dispatchOne(ctx: Ctx, id: number, held: Set<number>): Promise<boolean> {
+async function dispatchOne(ctx: Ctx, id: number, held: Set<number>, report: (err: unknown) => void): Promise<boolean> {
   const { repo, clock } = ctx;
   const now = clock.now();
   const item = repo.getOutbox(id);
@@ -161,11 +166,14 @@ async function dispatchOne(ctx: Ctx, id: number, held: Set<number>): Promise<boo
   const sending = sendingSet(ctx);
   if (sending.has(item.id)) return false;
   sending.add(item.id);
+  let claim: string | null = null;
   try {
     // Nothing above waited, but anything that could have changed the item gets a last look before it leaves.
     if (repo.getOutbox(item.id)?.state !== 'scheduled') return false;
     // The claim is written before the channel is asked, so a crash mid-send is never mistaken for "not sent".
     repo.updateOutbox(item.id, { state: 'sending', claimedAt: iso(now) });
+    claim = claimKey({ id: item.id, claimedAt: iso(now) });
+    liveClaims.add(claim);
     let result: SendResult;
     let thrown = false;
     try {
@@ -175,7 +183,7 @@ async function dispatchOne(ctx: Ctx, id: number, held: Set<number>): Promise<boo
       result = { ok: false, error: { code: 'unknown', message: err instanceof Error && err.message ? err.message : 'Callum could not send this' } };
     }
     if (result.ok) {
-      record(ctx, item, person.id, result, subject, body);
+      record(ctx, item, person.id, result, subject, body, report);
       return true;
     }
     if (thrown) {
@@ -191,26 +199,48 @@ async function dispatchOne(ctx: Ctx, id: number, held: Set<number>): Promise<boo
     return false;
   } finally {
     sending.delete(item.id);
+    if (claim) liveClaims.delete(claim);
   }
 }
 
-/** Writes down a send that went out. Tried twice; if it still cannot be written the item is failed, never left to send again. */
-function record(ctx: Ctx, item: OutboxItem, personId: number, result: Extract<SendResult, { ok: true }>, subject: string | null, body: string): void {
+/**
+ * Writes down a send that went out. Only the transaction is tried twice; if it still cannot be written the item is failed,
+ * never left to send again. What follows the commit runs once each, and a failure there is reported, not repeated.
+ */
+function record(
+  ctx: Ctx, item: OutboxItem, personId: number, result: Extract<SendResult, { ok: true }>, subject: string | null, body: string,
+  report: (err: unknown) => void,
+): void {
   let lastError: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  let written = false;
+  for (let attempt = 0; attempt < 2 && !written; attempt++) {
     try {
       writeSent(ctx, item, personId, result, subject, body);
-      return;
+      written = true;
     } catch (err) {
       lastError = err;
     }
   }
-  try {
-    ctx.repo.updateOutbox(item.id, { state: 'failed', error: COULD_NOT_RECORD, detail: JSON.stringify({ maybeSent: true, unrecorded: true }) });
-  } catch {
-    // The store is not answering at all. The item stays `sending`, which is never picked up again.
+  if (!written) {
+    try {
+      ctx.repo.updateOutbox(item.id, { state: 'failed', error: COULD_NOT_RECORD, detail: JSON.stringify({ maybeSent: true, unrecorded: true }) });
+    } catch {
+      // The store is not answering at all. The item stays `sending`, which is never picked up again.
+    }
+    throw lastError;
   }
-  throw lastError;
+  if (item.origin === 'user') {
+    // The user has taken over: whatever Callum had lined up for them goes, and an earlier notice about this reply is settled.
+    for (const step of [() => ctx.outbox.cancelPending(personId, ['auto']), () => resolveSendFailed(ctx, personId, item.channel)]) {
+      try {
+        step();
+      } catch (err) {
+        report(err);
+      }
+    }
+  }
+  ctx.bus.emit('outbox');
+  ctx.bus.emit('people');
 }
 
 function writeSent(ctx: Ctx, item: OutboxItem, personId: number, result: Extract<SendResult, { ok: true }>, subject: string | null, body: string): void {
@@ -223,7 +253,7 @@ function writeSent(ctx: Ctx, item: OutboxItem, personId: number, result: Extract
       body: result.noteDropped ? '' : body,
       at: iso(now), externalId: result.externalId,
     });
-    repo.updateOutbox(item.id, { state: 'sent', error: null });
+    repo.updateOutbox(item.id, { state: 'sent', error: null, detail: null, claimedAt: null });
     // Read the person again: they may have changed while the message was on its way.
     const person = repo.getPerson(personId);
     if (person) {
@@ -234,13 +264,6 @@ function writeSent(ctx: Ctx, item: OutboxItem, personId: number, result: Extract
       repo.updatePerson(personId, patch);
     }
   });
-  if (item.origin === 'user') {
-    // The user has taken over: whatever Callum had lined up for them goes, and an earlier notice about this reply is settled.
-    ctx.outbox.cancelPending(personId, ['auto']);
-    resolveSendFailed(ctx, personId, item.channel);
-  }
-  ctx.bus.emit('outbox');
-  ctx.bus.emit('people');
 }
 
 function onFailure(ctx: Ctx, item: OutboxItem, person: Person, error: ChannelError): void {
