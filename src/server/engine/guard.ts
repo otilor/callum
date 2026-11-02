@@ -37,8 +37,8 @@ export function withOptOut(body: string): string {
 export function placeholderMessage(ph: string): string {
   const never = `Callum never sends a message with ${ph} in it.`;
   if (ph.startsWith('[')) {
-    const what = ph.slice(1, -1).trim().toLowerCase().replace(/^your\s+/, '');
-    return `Add your ${what} first. ${never}`;
+    const what = ph.slice(1, -1).replace(/_/g, ' ').trim().toLowerCase().replace(/^your(\s+|$)/, '');
+    if (what) return `Add your ${what} first. ${never}`;
   }
   return `Fill in ${ph} first. ${never}`;
 }

@@ -100,7 +100,11 @@ CREATE TABLE incidents (
 );
 `;
 
-const STEPS: string[] = [V1];
+const V2 = `
+ALTER TABLE outbox ADD COLUMN approval_counted INTEGER NOT NULL DEFAULT 0;
+`;
+
+const STEPS: string[] = [V1, V2];
 
 export function migrate(db: Db): void {
   const row = db.prepare('PRAGMA user_version').get() as { user_version: number };

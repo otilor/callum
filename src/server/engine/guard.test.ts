@@ -43,6 +43,10 @@ describe('placeholderMessage', () => {
   it('does not double "your"', () => {
     expect(placeholderMessage('[BOOKING LINK]')).toBe('Add your booking link first. Callum never sends a message with [BOOKING LINK] in it.');
   });
+  it('never says "your your"', () => {
+    expect(placeholderMessage('[YOUR]')).toBe('Fill in [YOUR] first. Callum never sends a message with [YOUR] in it.');
+    expect(placeholderMessage('[YOUR_PRICE]')).toBe('Add your price first. Callum never sends a message with [YOUR_PRICE] in it.');
+  });
   it('asks to fill in a brace placeholder', () => {
     expect(placeholderMessage('{first_name}')).toBe('Fill in {first_name} first. Callum never sends a message with {first_name} in it.');
     expect(placeholderMessage('{{first_name}}')).toBe('Fill in {{first_name}} first. Callum never sends a message with {{first_name}} in it.');

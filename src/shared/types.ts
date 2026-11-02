@@ -42,9 +42,10 @@ export interface OutboxItem {
   id: number; personId: number; channel: Channel; kind: OutKind;
   subject: string | null; body: string; state: OutboxState; origin: 'auto' | 'user';
   sendAfter: string; undoUntil: string | null; error: string | null;
+  approvalCounted: boolean;           // an approval was spent on this item (so undo gives it back)
   createdAt: string; updatedAt: string;
 }
-export type NewOutboxItem = Pick<OutboxItem, 'personId' | 'channel' | 'kind' | 'body' | 'state' | 'origin' | 'sendAfter'> & Partial<Pick<OutboxItem, 'subject' | 'undoUntil' | 'error'>>;
+export type NewOutboxItem = Pick<OutboxItem, 'personId' | 'channel' | 'kind' | 'body' | 'state' | 'origin' | 'sendAfter'> & Partial<Pick<OutboxItem, 'subject' | 'undoUntil' | 'error' | 'approvalCounted'>>;
 
 export interface Incident {
   id: number; channel: Channel; kind: IncidentKind; state: 'open' | 'resolved';

@@ -36,13 +36,19 @@ export class Outbox {
   ): OutboxItem {
     this.assertNoPlaceholders(body, subject);
     const { channel } = this.personChannel(personId);
-    for (const old of this.repo.listOutbox({ personId, state: ['scheduled'] })) {
-      if (old.origin === 'user') this.repo.updateOutbox(old.id, { state: 'cancelled' });
-    }
+    const now = this.clock.now().getTime();
     const at = this.afterUndoWindow().toISOString();
-    const item = this.repo.insertOutbox({
-      personId, channel, kind, body, subject,
-      state: 'scheduled', origin: 'user', sendAfter: at, undoUntil: at,
+    const item = this.repo.transaction(() => {
+      // An earlier message whose undo window has closed is already on its way: leave it.
+      for (const old of this.repo.listOutbox({ personId, state: ['scheduled'] })) {
+        if (old.origin === 'user' && old.undoUntil !== null && new Date(old.undoUntil).getTime() > now) {
+          this.repo.updateOutbox(old.id, { state: 'cancelled' });
+        }
+      }
+      return this.repo.insertOutbox({
+        personId, channel, kind, body, subject,
+        state: 'scheduled', origin: 'user', sendAfter: at, undoUntil: at,
+      });
     });
     this.bus.emit('outbox');
     return item;
@@ -77,11 +83,15 @@ export class Outbox {
     this.assertNoPlaceholders(body, item.subject);
     const undoUntil = this.afterUndoWindow();
     const sendAfter = new Date(Math.max(new Date(item.sendAfter).getTime(), undoUntil.getTime()));
-    const next = this.repo.updateOutbox(id, {
-      body, state: 'scheduled', sendAfter: sendAfter.toISOString(), undoUntil: undoUntil.toISOString(),
+    const next = this.repo.transaction(() => {
+      const left = this.repo.getSettings().approvalsLeft;
+      const counted = left > 0;
+      if (counted) this.repo.updateSettings({ approvalsLeft: left - 1 });
+      return this.repo.updateOutbox(id, {
+        body, state: 'scheduled', sendAfter: sendAfter.toISOString(), undoUntil: undoUntil.toISOString(),
+        approvalCounted: counted,
+      });
     });
-    const settings = this.repo.getSettings();
-    this.repo.updateSettings({ approvalsLeft: Math.max(0, settings.approvalsLeft - 1) });
     this.bus.emit('outbox');
     return next;
   }
@@ -92,13 +102,13 @@ export class Outbox {
     const open = item.state === 'scheduled' && item.undoUntil !== null
       && new Date(item.undoUntil).getTime() > this.clock.now().getTime();
     if (!open) throw new UndoError('Too late to undo');
-    let next: OutboxItem;
-    if (item.origin === 'auto') {
-      next = this.repo.updateOutbox(id, { state: 'awaiting_ok', undoUntil: null });
-      this.repo.updateSettings({ approvalsLeft: this.repo.getSettings().approvalsLeft + 1 });
-    } else {
-      next = this.repo.updateOutbox(id, { state: 'cancelled' });
-    }
+    const next = this.repo.transaction(() => {
+      if (item.origin === 'user') return this.repo.updateOutbox(id, { state: 'cancelled' });
+      if (item.approvalCounted) {
+        this.repo.updateSettings({ approvalsLeft: this.repo.getSettings().approvalsLeft + 1 });
+      }
+      return this.repo.updateOutbox(id, { state: 'awaiting_ok', undoUntil: null, approvalCounted: false });
+    });
     this.bus.emit('outbox');
     return next;
   }
@@ -108,7 +118,9 @@ export class Outbox {
     const items = this.repo
       .listOutbox({ personId, state: ['awaiting_ok', 'scheduled'] })
       .filter((i) => origins.includes(i.origin));
-    for (const i of items) this.repo.updateOutbox(i.id, { state: 'cancelled' });
+    this.repo.transaction(() => {
+      for (const i of items) this.repo.updateOutbox(i.id, { state: 'cancelled' });
+    });
     if (items.length > 0) this.bus.emit('outbox');
     return items.length;
   }
@@ -139,7 +151,7 @@ export class Outbox {
   }
 
   private assertNoPlaceholders(body: string, subject: string | null): void {
-    const found = findPlaceholders(subject ? `${subject}\n${body}` : body);
+    const found = [...new Set([...(subject ? findPlaceholders(subject) : []), ...findPlaceholders(body)])];
     if (found.length > 0) throw new PlaceholderError(found);
   }
 }

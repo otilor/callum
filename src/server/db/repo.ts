@@ -9,6 +9,15 @@ import { normalizeEmail, normalizeLinkedinUrl, normalizeXHandle } from './handle
 type Row = Record<string, unknown>;
 type Param = string | number | null;
 
+/** SQLite stores approvalCounted as 0/1; the rest of the app sees a boolean. */
+function outboxOut(item: OutboxItem): OutboxItem {
+  return { ...item, approvalCounted: Boolean(item.approvalCounted) };
+}
+function outboxIn<T extends { approvalCounted?: boolean }>(o: T): Row {
+  const { approvalCounted, ...rest } = o;
+  return approvalCounted === undefined ? rest : { ...rest, approvalCounted: approvalCounted ? 1 : 0 };
+}
+
 const snake = (k: string): string => k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 const camel = (k: string): string => k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 
@@ -26,7 +35,7 @@ const PERSON_KEYS = [
 ] as const;
 const MESSAGE_KEYS = ['personId', 'channel', 'direction', 'kind', 'subject', 'body', 'at', 'externalId'] as const;
 const OUTBOX_KEYS = [
-  'personId', 'channel', 'kind', 'subject', 'body', 'state', 'origin', 'sendAfter', 'undoUntil', 'error',
+  'personId', 'channel', 'kind', 'subject', 'body', 'state', 'origin', 'sendAfter', 'undoUntil', 'error', 'approvalCounted',
 ] as const;
 const INCIDENT_KEYS = ['channel', 'kind', 'state', 'message', 'detail', 'personId', 'resolvedAt'] as const;
 const CHANNEL_KEYS = [
@@ -226,17 +235,18 @@ export class Repo {
 
   insertOutbox(o: NewOutboxItem): OutboxItem {
     const t = this.now();
-    const id = this.insertRow('outbox', [...OUTBOX_KEYS, 'createdAt', 'updatedAt'], { ...o, createdAt: t, updatedAt: t });
+    const id = this.insertRow('outbox', [...OUTBOX_KEYS, 'createdAt', 'updatedAt'], { ...outboxIn(o), createdAt: t, updatedAt: t });
     return this.require(this.getOutbox(id), 'outbox item', id);
   }
 
   getOutbox(id: number): OutboxItem | null {
-    return this.selectOne<OutboxItem>('SELECT * FROM outbox WHERE id = ?', [id]);
+    const item = this.selectOne<OutboxItem>('SELECT * FROM outbox WHERE id = ?', [id]);
+    return item && outboxOut(item);
   }
 
   updateOutbox(id: number, patch: Partial<OutboxItem>): OutboxItem {
     this.require(this.getOutbox(id), 'outbox item', id);
-    this.updateRow('outbox', [...OUTBOX_KEYS, 'updatedAt'], id, { ...patch, updatedAt: this.now() });
+    this.updateRow('outbox', [...OUTBOX_KEYS, 'updatedAt'], id, { ...outboxIn(patch), updatedAt: this.now() });
     return this.require(this.getOutbox(id), 'outbox item', id);
   }
 
@@ -253,7 +263,7 @@ export class Repo {
     return this.select<OutboxItem>(
       `SELECT * FROM outbox${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY send_after, id`,
       params,
-    );
+    ).map(outboxOut);
   }
 
   // ---- incidents ---------------------------------------------------------
@@ -274,6 +284,23 @@ export class Repo {
   listIncidents(filter: { open?: boolean } = {}): Incident[] {
     if (filter.open === undefined) return this.select<Incident>('SELECT * FROM incidents ORDER BY id');
     return this.select<Incident>('SELECT * FROM incidents WHERE state = ? ORDER BY id', [filter.open ? 'open' : 'resolved']);
+  }
+
+  // ---- transactions ------------------------------------------------------
+
+  /** Run `fn` so that all of its writes land together or not at all. Nests as a savepoint. */
+  transaction<T>(fn: () => T): T {
+    const nested = this.db.isTransaction;
+    const mark = 'repo_tx';
+    this.db.exec(nested ? `SAVEPOINT ${mark}` : 'BEGIN');
+    try {
+      const result = fn();
+      this.db.exec(nested ? `RELEASE ${mark}` : 'COMMIT');
+      return result;
+    } catch (e) {
+      this.db.exec(nested ? `ROLLBACK TO ${mark}; RELEASE ${mark}` : 'ROLLBACK');
+      throw e;
+    }
   }
 
   // ---- reset -------------------------------------------------------------

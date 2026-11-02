@@ -158,7 +158,11 @@ describe('outbox', () => {
     expect(o.subject).toBeNull();
     expect(o.undoUntil).toBeNull();
     expect(o.error).toBeNull();
+    expect(o.approvalCounted).toBe(false);
     expect(repo.getOutbox(o.id)).toEqual(o);
+    expect(repo.updateOutbox(o.id, { approvalCounted: true }).approvalCounted).toBe(true);
+    expect(repo.listOutbox()[0]?.approvalCounted).toBe(true);
+    expect(repo.updateOutbox(o.id, { approvalCounted: false }).approvalCounted).toBe(false);
     expect(repo.getOutbox(999)).toBeNull();
     const u = repo.updateOutbox(o.id, { state: 'failed', error: 'boom', undoUntil: '2026-01-05T09:00:10.000Z' });
     expect(u.state).toBe('failed');
@@ -214,5 +218,33 @@ describe('deleteAll', () => {
     expect(repo.getSettings().onboarded).toBe(false);
     expect(repo.getChannel('email').status).toBe('disconnected');
     expect(repo.getChannelSecret('email')).toBeNull();
+  });
+});
+
+describe('transaction', () => {
+  it('commits all writes, returns the result', () => {
+    const n = repo.transaction(() => {
+      repo.insertPerson({ name: 'Kemi Eze', source: 'csv' });
+      repo.insertPerson({ name: 'Ada Obi', source: 'csv' });
+      return 2;
+    });
+    expect(n).toBe(2);
+    expect(repo.listPeople()).toHaveLength(2);
+  });
+  it('rolls everything back on a throw and rethrows', () => {
+    expect(() => repo.transaction(() => {
+      repo.insertPerson({ name: 'Kemi Eze', source: 'csv' });
+      throw new Error('nope');
+    })).toThrow('nope');
+    expect(repo.listPeople()).toEqual([]);
+  });
+  it('nests: an inner failure that is caught keeps the outer writes', () => {
+    repo.transaction(() => {
+      repo.insertPerson({ name: 'Kemi Eze', source: 'csv' });
+      try {
+        repo.transaction(() => { repo.insertPerson({ name: 'Ada Obi', source: 'csv' }); throw new Error('inner'); });
+      } catch { /* expected */ }
+    });
+    expect(repo.listPeople().map((p) => p.name)).toEqual(['Kemi Eze']);
   });
 });

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Bus } from '../bus.js';
 import { openDb } from '../db/db.js';
 import { Repo } from '../db/repo.js';
@@ -61,6 +61,34 @@ describe('queueUserSend', () => {
     expect(repo.getOutbox(theirs.id)?.state).toBe('scheduled');
     expect(repo.getOutbox(auto.id)?.state).toBe('scheduled');
   });
+  it('leaves an earlier user item alone once its undo window has closed', () => {
+    const sent = outbox.queueUserSend(personId, 'reply', 'one');
+    clock.advance(UNDO_MS);
+    const second = outbox.queueUserSend(personId, 'reply', 'two');
+    expect(repo.getOutbox(sent.id)?.state).toBe('scheduled');
+    expect(repo.getOutbox(second.id)?.state).toBe('scheduled');
+    expect(outbox.due().map((i) => i.id)).toEqual([sent.id]);
+  });
+  it('still cancels an earlier user item at +9.9 s', () => {
+    const first = outbox.queueUserSend(personId, 'reply', 'one');
+    clock.advance(9_900);
+    outbox.queueUserSend(personId, 'reply', 'two');
+    expect(repo.getOutbox(first.id)?.state).toBe('cancelled');
+  });
+  it('keeps the earlier item scheduled if the new one cannot be saved', () => {
+    const first = outbox.queueUserSend(personId, 'reply', 'one');
+    vi.spyOn(repo, 'insertOutbox').mockImplementationOnce(() => { throw new Error('disk full'); });
+    events.length = 0;
+    expect(() => outbox.queueUserSend(personId, 'reply', 'two')).toThrow('disk full');
+    expect(repo.getOutbox(first.id)?.state).toBe('scheduled');
+    expect(events).toEqual([]);
+  });
+  it('checks subject and body separately, with no match across the two', () => {
+    expect(() => outbox.queueUserSend(personId, 'reply', 'PRICE] is fine', 'About [YOUR')).not.toThrow();
+    let err: unknown;
+    try { outbox.queueUserSend(personId, 'reply', 'Hi {first_name}, [YOUR PRICE], {first_name}', 'Re {first_name} [TOPIC]'); } catch (e) { err = e; }
+    expect((err as PlaceholderError).placeholders).toEqual(['{first_name}', '[TOPIC]', '[YOUR PRICE]']);
+  });
   it('rejects a person with no channel', () => {
     const bare = repo.insertPerson({ name: 'No Channel', source: 'paste' }).id;
     expect(() => outbox.queueUserSend(bare, 'reply', 'hi')).toThrow(/channel/);
@@ -106,6 +134,25 @@ describe('undo', () => {
     const back = outbox.undo(auto.id);
     expect(back).toMatchObject({ state: 'awaiting_ok', undoUntil: null });
     expect(repo.getSettings().approvalsLeft).toBe(10);
+  });
+});
+
+describe('undo and approvals', () => {
+  it('gives back an approval that approve spent', () => {
+    const auto = outbox.queueAuto(personId, 'hello', 'Hi', null, new Date(iso(1000)), true);
+    expect(outbox.approve(auto.id).approvalCounted).toBe(true);
+    expect(outbox.undo(auto.id)).toMatchObject({ state: 'awaiting_ok', approvalCounted: false });
+    expect(repo.getSettings().approvalsLeft).toBe(10);
+    outbox.approve(auto.id);
+    outbox.undo(auto.id);
+    expect(repo.getSettings().approvalsLeft).toBe(10);
+  });
+  it('gives nothing back when approve was made with none left', () => {
+    repo.updateSettings({ approvalsLeft: 0 });
+    const auto = outbox.queueAuto(personId, 'hello', 'Hi', null, new Date(iso(1000)), true);
+    expect(outbox.approve(auto.id).approvalCounted).toBe(false);
+    outbox.undo(auto.id);
+    expect(repo.getSettings().approvalsLeft).toBe(0);
   });
 });
 
