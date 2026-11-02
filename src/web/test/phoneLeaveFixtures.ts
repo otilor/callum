@@ -40,7 +40,7 @@ export function outboxItem(id: number, personId: number, over: Partial<OutboxIte
 
 export function appState(over: Partial<AppState> = {}): AppState {
   return {
-    settings: { senderName: 'Gabriel', senderEmail: 'gabriel@yourcompany.com', timezone: 'Africa/Lagos', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null },
+    settings: { senderName: 'Gabriel', senderEmail: 'gabriel@yourcompany.com', timezone: 'Africa/Lagos', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null, morningBrief: true },
     projects: [project()],
     channels: [channel('email', 'connected', 'gabriel@yourcompany.com'), channel('linkedin'), channel('x')],
     people: [],

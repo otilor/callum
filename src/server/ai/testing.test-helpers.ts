@@ -26,7 +26,7 @@ export function testProject(overrides: Partial<Project> = {}): Project {
 
 export const testSettings: Settings = {
   senderName: 'Ada Obi', senderEmail: 'ada@example.com', timezone: 'Africa/Lagos', onboarded: true,
-  currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null,
+  currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null, morningBrief: true,
 };
 
 export function testCtx(overrides: Partial<WriteContext> = {}): WriteContext {

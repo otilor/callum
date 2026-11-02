@@ -86,6 +86,10 @@ export interface Settings {
   notifications: boolean | null;
   /** Projects that Wrap up everything wrapped (so Start again can bring back exactly those). */
   wrappedByWrapUp?: number[];
+  /** The 8:30 brief tap. On unless turned off. */
+  morningBrief: boolean;
+  /** The Microsoft app registration id, when set from Your Callum in the desktop app (the environment variable wins). */
+  microsoftClientId?: string | null;
   /** Desktop app only: open Callum when the computer starts. Off until the person turns it on. */
   openAtLogin?: boolean;
 }

@@ -15,7 +15,9 @@ export interface OAuthOptions {
 export interface DeviceCode { deviceCode: string; userCode: string; verificationUri: string; expiresIn: number; interval: number }
 export interface TokenSet { accessToken: string; refreshToken: string; expiresAt: string }
 export type DeviceTokenResult =
-  | { status: 'waiting' | 'expired' | 'denied' }
+  | { status: 'expired' | 'denied' }
+  /** `slowDown` is set when Microsoft asked the caller to wait longer between checks. */
+  | { status: 'waiting'; slowDown?: true }
   | ({ status: 'connected' } & TokenSet);
 
 export class OAuthError extends Error {
@@ -80,8 +82,9 @@ export async function pollDeviceToken(clientId: string, deviceCode: string, opts
   if (ok) return { status: 'connected', ...tokenSet(body, null, opts.clock ?? systemClock) };
   switch (body.error) {
     case 'authorization_pending':
-    case 'slow_down':
       return { status: 'waiting' };
+    case 'slow_down':
+      return { status: 'waiting', slowDown: true };
     case 'expired_token':
       return { status: 'expired' };
     case 'authorization_declined':

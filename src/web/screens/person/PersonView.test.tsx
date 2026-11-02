@@ -73,7 +73,7 @@ function full(p: Person, over: Partial<PersonFull> = {}): PersonFull {
 
 function appState(people: Person[], over: Partial<AppState> = {}): AppState {
   return {
-    settings: { senderName: 'Ada Obi', senderEmail: 'ada@example.com', timezone: 'Africa/Lagos', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null },
+    settings: { senderName: 'Ada Obi', senderEmail: 'ada@example.com', timezone: 'Africa/Lagos', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null, morningBrief: true },
     projects: [project(1, 'Reconciliation'), project(2, 'Payroll')],
     channels: [],
     people,

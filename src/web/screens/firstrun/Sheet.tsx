@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import './Sheet.css';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
@@ -16,7 +17,7 @@ function focusablesIn(root: HTMLElement): HTMLElement[] {
  * A small card over the screen, and a real modal: the page behind it is inert, Tab stays inside, Escape or a tap
  * outside closes it, and focus goes back to whatever opened it.
  */
-export function Sheet({ label, onClose, children }: { label: string; onClose(): void; children: ReactNode }) {
+export function Sheet({ label, onClose, bare = false, children }: { label: string; onClose(): void; /** The content brings its own headings and text styles (the Connect sheet does). */ bare?: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
@@ -78,7 +79,7 @@ export function Sheet({ label, onClose, children }: { label: string; onClose(): 
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div ref={ref} className="sheet" role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}>
+      <div ref={ref} className={bare ? 'sheet sheet-bare' : 'sheet'} role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}>
         {children}
       </div>
     </div>,

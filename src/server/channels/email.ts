@@ -443,8 +443,13 @@ export function createEmailAdapter(secret: Record<string, string> | null, deps: 
 
     async connect(input) {
       const cfg = parseConfig(input);
+      // Microsoft signs in with a device code, not a password, so its message tells the person to sign in again.
       const signIn = new ConnectError(
-        cfg.oauth ? `Couldn't sign in to ${cfg.address}. Sign in with Microsoft again.` : `Couldn't sign in to ${cfg.address}. Check the app password.`,
+        cfg.oauth
+          ? `Couldn't sign in to ${cfg.address}. Sign in with Microsoft again.`
+          : cfg.provider === 'google'
+            ? "Google didn't accept that password. App passwords are 16 letters, with no spaces."
+            : "Your mail server didn't accept that password. Check the password and both server names.",
       );
       let token: string | null;
       try {

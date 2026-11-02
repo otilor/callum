@@ -154,3 +154,11 @@ export const api = {
   wake: (id: number) => post<{ person: Person; undoUntil: string; next: string | null }>(`/people/${id}/wake`),
   rest: (id: number) => post<Person>(`/people/${id}/rest`),
 };
+
+// Task 16
+export interface MicrosoftSetup { configured: boolean; source: 'env' | 'settings' | null }
+/** The one-time Microsoft app registration that device-code sign-in needs. */
+export const channelSetup = {
+  microsoft: () => get<MicrosoftSetup>('/channels/email/microsoft/setup'),
+  saveMicrosoftClientId: (clientId: string) => post<MicrosoftSetup>('/channels/email/microsoft/setup', { clientId }),
+};

@@ -17,7 +17,7 @@ function person(id: number, first: string, over: Partial<Person> = {}): Person {
 
 function state(people: Person[], notifications: boolean | null = true): AppState {
   return {
-    settings: { senderName: null, senderEmail: null, timezone: 'Africa/Lagos', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications },
+    settings: { senderName: null, senderEmail: null, timezone: 'Africa/Lagos', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications, morningBrief: true },
     projects: [], channels: [], people, outbox: [], incidents: [],
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], nextSendAt: null, line: '' },
     demo: false,

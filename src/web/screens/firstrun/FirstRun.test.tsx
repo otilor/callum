@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   disconnect: vi.fn(),
   microsoftStart: vi.fn(),
   microsoftPoll: vi.fn(),
+  channelSummary: vi.fn(),
   suggestOffer: vi.fn(),
   createProject: vi.fn(),
   updateProject: vi.fn(),
@@ -21,7 +22,11 @@ const mocks = vi.hoisted(() => ({
   plan: vi.fn(),
   start: vi.fn(),
 }));
-vi.mock('../../api.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../api.js')>()), api: mocks }));
+vi.mock('../../api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api.js')>()),
+  api: mocks,
+  channelSetup: { microsoft: () => Promise.resolve({ configured: true, source: 'env' }), saveMicrosoftClientId: vi.fn() },
+}));
 
 const NOW = new Date('2026-11-02T10:00:00Z');
 const OFFER = "You help fintech teams take reconciliation off their ops team's plate.";
@@ -50,7 +55,7 @@ function person(id: number, name: string, over: Partial<Person> = {}): Person {
 
 function appState(over: Partial<AppState> = {}): AppState {
   return {
-    settings: { senderName: null, senderEmail: 'gabriel@yourcompany.com', timezone: 'Africa/Lagos', onboarded: false, currentProjectId: null, pauseState: 'running', pausedUntil: null, notifications: null },
+    settings: { senderName: null, senderEmail: 'gabriel@yourcompany.com', timezone: 'Africa/Lagos', onboarded: false, currentProjectId: null, pauseState: 'running', pausedUntil: null, notifications: null, morningBrief: true },
     projects: [],
     channels: [channel('email'), channel('linkedin'), channel('x')],
     people: [],
@@ -86,12 +91,20 @@ function everythingShown(): string {
   return [document.body.textContent ?? '', ...values].join('\n');
 }
 
+/** Pastes instead of typing key by key, so a busy machine does not run a test out of time. */
+async function fill(user: ReturnType<typeof userEvent.setup>, field: HTMLElement, text: string) {
+  await user.click(field);
+  await user.paste(text);
+}
+
 async function connectGoogle(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
   const sheet = await screen.findByRole('dialog');
-  await user.type(within(sheet).getByLabelText('Your email address'), 'gabriel@yourcompany.com');
-  await user.type(within(sheet).getByLabelText('App password'), 'abcd efgh ijkl mnop');
+  await fill(user, within(sheet).getByLabelText('Email address'), 'gabriel@yourcompany.com');
+  await fill(user, within(sheet).getByLabelText('App password'), 'abcd efgh ijkl mnop');
   await user.click(within(sheet).getByRole('button', { name: 'Connect' }));
+  await within(sheet).findByText(/Sending from gabriel@yourcompany.com\./);
+  await user.click(within(sheet).getByRole('button', { name: 'Done' }));
   await screen.findByText('20 a day now, 120 by week 3');
 }
 
@@ -117,6 +130,7 @@ async function importTwo(user: ReturnType<typeof userEvent.setup>) {
 beforeEach(() => {
   for (const fn of Object.values(mocks)) fn.mockReset();
   refresh.mockClear();
+  mocks.channelSummary.mockResolvedValue({ pending: { invites: 0, followUps: 0, emails: 0, messages: 0 }, paceLine: '20 a day this week, 120 by week 3' });
   mocks.connect.mockImplementation((ch: ChannelAccount['channel']) => Promise.resolve(channel(ch, 'connected', 'gabriel@yourcompany.com')));
   mocks.suggestOffer.mockResolvedValue({ offer: OFFER });
   mocks.createProject.mockResolvedValue(project());
@@ -142,11 +156,10 @@ describe('Welcome', () => {
   it('Continue with Google opens the email sheet and keeps the mail server out of sight', async () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
-    const sheet = await screen.findByRole('dialog', { name: 'Connect your email' });
-    expect(within(sheet).getByText('Callum sends from your own accounts and never sees your passwords.')).toBeInTheDocument();
+    const sheet = await screen.findByRole('dialog', { name: 'Connect a channel' });
     expect(within(sheet).getByRole('button', { name: 'Google' })).toHaveAttribute('aria-pressed', 'true');
     expect(document.body.textContent).not.toMatch(/smtp|imap|gmail\.com:/i);
-    expect(within(sheet).getByRole('link', { name: 'Open Google' })).toHaveAttribute('href', 'https://myaccount.google.com/apppasswords');
+    expect(within(sheet).getByRole('link', { name: /Open Google/ })).toHaveAttribute('href', 'https://myaccount.google.com/apppasswords');
   });
 });
 
@@ -158,6 +171,7 @@ describe('Channels', () => {
     expect(refresh).toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Connect Email' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('gabriel@yourcompany.com')).toBeInTheDocument();
   });
 
   it('shows the server\'s words when the password is refused and keeps the sheet open', async () => {
@@ -165,8 +179,8 @@ describe('Channels', () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
     const sheet = await screen.findByRole('dialog');
-    await user.type(within(sheet).getByLabelText('Your email address'), 'gabriel@yourcompany.com');
-    await user.type(within(sheet).getByLabelText('App password'), 'wrong');
+    await fill(user, within(sheet).getByLabelText('Email address'), 'gabriel@yourcompany.com');
+    await fill(user, within(sheet).getByLabelText('App password'), 'wrong');
     await user.click(within(sheet).getByRole('button', { name: 'Connect' }));
     expect(await within(sheet).findByRole('alert')).toHaveTextContent("Google didn't accept that password. App passwords are 16 letters, with no spaces.");
     expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -176,17 +190,19 @@ describe('Channels', () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
     const sheet = await screen.findByRole('dialog');
-    await user.type(within(sheet).getByLabelText('Your email address'), 'gabriel@gmail.com');
+    await fill(user, within(sheet).getByLabelText('Email address'), 'gabriel@gmail.com');
     expect(within(sheet).getByText('This looks like a personal address. Cold email works best from your company address.')).toBeInTheDocument();
   });
 
   it('signs in to Microsoft with a short code', async () => {
     mocks.microsoftStart.mockResolvedValue({ userCode: 'ABCD-EFGH', verificationUri: 'https://microsoft.com/devicelogin', expiresAt: '2026-11-02T10:15:00.000Z' });
-    mocks.microsoftPoll.mockResolvedValue({ status: 'connected', account: channel('email', 'connected', 'gabriel@yourcompany.com') });
+    mocks.microsoftPoll
+      .mockResolvedValueOnce({ status: 'waiting' })
+      .mockResolvedValue({ status: 'connected', account: channel('email', 'connected', 'gabriel@yourcompany.com') });
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'Continue with Microsoft' }));
     const sheet = await screen.findByRole('dialog');
-    await user.type(within(sheet).getByLabelText('Your email address'), 'gabriel@yourcompany.com');
+    await fill(user, within(sheet).getByLabelText('Email address'), 'gabriel@yourcompany.com');
     await user.click(within(sheet).getByRole('button', { name: 'Open Microsoft' }));
     expect(await within(sheet).findByText('ABCD-EFGH')).toBeInTheDocument();
     expect(within(sheet).getByText("Callum waits here.", { exact: false })).toBeInTheDocument();
@@ -197,7 +213,7 @@ describe('Channels', () => {
   it('needs one connected channel before Next', async () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
-    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Close' }));
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
   });
 
@@ -205,15 +221,19 @@ describe('Channels', () => {
     const user = setup(appState({ channels: [channel('email', 'connected', 'gabriel@yourcompany.com'), channel('linkedin'), channel('x')] }));
     await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
     await user.click(screen.getByRole('button', { name: 'Connect LinkedIn' }));
-    const sheet = await screen.findByRole('dialog', { name: 'Connect LinkedIn' });
+    const sheet = await screen.findByRole('dialog', { name: 'Connect a channel' });
+    expect(within(sheet).getByRole('tab', { name: 'LinkedIn', selected: true })).toBeInTheDocument();
     expect(within(sheet).getByText("You sign in on LinkedIn's own page. Callum never sees your password.")).toBeInTheDocument();
     await user.click(within(sheet).getByRole('button', { name: 'Open LinkedIn' }));
     expect(mocks.connect).toHaveBeenCalledWith('linkedin', {});
+    expect(await within(sheet).findByText('Connected as gabriel@yourcompany.com')).toBeInTheDocument();
+    await user.click(within(sheet).getByRole('button', { name: 'Done' }));
     expect(await screen.findByText('15 invites a day')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Connect X' }));
-    const xSheet = await screen.findByRole('dialog', { name: 'Connect X' });
-    await user.type(within(xSheet).getByLabelText('Access token'), 'short');
+    const xSheet = await screen.findByRole('dialog', { name: 'Connect a channel' });
+    expect(within(xSheet).getByRole('tab', { name: 'X', selected: true })).toBeInTheDocument();
+    await user.type(within(xSheet).getByLabelText('X access token'), 'short');
     await user.click(within(xSheet).getByRole('button', { name: 'Connect' }));
     expect(await within(xSheet).findByRole('alert')).toHaveTextContent("That doesn't look like an X access token.");
     expect(mocks.connect).not.toHaveBeenCalledWith('x', expect.anything());

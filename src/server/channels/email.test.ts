@@ -172,7 +172,15 @@ describe('connect', () => {
     const adapter = createEmailAdapter(null, { createTransport: transport.createTransport, createImap: fakeImap([]).createImap });
     const failure = adapter.connect({ ...INPUT, address: 'you@x.com' });
     await expect(failure).rejects.toBeInstanceOf(ConnectError);
-    await expect(failure).rejects.toThrow("Couldn't sign in to you@x.com. Check the app password.");
+    await expect(failure).rejects.toThrow("Google didn't accept that password. App passwords are 16 letters, with no spaces.");
+  });
+
+  it('words a refused password for another provider around its servers', async () => {
+    const transport = fakeTransport({ verify: async () => { throw Object.assign(new Error('Invalid login'), { code: 'EAUTH' }); } });
+    const adapter = createEmailAdapter(null, { createTransport: transport.createTransport, createImap: fakeImap([]).createImap });
+    await expect(adapter.connect({ provider: 'custom', address: 'you@x.com', password: 'pw', smtpHost: 'smtp.x.com', smtpPort: '587', imapHost: 'imap.x.com', imapPort: '993' })).rejects.toThrow(
+      "Your mail server didn't accept that password. Check the password and both server names.",
+    );
   });
 
   it('rejects with the same message when IMAP refuses the login', async () => {
@@ -180,7 +188,7 @@ describe('connect', () => {
       createTransport: fakeTransport().createTransport,
       createImap: fakeImap([], { connectErrors: [Object.assign(new Error('Command failed'), { authenticationFailed: true })] }).createImap,
     });
-    await expect(adapter.connect(INPUT)).rejects.toThrow("Couldn't sign in to you@x.com. Check the app password.");
+    await expect(adapter.connect(INPUT)).rejects.toThrow("Google didn't accept that password. App passwords are 16 letters, with no spaces.");
   });
 
   it('says the server could not be reached when the network fails', async () => {

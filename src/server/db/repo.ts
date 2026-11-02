@@ -48,7 +48,7 @@ const CHANNEL_KEYS = [
 
 const DEFAULT_SETTINGS: Settings = {
   senderName: null, senderEmail: null, timezone: 'UTC', onboarded: false, currentProjectId: null,
-  pauseState: 'running', pausedUntil: null, notifications: null,
+  pauseState: 'running', pausedUntil: null, notifications: null, morningBrief: true,
 };
 
 function defaultChannel(channel: Channel): ChannelAccount {

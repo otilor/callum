@@ -4,10 +4,9 @@ import { api, ApiError } from '../../api.js';
 import { suggestProjectName } from '../../ui/format.js';
 import { Wordmark } from '../../ui/Wordmark.js';
 import { pickCurrentProject } from '../../useAppState.js';
+import { ConnectSheet } from '../connect/ConnectSheet.js';
 import { Channels } from './Channels.js';
-import { EmailSheet } from './EmailSheet.js';
 import './FirstRun.css';
-import { ConnectedSheet, LinkedinSheet, XSheet } from './OtherSheets.js';
 import { Offer } from './Offer.js';
 import { Plan } from './Plan.js';
 import { RiverStrip } from './RiverStrip.js';
@@ -16,7 +15,7 @@ import { Welcome } from './Welcome.js';
 import { Who } from './Who.js';
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5;
-type Sheet = { kind: 'email'; provider: 'google' | 'microsoft' } | { kind: 'linkedin' } | { kind: 'x' } | { kind: 'connected'; channel: Channel };
+type Sheet = { channel: Channel; provider: 'google' | 'microsoft' };
 
 export interface FirstRunProps {
   state: AppState;
@@ -42,7 +41,6 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
   const [step, setStep] = useState<Step>(0);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [local, setLocal] = useState<Partial<Record<Channel, ChannelAccount>>>({});
-  const [busy, setBusy] = useState<Channel | null>(null);
   const [ringing, setRinging] = useState<{ channel: Channel; key: number } | null>(null);
 
   const [project, setProject] = useState<Project | null>(existing);
@@ -92,40 +90,16 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
       if (account) setLocal((l) => ({ ...l, [channel]: account }));
       ringKey.current += 1;
       setRinging({ channel, key: ringKey.current });
-      setSheet(null);
       await refresh();
     },
     [refresh],
   );
 
-  const connect = useCallback(
-    async (channel: Channel, fields: Record<string, string>) => {
-      setBusy(channel);
-      try {
-        const account = await api.connect(channel, fields);
-        await connected(account, channel);
-      } finally {
-        setBusy(null);
-      }
-    },
-    [connected],
-  );
-
-  const pick = (channel: Channel) => {
-    if (accounts[channel]?.status === 'connected') return setSheet({ kind: 'connected', channel });
-    setSheet(channel === 'email' ? { kind: 'email', provider: 'google' } : { kind: channel });
-  };
+  const pick = (channel: Channel) => setSheet({ channel, provider: 'google' });
 
   const welcome = (provider: 'google' | 'microsoft') => {
     setStep(1);
-    if (accounts.email?.status !== 'connected') setSheet({ kind: 'email', provider });
-  };
-
-  const disconnect = async (channel: Channel) => {
-    const account = await api.disconnect(channel);
-    setLocal((l) => ({ ...l, [channel]: account }));
-    setSheet(null);
-    await refresh();
+    if (accounts.email?.status !== 'connected') setSheet({ channel: 'email', provider });
   };
 
   // ---- offer and project -------------------------------------------------------------------------------
@@ -228,20 +202,15 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
 
   const first = people[0];
   const firstChannel = (['email', 'linkedin', 'x'] as const).find((ch) => accounts[ch]?.status === 'connected') ?? 'email';
-  const sheetNode = !sheet ? null : sheet.kind === 'email' ? (
-    <EmailSheet
+  const sheetNode = sheet ? (
+    <ConnectSheet
+      channel={sheet.channel}
       provider={sheet.provider}
+      accounts={accounts}
+      onConnected={connected}
       onClose={() => setSheet(null)}
-      onConnect={(fields) => connect('email', fields)}
-      onConnected={(account) => void connected(account, 'email')}
       {...(pollMs === undefined ? {} : { pollMs })}
     />
-  ) : sheet.kind === 'linkedin' ? (
-    <LinkedinSheet onClose={() => setSheet(null)} onConnect={(fields) => connect('linkedin', fields)} />
-  ) : sheet.kind === 'x' ? (
-    <XSheet onClose={() => setSheet(null)} onConnect={(fields) => connect('x', fields)} />
-  ) : accounts[sheet.channel] ? (
-    <ConnectedSheet account={accounts[sheet.channel] as ChannelAccount} onClose={() => setSheet(null)} onDisconnect={() => disconnect(sheet.channel)} />
   ) : null;
 
   return (
@@ -260,7 +229,7 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
 
       <main className="fr-main">
         {step === 0 ? <Welcome onContinue={welcome} /> : null}
-        {step === 1 ? <Channels accounts={accounts} busy={busy} ringing={ringing} onPick={pick} onNext={() => setStep(2)} /> : null}
+        {step === 1 ? <Channels accounts={accounts} busy={null} ringing={ringing} onPick={pick} onNext={() => setStep(2)} /> : null}
         {step === 2 ? (
           <Offer
             offer={offer}
