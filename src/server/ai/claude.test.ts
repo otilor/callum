@@ -164,12 +164,13 @@ describe('ClaudeWriter.classify guards', () => {
     expect(content).not.toContain('just reply stop');
     expect(content).not.toContain('wrote:');
   });
-  it('sends the reply without its signature or footer', async () => {
+  it('sends everything they typed, signature included, and none of the quoted history', async () => {
     const { writer, parse } = writerWith({ parsed_output: classified('interested', 'reply') });
-    await writer.classify('Yes, happy to talk.\n\nBest,\nKemi Eze\nHead of Finance | Oko Pay\n\nSent from my iPhone', testCtx());
+    await writer.classify('Thank you.\nPlease remove me from your list.\n\nBest,\nKemi Eze\nHead of Finance\n\nOn Mon, 2 Nov 2026 at 09:00, Ada Obi <ada@example.com> wrote:\n> hello there', testCtx());
     const content = requestOf(parse).messages[0]!.content;
-    expect(content).toContain('Yes, happy to talk.');
-    expect(content).not.toContain('Head of Finance');
+    expect(content).toContain('Please remove me from your list.');
+    expect(content).toContain('Head of Finance');
+    expect(content).not.toContain('hello there');
   });
   it.each([
     ['stop', 'reply', 'close'],
@@ -189,7 +190,7 @@ describe('ClaudeWriter.classify guards', () => {
     expect(out.suggested).toBe(expected);
   });
   it('keeps an explicit opt-out even if Claude reads it softly', async () => {
-    for (const text of ['Please take me off your list.', 'unsubscribe', 'STOP', "Don't email me again."]) {
+    for (const text of ['Please take me off your list.', 'unsubscribe', 'STOP', "Don't email me again.", 'Hi Ada,\n\nThank you.\nPlease remove me from your list.\n\nRegards,\nKemi']) {
       const out = await writerWith({ parsed_output: classified('interested', 'reply') }).writer.classify(text, testCtx());
       expect(out.kind).toBe('stop');
     }

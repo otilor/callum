@@ -542,3 +542,20 @@ describe('classify round 2: signatures, stop, hostile, out of office, other lang
     }
   });
 });
+
+describe('stripSignature is conservative', () => {
+  it('does not treat a thank-you under a greeting as a sign-off', () => {
+    const text = 'Hi Ada,\n\nThank you.\nI am not interested, please remove me from your mailing list.\n\nRegards,\nKemi';
+    expect(stripSignature(text)).toBe('Hi Ada,\n\nThank you.\nI am not interested, please remove me from your mailing list.');
+    expect(stripSignature('Hi Ada\nThanks\nYes interested, call me Friday')).toBe('Hi Ada\nThanks\nYes interested, call me Friday');
+  });
+  it('needs a name-like line after a sign-off word', () => {
+    expect(stripSignature("Not now.\nThanks,\nI'll circle back in Q2")).toBe("Not now.\nThanks,\nI'll circle back in Q2");
+    expect(stripSignature('Not now.\nThanks,\nKemi Eze\nCFO')).toBe('Not now.');
+  });
+  it('keeps P.S. lines and drops known client footers', () => {
+    expect(stripSignature("Thanks for this.\n\nCheers,\nKemi\n\nPS: please don't email me again.")).toBe("Thanks for this.\n\nPS: please don't email me again.");
+    expect(stripSignature('Interested.\n\nGet Outlook for iOS<https://aka.ms/o0ukef>')).toBe('Interested.');
+    expect(stripSignature('Oui.\n\nEnvoyé de mon iPhone')).toBe('Oui.');
+  });
+});
