@@ -19,7 +19,7 @@ afterEach(async () => {
 
 describe('what the desktop shell uses from the server', () => {
   it('is there, with the shapes the shell expects', async () => {
-    running = await startServer({ dataDir: join(mkdtempSync(join(tmpdir(), 'callum-shell-')), 'data'), host: '127.0.0.1', port: 0, password: null, webDir: null, env: { CALLUM_DEMO: '1' }, log: () => undefined });
+    running = await startServer({ dataDir: join(mkdtempSync(join(tmpdir(), 'callum-shell-')), 'data'), host: '127.0.0.1', port: 0, password: null, webDir: null, env: {}, log: () => undefined });
     const server = asDesktop(running);
     const { repo, bus } = server.ctx;
     expect(repo.getSettings()).toMatchObject({ pauseState: 'running', pausedUntil: null });

@@ -5,7 +5,7 @@ import type { AppState, OutboxItem, Person, Project } from '../shared/types.js';
 import { ApiError } from './api.js';
 import { App, dayOneAsBanner, screenFor } from './App.js';
 
-const mocks = vi.hoisted(() => ({ state: vi.fn(), login: vi.fn(), logout: vi.fn() }));
+const mocks = vi.hoisted(() => ({ state: vi.fn(), login: vi.fn(), logout: vi.fn(), sample: vi.fn(), channelSummary: vi.fn() }));
 vi.mock('./api.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('./api.js')>()), api: mocks }));
 
 const AT = '2026-11-02T10:00:00.000Z';
@@ -46,6 +46,8 @@ beforeEach(() => {
   mocks.state.mockReset();
   mocks.login.mockReset();
   mocks.logout.mockReset();
+  mocks.sample.mockReset().mockResolvedValue({ body: 'Hi Kemi' });
+  mocks.channelSummary.mockReset().mockResolvedValue({ pending: 0, paceLine: '' });
   localStorage.clear();
 });
 
@@ -53,6 +55,8 @@ describe('screenFor', () => {
   it('picks the screen the state calls for', () => {
     expect(screenFor(appState({}, { onboarded: false }), null)).toBe('first-run');
     expect(screenFor(appState({}, { pauseState: 'wrapped' }), project())).toBe('wrapped');
+    // Starting again sets onboarded to false: the wrapped screen still comes first.
+    expect(screenFor(appState({}, { pauseState: 'wrapped', onboarded: false }), null)).toBe('wrapped');
     expect(screenFor(appState({ people: [kemi()], outbox: [awaiting()] }), project())).toBe('day-one');
     expect(screenFor(appState({ people: [kemi()], outbox: [awaiting()] }), project({ approvalsLeft: 0 }))).toBe('home');
     // Hellos waiting in another project do not hold this one on Day one.
@@ -116,7 +120,8 @@ describe('App', () => {
     first.unmount();
     mocks.state.mockResolvedValue(appState({}, { pauseState: 'wrapped' }));
     const second = render(<App />);
-    await waitFor(() => expect(second.container.querySelector('main')).toHaveAttribute('data-screen', 'wrapped'));
+    expect(await screen.findByRole('heading', { name: 'All wrapped up' })).toBeInTheDocument();
+    second.unmount();
   });
 
   it('asks for the password on a 401, says when it is wrong, and lets the person in once it is right', async () => {
@@ -124,7 +129,7 @@ describe('App', () => {
     mocks.login.mockRejectedValueOnce(new ApiError(401, "That's not the password."));
     const user = userEvent.setup();
     const { container } = render(<App />);
-    expect(await screen.findByRole('heading', { name: 'This Callum is private.' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'This Callum is private' })).toBeInTheDocument();
     await user.type(screen.getByPlaceholderText('Password'), 'nope');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('alert')).toHaveTextContent("That's not the password.");
@@ -138,18 +143,53 @@ describe('App', () => {
     expect(mocks.login).toHaveBeenLastCalledWith('right');
   });
 
-  it('offers Sign out only to a browser that signed in, and goes back to the password card', async () => {
-    localStorage.setItem('callum.signed-in', '1');
-    mocks.state.mockResolvedValue(appState({ people: [kemi()], outbox: [awaiting()] }));
+  it('leaves the checking state and shows the error when the state cannot be fetched after signing in', async () => {
+    mocks.state.mockRejectedValueOnce(new ApiError(401, 'Sign in first'));
+    mocks.login.mockResolvedValueOnce({ ok: true });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'This Callum is private' });
+    mocks.state.mockRejectedValue(new ApiError(0, "Callum can't be reached. Check that it is still running."));
+    await user.type(screen.getByPlaceholderText('Password'), 'right');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("Callum can't be reached. Check that it is still running.");
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+  });
+
+  it('offers Sign out only when the server asks for a password, and goes back to the password card', async () => {
+    mocks.state.mockResolvedValue(appState({ people: [kemi()], outbox: [awaiting()], auth: { password: true } }));
     const user = userEvent.setup();
     render(<App />);
     await user.click(await screen.findByRole('button', { name: 'Your account' }));
     mocks.logout.mockResolvedValue({ ok: true });
     mocks.state.mockRejectedValue(new ApiError(401, 'Sign in first'));
     await user.click(screen.getByRole('menuitem', { name: 'Sign out' }));
-    expect(await screen.findByRole('heading', { name: 'This Callum is private.' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'This Callum is private' })).toBeInTheDocument();
     expect(mocks.logout).toHaveBeenCalled();
-    expect(localStorage.getItem('callum.signed-in')).toBeNull();
+  });
+
+  it('offers no Sign out when there is no password', async () => {
+    mocks.state.mockResolvedValue(appState({ people: [kemi()], outbox: [awaiting()] }));
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Your account' }));
+    expect(screen.queryByRole('menuitem', { name: 'Sign out' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Your Callum' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Take a break or wrap up' })).toBeInTheDocument();
+  });
+
+  it('opens Your Callum and the leave sheet from the account menu, and comes back', async () => {
+    mocks.state.mockResolvedValue(appState());
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Your account' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Your Callum' }));
+    expect(await screen.findByRole('heading', { name: 'Your Callum' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /back/i }));
+    await waitFor(() => expect(container.querySelector('main')).toHaveAttribute('data-screen', 'home'));
+    await user.click(screen.getByRole('button', { name: 'Your account' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Take a break or wrap up' }));
+    expect(await screen.findByRole('button', { name: /Back to the river/ })).toBeInTheDocument();
   });
 
   it('says plainly when Callum cannot be reached at first', async () => {

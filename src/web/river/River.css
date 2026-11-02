@@ -248,3 +248,18 @@ span.river-group {
     display: none;
   }
 }
+
+.river-badge-mark {
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  color: #ffffff;
+  background: #646b85;
+}
+.river-badge-error {
+  background: #d9480f;
+}
+.river-badge-intro {
+  background: #ffb020;
+  color: #1d2140;
+}

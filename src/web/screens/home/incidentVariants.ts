@@ -354,7 +354,7 @@ export function faceReactions(state: AppState, quiet: QuietSnapshot | null = nul
   const alive = new Set(state.people.map((p) => p.id));
   for (const i of state.incidents) {
     if (i.state !== 'open') continue;
-    if (i.kind === 'mailbox_signed_out' || i.kind === 'x_limit') {
+    if (i.kind === 'mailbox_signed_out' || i.kind === 'x_limit' || i.kind === 'x_signed_out' || i.kind === 'linkedin_signed_out') {
       for (const p of waitingOn(state.people, i.channel)) set(p.id, { mark: 'pause', still: true, label: 'waiting' });
     } else if (i.kind === 'linkedin_weekly_limit') {
       for (const p of state.people) {

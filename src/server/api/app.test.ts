@@ -12,6 +12,7 @@ import { fixedClock } from '../engine/clock.js';
 import { ApolloSource } from '../leads/apollo.js';
 import { UserError } from '../services/errors.js';
 import { createApp, SOMETHING_WENT_WRONG } from './app.js';
+import { FEATURE_ROUTES } from './features.js';
 
 const MONDAY = '2026-11-02T10:00:00.000Z';
 
@@ -36,7 +37,8 @@ function setup(opts: SetupOptions = {}) {
     password: opts.password ?? null,
     webDir: opts.webDir ?? null,
     ...(opts.runner ? { runner: opts.runner } : {}),
-    ...(opts.extraRoutes ? { extraRoutes: opts.extraRoutes } : {}),
+    // The routes of the other parts are part of the app: by default it is built the way main.ts builds it.
+    extraRoutes: opts.extraRoutes ?? FEATURE_ROUTES.map((build) => build(ctx)),
     onError: (e) => problems.push(e),
   });
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
@@ -72,10 +74,13 @@ describe('state', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('application/json');
     const body = (await res.json()) as AppState;
-    expect(Object.keys(body).sort()).toEqual(['brief', 'channels', 'demo', 'incidents', 'outbox', 'people', 'projects', 'settings']);
+    expect(Object.keys(body).sort()).toEqual(['apolloConnected', 'auth', 'brief', 'channels', 'claudeConnected', 'demo', 'incidents', 'outbox', 'people', 'projects', 'settings']);
+    expect(body.auth).toEqual({ password: false });
+    expect(body.apolloConnected).toBe(false);
+    expect(body.claudeConnected).toBe(false);
     expect(body.demo).toBe(true);
     expect(body.channels.map((c) => c.channel).sort()).toEqual(['email', 'linkedin', 'x']);
-    const text = JSON.stringify(body);
+    const text = JSON.stringify({ ...body, auth: undefined });
     for (const secret of ['hunter2-secret', 'token-abc', 'refresh-xyz', 'password', 'accessToken']) expect(text).not.toContain(secret);
   });
 

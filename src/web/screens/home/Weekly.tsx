@@ -13,6 +13,8 @@ export interface WeeklyProps {
   onChanged?: () => void;
   /** Opens a person in Home's popover. The link in the note is left out without it. */
   onOpenPerson?: (id: number) => void;
+  /** Each time this number goes up the note opens (the account menu's `Your week, in people`). */
+  openSignal?: number;
 }
 
 type Suggestion = 'idle' | 'looking' | 'found' | 'later';
@@ -124,7 +126,7 @@ function Group({ group }: { group: WeeklyGroup }) {
  * Your week, in people. A button that opens the weekly note as a sheet over the river, and opens it by itself the first
  * time the person visits after Monday 8:30. The note covers every project and shows the plain-text email beside it on request.
  */
-export function Weekly({ tz, onChanged, onOpenPerson }: WeeklyProps) {
+export function Weekly({ tz, onChanged, onOpenPerson, openSignal = 0 }: WeeklyProps) {
   const [answer, setAnswer] = useState<WeeklyAnswer | null>(null);
   const [open, setOpen] = useState(false);
   const [emailOn, setEmailOn] = useState(false);
@@ -166,6 +168,14 @@ export function Weekly({ tz, onChanged, onOpenPerson }: WeeklyProps) {
     };
   }, [markSeen]);
 
+  // The account menu asks for the note by number; the first value is only where it starts.
+  const firstSignal = useRef(openSignal);
+  useEffect(() => {
+    if (openSignal === firstSignal.current) return;
+    setOpen(true);
+    markSeen();
+  }, [openSignal, markSeen]);
+
   const close = useCallback(() => {
     setOpen(false);
     trigger.current?.focus();
@@ -184,7 +194,18 @@ export function Weekly({ tz, onChanged, onOpenPerson }: WeeklyProps) {
 
   if (!answer) return null;
   const { note, email } = answer;
-  if (note.hellos === 0 && note.replied.length === 0) return null;
+  if (note.hellos === 0 && note.replied.length === 0) {
+    // Asked for from the menu in a week with nothing in it: say so, instead of doing nothing.
+    return open ? (
+      <div className="wk-empty-back" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+        <div className="wk-empty" role="dialog" aria-modal="true" aria-label="Your week, in people">
+          <h2>Your week, in people</h2>
+          <p>Nothing to tell yet. Once Callum has said hello to people, their week shows up here.</p>
+          <button type="button" ref={closeButton} className="wk-empty-close" onClick={close}>Close</button>
+        </div>
+      </div>
+    ) : null;
+  }
 
   async function findMore() {
     const s = note.suggestion;

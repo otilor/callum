@@ -485,11 +485,13 @@ export interface IncidentCardsProps {
   onReconnect(channel: Channel): void;
   /** Opens a person's conversation (the face popover). */
   onOpenPerson?(personId: number): void;
+  /** Which incidents this stack draws; the others belong to another card on the same screen. All of them when left out. */
+  include?(incident: Incident): boolean;
   now?: () => Date;
 }
 
 /** One card for each open incident. Notices that only need reading go away on `Okay` and stay away on this computer. */
-export function IncidentCards({ state, refresh, onReconnect, onOpenPerson, now }: IncidentCardsProps) {
+export function IncidentCards({ state, refresh, onReconnect, onOpenPerson, include, now }: IncidentCardsProps) {
   const [dismissed, setDismissed] = useState<Set<number>>(readDismissed);
   const [kept, setKept] = useState<Incident[]>([]);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -501,7 +503,7 @@ export function IncidentCards({ state, refresh, onReconnect, onOpenPerson, now }
     };
   }, []);
 
-  const open = state.incidents.filter((i) => i.state === 'open' && !dismissed.has(i.id));
+  const open = state.incidents.filter((i) => i.state === 'open' && !dismissed.has(i.id) && (include ? include(i) : true));
   const lingering = kept.filter((k) => !open.some((o) => o.id === k.id));
   const shown = [...open, ...lingering].sort((a, b) => a.id - b.id);
   if (shown.length === 0) return null;

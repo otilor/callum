@@ -343,9 +343,9 @@ describe('Home', () => {
     expect(within(table).queryByText('Old Timer')).not.toBeInTheDocument();
   });
 
-  it('draws the face of the person who accepted, by who is connected', () => {
+  it('draws the face of the person the brief names, by id', () => {
     const people = [person(4, 'Ada Obi', { linkedinState: 'invited' }), person(5, 'Ada Eze', { linkedinState: 'connected' })];
-    const { container } = view(appState({ people, brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: ['Ada'], acceptedIds: people.filter((p) => p.firstName === 'Ada').map((p) => p.id), nextSendAt: null, line: '' } }));
+    const { container } = view(appState({ people, brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: ['Ada'], acceptedIds: [5], nextSendAt: null, line: '' } }));
     expect(screen.getByRole('group', { name: 'Since yesterday' })).toBeInTheDocument();
     const face = container.querySelector('.brief-face') as HTMLElement;
     const probe = (id: number) => {

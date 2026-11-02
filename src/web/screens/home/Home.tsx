@@ -14,6 +14,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AppState, Channel, Person, Project } from '../../../shared/types.js';
+import type { FaceReaction } from './incidentVariants.js';
 import { api } from '../../api.js';
 import { River } from '../../river/River.js';
 import { isStill, stillChannels } from '../../river/state.js';
@@ -42,8 +43,11 @@ export interface HomeProps {
   now?: () => Date;
   account?: AccountSlots;
   incident?: ReactNode;
-  quiet?: ReactNode;
+  /** A function gets `ask`, which puts words in the Ask bar (a starter chip). */
+  quiet?: ReactNode | ((tools: { ask(text: string): void }) => ReactNode);
   overlay?: ReactNode;
+  /** How faces react to what is going on (see `faceReactions`). */
+  reactions?: ReadonlyMap<number, FaceReaction>;
   onAddPeople?: () => void;
   onNewProject?: () => void;
   onOpenPerson?: (id: number) => void;
@@ -87,7 +91,7 @@ function PlayGlyph() {
   );
 }
 
-export function Home({ state, project, refresh, now, account = {}, incident, quiet, overlay, onAddPeople, onNewProject, onOpenPerson, dayOne }: HomeProps) {
+export function Home({ state, project, refresh, now, account = {}, incident, quiet, overlay, reactions, onAddPeople, onNewProject, onOpenPerson, dayOne }: HomeProps) {
   const clock = useMemo(() => now ?? (() => new Date()), [now]);
   const toasts = useUndoToasts();
   const [view, setView] = useState<'river' | 'list'>('river');
@@ -95,6 +99,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
   const [selected, setSelected] = useState<number | null>(null);
   const [, tick] = useState(0);
   const askInput = useRef<HTMLInputElement>(null);
+  const [prefill, setPrefill] = useState<{ text: string; n: number } | null>(null);
   const opener = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
 
@@ -295,7 +300,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
             now={at}
             idle={IDLE}
             greeting={greeting(hourIn(at, tz))}
-            quiet={quiet}
+            quiet={typeof quiet === 'function' ? quiet({ ask: (text) => setPrefill((p) => ({ text, n: (p?.n ?? 0) + 1 })) }) : quiet}
             above={
               <>
                 {incident}
@@ -317,6 +322,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
                   selectedId={selectedPerson?.id ?? null}
                   onFace={(p) => setSelected((s) => (s === p.id ? null : p.id))}
                   onGroup={() => setView('list')}
+                  {...(reactions ? { reactions } : {})}
                   popover={
                     selectedPerson ? (
                       <FacePopover
@@ -367,6 +373,8 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
           likeName={latestReply?.firstName ?? null}
           inputRef={askInput}
           onChanged={refresh}
+          prefill={prefill}
+          {...(onAddPeople ? { onBringList: onAddPeople } : {})}
         />
       </div>
 

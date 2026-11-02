@@ -17,6 +17,10 @@ export interface AskBarProps {
   onChanged?: () => void | Promise<void>;
   /** Replaces the placeholder, e.g. for the empty river. */
   placeholder?: string;
+  /** Puts words in the field and the cursor there (a starter chip of the quiet moments). A new `n` is a new request. */
+  prefill?: { text: string; n: number } | null;
+  /** Opens the add people flow, for an answer that says Callum needs a list. */
+  onBringList?: () => void;
 }
 
 interface Turn { asked: string; answer: AskAnswer | null; result: AskAnswer | null; error: string; working: boolean }
@@ -29,7 +33,7 @@ function errorText(e: unknown): string {
  * The Ask bar: say what you want, or tap a chip. The answer opens above the bar with the people it is about and one
  * button that does the thing.
  */
-export function AskBar({ project, people, likeName, inputRef, onChanged, placeholder }: AskBarProps) {
+export function AskBar({ project, people, likeName, inputRef, onChanged, placeholder, prefill, onBringList }: AskBarProps) {
   const [text, setText] = useState('');
   const [chips, setChips] = useState(false);
   const [turn, setTurn] = useState<Turn | null>(null);
@@ -37,6 +41,12 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const asking = useRef(0);
   useEffect(() => () => clearTimeout(closeTimer.current), []);
+  const field = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!prefill) return;
+    setText(prefill.text);
+    field.current?.focus();
+  }, [prefill?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const suggestions = [
     "Who's warming up?",
@@ -87,6 +97,7 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
   const faces = (shown?.personIds ?? []).map((id) => people.find((p) => p.id === id)).filter((p): p is Person => p !== undefined).slice(0, 6);
   const more = (shown?.personIds.length ?? 0) - faces.length;
   const action = turn?.answer?.action ?? null;
+  const needsList = onBringList !== undefined && !action && shown !== null && /needs a list for that/i.test(shown.text);
 
   return (
     <div
@@ -123,6 +134,12 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
               ) : null}
               {shown ? <p className="ab-text">{shown.text}</p> : null}
               {turn.error ? <p className="ab-error" role="alert">{turn.error}</p> : null}
+              {needsList ? (
+                <div className="ab-buttons">
+                  <button type="button" className="ab-btn ab-btn-ink" onClick={onBringList}>Bring a list</button>
+                  <button type="button" className="ab-btn ab-btn-quiet" onClick={() => setTurn(null)}>Not now</button>
+                </div>
+              ) : null}
               {action && !turn.result ? (
                 <div className="ab-buttons">
                   <button type="button" className="ab-btn ab-btn-ink" disabled={acting} onClick={() => void act()}>{action.label}</button>
@@ -139,7 +156,11 @@ export function AskBar({ project, people, likeName, inputRef, onChanged, placeho
         <label className="sr-only" htmlFor="ab-input">Ask Callum</label>
         <input
           id="ab-input"
-          ref={inputRef}
+          ref={(el) => {
+            field.current = el;
+            if (typeof inputRef === 'function') inputRef(el);
+            else if (inputRef) (inputRef as { current: HTMLInputElement | null }).current = el;
+          }}
           className="ab-input"
           type="text"
           value={text}

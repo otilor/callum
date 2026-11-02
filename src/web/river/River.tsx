@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode, type RefObject } from 'react';
 import type { Channel, Person, Stage } from '../../shared/types.js';
 import { marbleBackground } from '../ui/Marble.js';
+import type { FaceReaction } from '../screens/home/incidentVariants.js';
 import { riverLayout, STAGE_LABEL, STAGE_ORDER, type RiverItem } from './layout.js';
 import './River.css';
 
@@ -27,6 +28,8 @@ export interface RiverProps {
   /** Drawn inside the water (a banner, the place replies land). */
   overlay?: ReactNode;
   onGroup?: (stage: Stage) => void;
+  /** How faces react to what is going on (a pause, a bounce, a reply that did not go, a stop): see `faceReactions`. */
+  reactions?: ReadonlyMap<number, FaceReaction>;
   /** Height of the water in px. Default 280, or 160 when compact. */
   height?: number;
   className?: string;
@@ -40,6 +43,9 @@ const LOOK: Record<Stage, Look> = {
   following: { filter: 'grayscale(0.28)', opacity: 1, ring: '#6E86F2', ringWidth: 2 },
   talking: { filter: 'none', opacity: 1, ring: '#3F52D9', ringWidth: 2 },
 };
+
+/** The small letter in a face's corner for a reaction that is not a pause. */
+const CORNER_TEXT: Record<string, string> = { error: '\u00d7', in: 'in', mail: '@', x: 'X', stop: '\u2013', away: 'z', intro: '+' };
 
 const CENTERS = [14.5, 38, 62, 84.5];
 
@@ -86,7 +92,7 @@ function PauseGlyph({ size = 7 }: { size?: number }) {
   );
 }
 
-function faceStyle(item: Extract<RiverItem, { kind: 'face' }>, width: number, h: number, still: boolean, mark: FaceMark | undefined, selected: boolean): CSSProperties {
+function faceStyle(item: Extract<RiverItem, { kind: 'face' }>, width: number, h: number, still: boolean, mark: FaceMark | undefined, selected: boolean, react?: FaceReaction): CSSProperties {
   const p = item.person;
   const look = LOOK[p.stage];
   let filter = look.filter;
@@ -121,6 +127,8 @@ function faceStyle(item: Extract<RiverItem, { kind: 'face' }>, width: number, h:
     opacity = 1;
     shadow = '0 0 0 2px #A9B8F5';
   }
+  if (react?.faded) opacity = Math.min(opacity, 0.35);
+  if (react?.errorRing) shadow = '0 0 0 2.5px #D9480F';
   if (selected) shadow += ', 0 0 0 7px rgba(63,82,217,0.18)';
   const half = item.size / 2;
   return {
@@ -142,7 +150,7 @@ function faceStyle(item: Extract<RiverItem, { kind: 'face' }>, width: number, h:
  * Faces slide to the next lane when a person moves on, and the water stands still when Callum is not running.
  */
 export function River({
-  people, running, still, onFace, compact = false, selectedId = null, popover, sendingIds, marks, overlay, onGroup, height, className,
+  people, running, still, onFace, compact = false, selectedId = null, popover, sendingIds, marks, overlay, onGroup, reactions, height, className,
 }: RiverProps) {
   const h = height ?? (compact ? 160 : 280);
   const ref = useRef<HTMLDivElement>(null);
@@ -225,20 +233,23 @@ export function River({
           const mark = marks?.[p.id];
           const isSending = sending.has(p.id);
           const pinging = pinged.ids.includes(p.id);
-          const dressedStill = isStill && p.stage !== 'talking' && p.status !== 'held';
+          const react = reactions?.get(p.id);
+          const dressedStill = (isStill || react?.still === true) && p.stage !== 'talking' && p.status !== 'held';
+          const corner = react?.mark && react.mark !== 'pause' ? react.mark : null;
           return (
             <Face
               key={p.id}
               onClick={onFace ? () => onFace(p) : undefined}
               className={['river-face', dressedStill ? 'going-still' : '', mark === 'current' ? 'cur-ring' : '', mark === 'next' ? 'next-ring' : ''].filter(Boolean).join(' ')}
-              aria-label={`${p.name}, ${STAGE_LABEL[p.stage]}`}
+              aria-label={`${p.name}, ${STAGE_LABEL[p.stage]}${react?.label ? `, ${react.label}` : ''}`}
               {...(dressedStill ? { 'aria-description': `${p.channel === 'linkedin' ? 'LinkedIn' : p.channel === 'x' ? 'X' : 'Email'} is paused` } : {})}
               data-stage={p.stage}
               data-id={p.id}
-              style={faceStyle(item, width, h, dressedStill, mark, selectedId === p.id)}
+              style={faceStyle(item, width, h, dressedStill, mark, selectedId === p.id, react)}
             >
               {pinging ? <span key={pinged.key} aria-hidden="true" className={pinged.key % 2 ? 'ping-a' : 'ping-b'} /> : null}
               {dressedStill ? <span aria-hidden="true" className="river-badge river-badge-pause"><PauseGlyph /></span> : null}
+              {corner && !isSending ? <span aria-hidden="true" className={`river-badge river-badge-mark river-badge-${corner}`}>{CORNER_TEXT[corner]}</span> : null}
               {isSending ? <span aria-hidden="true" className="river-badge river-badge-sending" /> : null}
               {!isSending && p.stage === 'talking' && p.badge === 'sent' ? (
                 <span aria-hidden="true" className="river-badge">

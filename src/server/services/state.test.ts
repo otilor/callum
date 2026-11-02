@@ -60,7 +60,10 @@ describe('getState', () => {
     h.ctx.repo.setChannelSecret('email', { password: 'hunter2-secret', accessToken: 'tok-123', refreshToken: 'ref-456' });
     h.ctx.repo.setChannelSecret('x', { accessToken: 'x-tok' });
     h.person();
-    const json = JSON.stringify(getState(h.ctx, { password: false }));
+    const state = getState(h.ctx, { password: true });
+    // The only mention of a password is whether there is one.
+    expect(state.auth).toEqual({ password: true });
+    const json = JSON.stringify({ ...state, auth: undefined });
     expect(json).not.toContain('password');
     expect(json).not.toContain('accessToken');
     expect(json).not.toContain('hunter2');
@@ -129,5 +132,30 @@ describe('brief', () => {
     h.ctx.outbox.queueAuto(p.id, 'follow_up', 'Hi', 'Hello', new Date('2026-11-03T08:00:00.000Z'), false);
     h.ctx.outbox.queueAuto(p.id, 'follow_up', 'Hi', 'Hello', new Date('2026-11-02T08:00:00.000Z'), true);
     expect(brief(h.ctx).nextSendAt).toBe('2026-11-03T08:00:00.000Z');
+  });
+});
+
+describe('getState: connections and the brief', () => {
+  it('says whether Apollo and Claude are connected, never with a key', () => {
+    const h = harness();
+    const before = getState(h.ctx, { password: false });
+    expect(before.apolloConnected).toBe(false);
+    expect(before.claudeConnected).toBe(false);
+    h.ctx.repo.setChannelSecret('anthropic', { key: 'sk-ant-secret-key' });
+    h.ctx.repo.setChannelSecret('apollo', { key: 'apollo-secret-key' });
+    h.ctx.reloadKeys();
+    const after = getState(h.ctx, { password: false });
+    expect(after.apolloConnected).toBe(true);
+    expect(after.claudeConnected).toBe(true);
+    expect(JSON.stringify(after)).not.toContain('secret-key');
+  });
+
+  it('names the people who accepted by id as well as by first name', () => {
+    const h = harness();
+    const ada = h.person({ name: 'Ada Obi', linkedinUrl: 'https://www.linkedin.com/in/ada', channel: 'linkedin' });
+    h.ctx.repo.updatePerson(ada.id, { linkedinState: 'connected' });
+    const { brief } = getState(h.ctx, { password: false });
+    expect(brief.acceptedRecently).toEqual(['Ada']);
+    expect(brief.acceptedIds).toEqual([ada.id]);
   });
 });
