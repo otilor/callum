@@ -6,7 +6,7 @@ import { findPlaceholders, guardLine, leaveOutLabel, removePlaceholderSentence }
 import { marbleBackground } from '../../ui/Marble.js';
 import { dayName, formatWhen } from '../../ui/when.js';
 import { prefersReducedMotion } from '../firstrun/motion.js';
-import { channelName, channelPhrase } from './dock.js';
+import { channelName, channelPhrase } from './people.js';
 import { undoMsLeft, type UndoToasts } from './UndoToast.js';
 import './Deck.css';
 

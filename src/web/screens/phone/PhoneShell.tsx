@@ -1,7 +1,7 @@
 import type { AppState, Channel, Person, Project } from '../../../shared/types.js';
 import { River } from '../../river/River.js';
 import { isStill, stillChannels } from '../../river/state.js';
-import { pendingSendIds, riverPeople } from '../home/dock.js';
+import { pendingSendIds, riverPeople } from '../home/people.js';
 import type { FaceReaction } from '../home/incidentVariants.js';
 import { PhoneHome } from './PhoneHome.js';
 import { PhoneTabs } from './PhoneTabs.js';

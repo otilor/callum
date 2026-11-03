@@ -4,7 +4,7 @@ import { api } from './api.js';
 import { DayOne } from './screens/dayone/DayOne.js';
 import { FirstRun } from './screens/firstrun/FirstRun.js';
 import { Home } from './screens/home/Home.js';
-import { dockPeople } from './screens/home/dock.js';
+import { dockPeople } from './screens/home/people.js';
 import { IncidentCards } from './screens/home/IncidentCard.js';
 import { faceReactions, incidentVariant } from './screens/home/incidentVariants.js';
 import { ProjectSwitcher } from './screens/home/ProjectSwitcher.js';
