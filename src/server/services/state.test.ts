@@ -136,17 +136,15 @@ describe('brief', () => {
 });
 
 describe('getState: connections and the brief', () => {
-  it('says whether Apollo and Claude are connected, never with a key', () => {
+  it('says whether Claude is there and where it runs, never with a key', () => {
     const h = harness();
     const before = getState(h.ctx, { password: false });
-    expect(before.apolloConnected).toBe(false);
-    expect(before.claudeConnected).toBe(false);
+    // The demo finds made-up people without Claude.
+    expect(before).toMatchObject({ canFind: true, claudeConnected: false, claudeEngine: null });
     h.ctx.repo.setChannelSecret('anthropic', { key: 'sk-ant-secret-key' });
-    h.ctx.repo.setChannelSecret('apollo', { key: 'apollo-secret-key' });
     h.ctx.reloadKeys();
     const after = getState(h.ctx, { password: false });
-    expect(after.apolloConnected).toBe(true);
-    expect(after.claudeConnected).toBe(true);
+    expect(after).toMatchObject({ canFind: true, claudeConnected: true, claudeEngine: 'api' });
     expect(JSON.stringify(after)).not.toContain('secret-key');
   });
 

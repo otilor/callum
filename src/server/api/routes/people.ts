@@ -1,8 +1,7 @@
 import { Hono, type Context } from 'hono';
 import type { Tone } from '../../../shared/types.js';
 import type { Ctx } from '../../context.js';
-import { commit, connectApollo, describe, discardProject, preview, sampleHello, undoBatch, type AddSource } from '../../services/addPeople.js';
-import type { ApolloSource } from '../../leads/apollo.js';
+import { commit, describe, discardProject, preview, sampleHello, undoBatch, type AddSource } from '../../services/addPeople.js';
 import { UserError } from '../../services/errors.js';
 
 type Body = Record<string, unknown>;
@@ -24,8 +23,8 @@ function projectOf(v: unknown): number | null | undefined {
   return typeof v === 'number' && Number.isInteger(v) ? v : undefined;
 }
 
-/** Adding people after day one, the New project flow, and connecting Apollo. Paths are relative to `/api`. */
-export function peopleRoutes(ctx: Ctx, opts: { makeApollo?: (key: string) => ApolloSource } = {}): Hono {
+/** Adding people after day one and the New project flow. Paths are relative to `/api`. */
+export function peopleRoutes(ctx: Ctx): Hono {
   const routes = new Hono();
 
   // A message for the person leaves as it is; anything else goes on to the app's own error handling.
@@ -82,8 +81,6 @@ export function peopleRoutes(ctx: Ctx, opts: { makeApollo?: (key: string) => Apo
       ...(batchId === undefined ? {} : { batchId }), ...(key === undefined ? {} : { key }),
     });
   }));
-
-  routes.post('/apollo/connect', answer((b) => connectApollo(ctx, text(b.key) ?? '', opts.makeApollo)));
 
   return routes;
 }

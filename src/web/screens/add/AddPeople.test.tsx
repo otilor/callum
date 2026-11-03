@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   commit: vi.fn(),
   undo: vi.fn(),
   describe: vi.fn(),
-  connectApollo: vi.fn(),
   sample: vi.fn(),
 }));
 vi.mock('../../api.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../api.js')>()), peopleApi: mocks }));
@@ -203,57 +202,56 @@ describe('AddPeople', () => {
 describe('AddPeople, describing who', () => {
   const rows = (n: number): PreviewPerson[] =>
     ['Kemi', 'Femi', 'Tunde'].slice(0, n).map((first, i) => ({
-      key: `apollo-${i}`, apolloId: `apollo-${i}`, hasEmail: true, name: `${first} Ez***`, firstName: first, source: 'apollo' as const, projectId: 1,
-      role: 'Head of Finance', company: ['Oko Pay', 'Ledgerly', 'Sent Co'][i] ?? 'Co',
+      key: `web-${i}`, name: `${first} ${['Eze', 'Ade', 'Bello'][i]}`, firstName: first, source: 'web' as const, projectId: 1,
+      role: 'Head of Finance', company: ['Oko Pay', 'Ledgerly', 'Sent Co'][i] ?? 'Co', note: 'Head of finance. Found on techcabal.com.',
     }));
-  const found = (over: Partial<Described> = {}): Described => ({ batchId: 'apollo-batch', total: 3, people: rows(3), narrow: null, line: 'Callum found 3', ...over });
+  const found = (over: Partial<Described> = {}): Described => ({ batchId: 'web-batch', total: 3, people: rows(3), narrow: null, line: 'Callum found 3', ...over });
 
-  it('says what is missing without Apollo, connects it with a key, and looks again', async () => {
+  it('says what is missing when Claude is not there, and keeps the way to bring a list', async () => {
     const user = userEvent.setup();
-    mocks.describe.mockRejectedValueOnce(new ApiError(422, 'Describing people needs a people search connected. Bring a list instead, or connect Apollo in Your Callum.', { detail: { code: 'no_apollo' } }));
-    mocks.connectApollo.mockResolvedValue({ connected: true });
+    const message = 'Finding people needs Claude. Sign in to Claude Code on this computer, or add a Claude key in Your Callum. You can bring a list instead.';
+    mocks.describe.mockRejectedValueOnce(new ApiError(422, message, { detail: { code: 'no_claude' } }));
     show();
     await user.click(screen.getByRole('tab', { name: 'Describe who' }));
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'heads of finance in Accra');
     await user.click(screen.getByRole('button', { name: 'Look' }));
-    expect(await screen.findByText(/Describing people needs a people search connected/)).toBeInTheDocument();
-
-    mocks.describe.mockResolvedValue(found());
-    await user.click(screen.getByRole('button', { name: 'Connect Apollo' }));
-    expect(screen.getByText(/Callum uses it to find people and their emails\. Adding people uses Apollo credits\./)).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Apollo API key'), 'key-123');
-    await user.click(screen.getByRole('button', { name: 'Connect' }));
-    expect(mocks.connectApollo).toHaveBeenCalledWith('key-123');
-    expect(await screen.findByText('Apollo is connected. Callum can look for people now.')).toBeInTheDocument();
-    expect(await screen.findByText('Callum found 3')).toBeInTheDocument();
-    expect(mocks.describe).toHaveBeenLastCalledWith({ query: 'heads of finance in Accra', filters: [], projectId: 1 });
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Connect/ })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Bring a list' }));
+    expect(screen.getByRole('tab', { name: 'Drop a CSV' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('shows 3 rows by first name and company, drops one, says the credits, and names them after adding', async () => {
+  it('says Callum is looking on the web while the search runs', async () => {
+    const user = userEvent.setup();
+    mocks.describe.mockReturnValue(new Promise(() => {}));
+    show();
+    await user.click(screen.getByRole('tab', { name: 'Describe who' }));
+    await user.type(screen.getByLabelText('Describe who you want to meet'), 'cfo{Enter}');
+    expect(await screen.findByText('Callum is looking on the web. This takes a few minutes.')).toBeInTheDocument();
+  });
+
+  it('shows 3 people by full name and company, drops one, and names them after adding', async () => {
     const user = userEvent.setup();
     mocks.describe.mockResolvedValue(found());
     mocks.commit.mockResolvedValue({
-      added: [person(10, 'Kemi Eze'), person(12, 'Tunde Bello')], groups: [], creditsUsed: 2,
-      line: '2 people join the river. First hellos from tomorrow at 9:00. That used 2 Apollo credits.',
+      added: [person(10, 'Kemi Eze'), person(12, 'Tunde Bello')], groups: [],
+      line: '2 people join the river. First hellos from tomorrow at 9:00.',
     });
     show();
     await user.click(screen.getByRole('tab', { name: 'Describe who' }));
     await user.click(screen.getByRole('button', { name: 'Heads of finance at fintechs' }));
     expect(await screen.findByText('Callum found 3')).toBeInTheDocument();
-    expect(screen.getByText('Adding uses about 3 Apollo credits.')).toBeInTheDocument();
+    expect(screen.queryByText(/credit/i)).toBeNull();
 
-    // Apollo rows show a first name and a company, never the hidden last name.
-    expect(screen.queryByRole('button', { name: /Ez\*\*\*/ })).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Femi, Ledgerly' }));
-    expect(screen.getByText('Femi', { selector: 'strong' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Femi Ade, Head of Finance at Ledgerly' }));
+    expect(screen.getByText('Femi Ade', { selector: 'strong' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Not a fit' }));
-    expect(screen.getByText('Femi is out. No credit goes on Femi.')).toBeInTheDocument();
-    expect(screen.getByText('Adding uses about 2 Apollo credits.')).toBeInTheDocument();
+    expect(screen.getByText('Femi is out and will not join.')).toBeInTheDocument();
     expect(mocks.commit).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Add 2 people' }));
-    expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'apollo-batch', projectId: 1, drop: ['apollo-1'] });
-    expect(await screen.findByText('First hellos go out from tomorrow at 9:00, within your daily limits. That used 2 Apollo credits.')).toBeInTheDocument();
+    expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'web-batch', projectId: 1, drop: ['web-1'] });
+    expect(await screen.findByText('First hellos go out from tomorrow at 9:00, within your daily limits.')).toBeInTheDocument();
   });
 
   it('asks to narrow a search of thousands, and looks again with the chips chosen', async () => {
@@ -293,30 +291,14 @@ describe('AddPeople, describing who', () => {
     await user.click(screen.getByRole('button', { name: 'heads of ops' }));
     expect(mocks.describe).toHaveBeenLastCalledWith({ query: 'heads of ops', filters: [], projectId: 1 });
   });
-
-  it('shows what Apollo said when part of a look-up failed, and keeps who was found', async () => {
-    const user = userEvent.setup();
-    mocks.describe.mockResolvedValue(found());
-    mocks.commit.mockResolvedValue({
-      added: [person(10, 'Kemi Eze')], groups: [{ reason: 'no_channel', line: '1 has no email or LinkedIn', names: ['Femi Ade'] }], creditsUsed: 1,
-      warning: "Apollo's lookup limit is reached. Try again in an hour.",
-      line: '1 person joins the river. First hellos from tomorrow at 9:00. That used 1 Apollo credit.',
-    });
-    show();
-    await user.click(screen.getByRole('tab', { name: 'Describe who' }));
-    await user.type(screen.getByLabelText('Describe who you want to meet'), 'cfo{Enter}');
-    await user.click(await screen.findByRole('button', { name: 'Add 3 people' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent("Apollo's lookup limit is reached. Try again in an hour.");
-    expect(screen.getByText('Left out: 1 has no email or LinkedIn.')).toBeInTheDocument();
-  });
 });
 
-describe('AddPeople, after Apollo', () => {
+describe('AddPeople, after a search on the web', () => {
   const rows = ['Kemi', 'Femi', 'Tunde'].map((first, i) => ({
-    key: `apollo-${i}`, apolloId: `apollo-${i}`, hasEmail: true, name: `${first} Ez***`, firstName: first, source: 'apollo' as const, projectId: 1,
-    role: 'Head of Finance', company: 'Co',
+    key: `web-${i}`, name: `${first} Ez`, firstName: first, source: 'web' as const, projectId: 1,
+    role: 'Head of Finance', company: 'Co', note: null,
   }));
-  const found: Described = { batchId: 'apollo-batch', total: 3, people: rows, narrow: null, line: 'Callum found 3' };
+  const found: Described = { batchId: 'web-batch', total: 3, people: rows, narrow: null, line: 'Callum found 3' };
 
   async function describeAndAdd(user: ReturnType<typeof userEvent.setup>) {
     show();
@@ -329,58 +311,29 @@ describe('AddPeople, after Apollo', () => {
     expect(UNDO_MS).toBe(10000);
   });
 
-  it('says the credits stay spent when an Apollo batch is undone', async () => {
+  it('undoes a batch found on the web without a word about cost', async () => {
     const user = userEvent.setup();
     mocks.describe.mockResolvedValue(found);
     mocks.commit.mockResolvedValue({
-      added: [person(10, 'Kemi Eze'), person(11, 'Femi Ade'), person(12, 'Tunde Bello')], groups: [], creditsUsed: 3,
-      line: '3 people join the river. First hellos from tomorrow at 9:00. That used 3 Apollo credits.',
+      added: [person(10, 'Kemi Eze'), person(11, 'Femi Ade'), person(12, 'Tunde Bello')], groups: [],
+      line: '3 people join the river. First hellos from tomorrow at 9:00.',
     });
     mocks.undo.mockResolvedValue({ removed: 3 });
     await describeAndAdd(user);
     await user.click(within(await screen.findByRole('status')).getByRole('button', { name: 'Undo' }));
-    expect(await screen.findByText('Undone. Nobody was added. The Apollo credits stay spent.')).toBeInTheDocument();
+    expect(await screen.findByText('Undone. Nobody was added.')).toBeInTheDocument();
   });
 
-  it('offers to add the rest after a failure part way, and undoes everyone together', async () => {
+  it('shows the finished screen with no credit line and no add-the-rest button', async () => {
     const user = userEvent.setup();
     mocks.describe.mockResolvedValue(found);
-    mocks.commit.mockResolvedValueOnce({
-      added: [person(10, 'Kemi Eze')], groups: [], creditsUsed: 1, remaining: 2, warning: "Apollo's lookup limit is reached. Try again in an hour.",
-      line: '1 person joins the river. First hellos from tomorrow at 9:00. That used 1 Apollo credit.',
+    mocks.commit.mockResolvedValue({
+      added: [person(10, 'Kemi Eze'), person(11, 'Femi Ade'), person(12, 'Tunde Bello')], groups: [],
+      line: '3 people join the river. First hellos from tomorrow at 9:00.',
     });
-    mocks.commit.mockResolvedValueOnce({
-      added: [person(11, 'Femi Ade'), person(12, 'Tunde Bello')], groups: [], creditsUsed: 2,
-      line: '2 people join the river. First hellos from tomorrow at 9:00. That used 2 Apollo credits.',
-    });
-    mocks.undo.mockResolvedValue({ removed: 3 });
     await describeAndAdd(user);
-    await user.click(await screen.findByRole('button', { name: 'Add the rest' }));
-    expect(mocks.commit).toHaveBeenCalledTimes(2);
-    expect(mocks.commit).toHaveBeenLastCalledWith({ batchId: 'apollo-batch', projectId: 1, drop: [] });
-    expect(await screen.findByText('2 people join the river.', { selector: 'p' })).toBeInTheDocument();
+    expect(await screen.findByText('3 people join the river.', { selector: 'p' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add the rest' })).toBeNull();
-  });
-});
-
-describe('AddPeople, the river', () => {
-  it('counts the people of the project by how far along they are and grows when people join', async () => {
-    const user = userEvent.setup();
-    mocks.preview.mockResolvedValue(THREE);
-    mocks.commit.mockResolvedValue({ added: [person(10, 'Kemi Eze')], line: '1 person joins the river. First hellos from tomorrow at 9:00.', groups: [] });
-    show([person(1, 'Sade Bello'), person(2, 'Yaw Mensah', { stage: 'hello' }), person(3, 'Ama Ofori', { stage: 'talking' })]);
-    const lanes = () => Array.from(document.querySelectorAll('.ap-lane')).map((l) => l.textContent);
-    expect(lanes()).toEqual(['1strangers', '1said hello', '0following up', '1talking']);
-    await pasteAndRead(user);
-    await user.click(await screen.findByRole('button', { name: 'Add 3 people' }));
-    await screen.findByText('1 person joins the river.', { selector: 'p' });
-    expect(lanes()[0]).toBe('2strangers');
-  });
-
-  it('goes back to the river', async () => {
-    const user = userEvent.setup();
-    const { onClose } = show();
-    await user.click(screen.getByRole('button', { name: 'River' }));
-    expect(onClose).toHaveBeenCalled();
+    expect(screen.queryByText(/credit/i)).toBeNull();
   });
 });

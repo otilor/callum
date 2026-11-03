@@ -56,6 +56,7 @@ export async function startCallum(opts: StartOptions = {}): Promise<Running> {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     CALLUM_DEMO: '1',
+    CALLUM_CLAUDE_CODE: 'off',
     CALLUM_DATA_DIR: dataDir,
     PORT: '0',
     CALLUM_DEMO_SCENE: opts.scene ?? 'fresh',

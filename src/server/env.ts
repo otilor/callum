@@ -6,7 +6,6 @@ export interface Env {
   password: string | null;
   anthropicKey: string | null;
   model: string;
-  apolloKey: string | null;
   timezone: string | null;
   /** Behind a reverse proxy that sets X-Forwarded-For: the sign-in lockout counts the address the proxy saw. */
   trustProxy: boolean;
@@ -40,7 +39,6 @@ export function readEnv(e: NodeJS.ProcessEnv = process.env): Env {
     password,
     anthropicKey: clean(e.ANTHROPIC_API_KEY),
     model: clean(e.CALLUM_MODEL) ?? DEFAULT_MODEL,
-    apolloKey: clean(e.APOLLO_API_KEY),
     timezone: clean(e.TZ_DEFAULT),
     trustProxy: clean(e.CALLUM_TRUST_PROXY) === '1',
   };

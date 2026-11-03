@@ -5,7 +5,7 @@ import type { Correction, Settings } from '../../shared/types.js';
 import { ConnectError } from '../channels/types.js';
 import type { Ctx } from '../context.js';
 import { seedScene } from '../demo/seed.js';
-import { ApolloError } from '../leads/apollo.js';
+import { FindError } from '../leads/finder.js';
 import { ImportFileError } from '../leads/parse.js';
 import { resumeChannel } from '../runner/incidents.js';
 import * as actions from '../services/actions.js';
@@ -113,7 +113,7 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
     if (err instanceof UserError) {
       return c.json({ error: err.message, ...(err.detail !== undefined ? { detail: err.detail } : {}) }, err.status as ContentfulStatusCode);
     }
-    if (err instanceof ConnectError || err instanceof ApolloError || err instanceof ImportFileError) {
+    if (err instanceof ConnectError || err instanceof FindError || err instanceof ImportFileError) {
       return c.json({ error: err.message }, 422);
     }
     report(err);

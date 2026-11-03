@@ -8,17 +8,13 @@ export function seedOf(text: string): number {
   return 600 + (h % 1000);
 }
 
-/** Apollo's free results show a first name and a company only; the last name is hidden until the person is added. */
-export const isFromApollo = (p: PreviewPerson): boolean => p.source === 'apollo';
-
 export const firstOf = (p: PreviewPerson): string => p.firstName ?? (p.name.split(/\s+/)[0] || p.name);
 
 export function shownName(p: PreviewPerson): string {
-  return isFromApollo(p) ? firstOf(p) : p.name;
+  return p.name;
 }
 
 export function shownSub(p: PreviewPerson): string {
-  if (isFromApollo(p)) return p.company ?? 'A company Apollo knows';
   return [p.role, p.company].filter(Boolean).join(' at ') || p.email || p.linkedinUrl || p.xHandle || '';
 }
 
@@ -59,5 +55,3 @@ export function skipDetail(group: SkipGroup): string {
       return `${who} ${one ? 'has' : 'have'} a name and nothing else. Add an email or a profile link and bring the list again.`;
   }
 }
-
-export const credits = (n: number): string => `${n.toLocaleString('en-US')} Apollo ${n === 1 ? 'credit' : 'credits'}`;

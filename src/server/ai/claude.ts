@@ -1,14 +1,13 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import type { Channel, Message, OutKind, Tone } from '../../shared/types.js';
 import { clampNote } from '../channels/linkedin-detect.js';
 import { type Clock, systemClock } from '../engine/clock.js';
 import { findPlaceholders } from '../engine/guard.js';
 import { OFFER_PLACEHOLDER, classifyOptions, isExplicitOptOut, messageDate, stripQuoted } from './templates.js';
+import { ApiModel, type Model } from './model.js';
 import type { AskIntent, Classification, Writer, WriteContext } from './writer.js';
 
-const MAX_TOKENS = 4000;
 const CHANNELS = ['email', 'linkedin', 'x'] as const;
 
 /** The prompt asks for under 90 words; this is the limit the code enforces, with room to spare. */
@@ -94,43 +93,30 @@ function dayName(d: Date): string {
 
 /** Claude writes; the template writer answers whenever Claude cannot (no network, error, refusal, bad output). */
 export class ClaudeWriter implements Writer {
-  private readonly client: Anthropic;
-  private readonly apiKey: string;
-  /** The last reason a call fell back to the templates (never contains the API key). */
-  lastError: string | null = null;
+  /** Where Claude runs: Claude Code on this computer, or the API with a key. */
+  readonly model: Model;
 
+  /**
+   * `source` is a Model, or an API key (with `model` naming the Claude model and `client` standing in for the API in
+   * tests). Every call falls back to `fallback` when Claude can't answer.
+   */
   constructor(
-    apiKey: string,
-    private readonly model: string,
+    source: string | Model,
+    modelName: string,
     private readonly fallback: Writer,
     client?: Anthropic,
     private readonly clock: Clock = systemClock,
   ) {
-    this.apiKey = apiKey;
-    this.client = client ?? new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+    this.model = typeof source === 'string' ? new ApiModel(source, modelName, client) : source;
   }
 
-  private async ask<S extends z.ZodType>(schema: S, system: string, user: string): Promise<z.infer<S> | null> {
-    try {
-      const res = await this.client.messages.parse({
-        model: this.model,
-        max_tokens: MAX_TOKENS,
-        output_config: { effort: 'low', format: zodOutputFormat(schema) },
-        system,
-        messages: [{ role: 'user', content: user }],
-      });
-      if (res.stop_reason === 'refusal') return this.failed('refused');
-      if (res.parsed_output == null) return this.failed(`no valid output (stop reason ${res.stop_reason ?? 'unknown'})`);
-      this.lastError = null;
-      return res.parsed_output as z.infer<S>;
-    } catch (err) {
-      return this.failed(err instanceof Error ? err.message : 'request failed');
-    }
+  /** The last reason a call fell back to the templates (never contains the API key). */
+  get lastError(): string | null {
+    return this.model.lastError;
   }
 
-  private failed(reason: string): null {
-    this.lastError = reason.split(this.apiKey).join('[key]');
-    return null;
+  private ask<S extends z.ZodType>(schema: S, system: string, user: string): Promise<z.infer<S> | null> {
+    return this.model.ask(schema, system, user);
   }
 
   async write(kind: OutKind, ctx: WriteContext): Promise<{ subject: string | null; body: string }> {

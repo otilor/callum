@@ -7,7 +7,7 @@ import type { Ctx } from '../context.js';
 import { chooseChannel, personTz } from '../engine/lifecycle.js';
 import { localParts } from '../engine/time.js';
 import { firstSlotAfterStart } from '../engine/windows.js';
-import { ApolloError, ApolloSource, type ApolloEnrichment, type ApolloPreview } from '../leads/apollo.js';
+import { FindError } from '../leads/finder.js';
 import { importPeople, sketchPerson } from '../leads/import.js';
 import { decodeLeadFile, ImportFileError, parseCsv, parsePaste, type Skipped } from '../leads/parse.js';
 import { UserError } from './errors.js';
@@ -19,16 +19,12 @@ export const MAX_BATCHES = 20;
 /** The most people one list can bring. */
 export const MAX_ROWS = 5000;
 const TOO_MANY = `That's a lot of people. Add up to ${MAX_ROWS} at a time.`;
-/** Apollo looks people up this many at a time. */
-const LOOKUP_CHUNK = 10;
 /** How many people a described search brings back to look at. */
-export const DESCRIBE_COUNT = 20;
-/** Past this many matches the search is too wide and Callum asks for a narrower one. */
-export const TOO_WIDE = 1000;
+export const DESCRIBE_COUNT = 10;
 /** A LinkedIn search link is read up to this many people. */
 export const LINKEDIN_COUNT = 100;
 
-const NO_APOLLO = 'Describing people needs a people search connected. Bring a list instead, or connect Apollo in Your Callum.';
+export const NO_CLAUDE = 'Finding people needs Claude. Sign in to Claude Code on this computer, or add a Claude key in Your Callum. You can bring a list instead.';
 export const NOT_A_SEARCH = "That isn't a LinkedIn people search. It should start with linkedin.com/search/results/people.";
 const LINKEDIN_SEARCH = /linkedin\.com\/search\/results\/people/i;
 
@@ -47,8 +43,6 @@ interface Batch {
   leads: PersonLead[];
   /** Rows that could not be read as people. */
   unreadable: Skipped[];
-  /** Free Apollo previews, until the user adds them. */
-  apollo: ApolloPreview[] | null;
   known: Set<string>;
   committing: boolean;
   /** Everyone added so far from this batch, for undo. */
@@ -56,8 +50,6 @@ interface Batch {
   /** The project they were added to, and what was said, so pressing Add again gets the same answer. */
   addedTo: number | null;
   result: AddCommit | null;
-  /** Apollo ids still to look up after a failure part way. */
-  remaining: string[] | null;
 }
 
 const stores = new WeakMap<Ctx, Map<string, Batch>>();
@@ -73,7 +65,7 @@ function storeOf(ctx: Ctx): Map<string, Batch> {
   return store;
 }
 
-function keep(ctx: Ctx, batch: Pick<Batch, 'projectId' | 'leads' | 'unreadable' | 'apollo' | 'known'>): string {
+function keep(ctx: Ctx, batch: Pick<Batch, 'projectId' | 'leads' | 'unreadable' | 'known'>): string {
   const id = randomUUID();
   const store = storeOf(ctx);
   while (store.size >= MAX_BATCHES) {
@@ -82,7 +74,7 @@ function keep(ctx: Ctx, batch: Pick<Batch, 'projectId' | 'leads' | 'unreadable' 
     store.delete(oldest);
   }
   store.set(id, {
-    ...batch, expires: ctx.clock.now().getTime() + BATCH_MS, committing: false, added: null, addedTo: null, result: null, remaining: null,
+    ...batch, expires: ctx.clock.now().getTime() + BATCH_MS, committing: false, added: null, addedTo: null, result: null,
   });
   return id;
 }
@@ -175,7 +167,7 @@ export function groupSkips(skipped: Skipped[]): SkipGroup[] {
 }
 
 function previewOf(p: Person, key: string): PreviewPerson {
-  const { id: _id, createdAt: _created, updatedAt: _updated, apolloId: _apollo, ...rest } = p;
+  const { id: _id, createdAt: _created, updatedAt: _updated, ...rest } = p;
   return { ...rest, key };
 }
 
@@ -192,7 +184,7 @@ export async function preview(ctx: Ctx, source: AddSource, opts: { projectId?: n
   if (people.length + unreadable.length > MAX_ROWS) throw new UserError(TOO_MANY);
   const known = await emailedBefore(ctx);
   const dry = importPeople(ctx.repo, projectId, people, { dryRun: true, known, at: ctx.clock.now().toISOString() });
-  const batchId = keep(ctx, { projectId, leads: people, unreadable, apollo: null, known });
+  const batchId = keep(ctx, { projectId, leads: people, unreadable, known });
   const places = dry.addedAt ?? [];
   return {
     batchId,
@@ -201,113 +193,63 @@ export async function preview(ctx: Ctx, source: AddSource, opts: { projectId?: n
   };
 }
 
-// ---- describing people (Apollo) ---------------------------------------------------------------------------
+// ---- describing people (Claude, on the web) --------------------------------------------------------------
 
-const SIZE_CHIP = '20 to 200 people';
-/** Apollo writes company sizes as `21,200`. */
-const SIZE_RANGE = '21,200';
-const CITY_CHIP = /^(\p{L}[\p{L}'. -]*) only$/u;
-const IN_CITY = /\s*\b(?:in|near|around)\s+(\p{Lu}[\p{L}'.-]*(?:\s+\p{Lu}[\p{L}'.-]*)?)\s*$/u;
-
-/** The city a search ends with, and the words before it: `Heads of finance in Accra` gives `Accra`. */
-function splitCity(query: string): { words: string; city: string | null } {
-  const m = IN_CITY.exec(query);
-  return m?.[1] ? { words: query.slice(0, m.index).trim(), city: m[1] } : { words: query, city: null };
+/** A chip the user pressed, as words added to what they typed. */
+function chipWords(chip: string): string {
+  const t = chip.trim().slice(0, 80);
+  if (t === '20 to 200 people') return 'at companies of 20 to 200 people';
+  const city = /^(\p{L}[\p{L}'. -]*) only$/u.exec(t)?.[1];
+  return city ? `in ${city} only` : t;
 }
 
-/** What the chips the user pressed ask of Apollo. A chip Callum did not offer is refused. */
-function narrowing(filters: string[]): { employeeRanges: string[]; cities: string[] } {
-  const employeeRanges: string[] = [];
-  const cities: string[] = [];
-  for (const f of filters) {
-    const chip = f.trim();
-    const city = CITY_CHIP.exec(chip)?.[1];
-    if (chip === SIZE_CHIP) employeeRanges.push(SIZE_RANGE);
-    else if (city) cities.push(city);
-    else throw new UserError(`Callum doesn't know how to narrow by '${chip}'.`);
-  }
-  return { employeeRanges, cities };
+/** People already in Callum, as "Name (Company)", newest first, so a search doesn't bring them back. */
+function knownNames(ctx: Ctx): string[] {
+  return ctx.repo.listPeople()
+    .slice()
+    .reverse()
+    .map((p) => (p.company ? `${p.name} (${p.company})` : p.name));
 }
-
-function previewRow(p: ApolloPreview, projectId: number | null): PreviewPerson {
-  const name = [p.firstName, p.lastNameObfuscated].filter(Boolean).join(' ') || 'Someone';
-  return {
-    key: p.apolloId, apolloId: p.apolloId, hasEmail: p.hasEmail,
-    name, firstName: p.firstName || name, source: 'apollo', projectId: projectId ?? 0,
-    ...(p.title ? { role: p.title } : {}), ...(p.company ? { company: p.company } : {}),
-  };
-}
-
-const fmt = (n: number): string => n.toLocaleString('en-US');
 
 /**
- * Looks for people from words, on Apollo's free search: no credits are spent, and the rows have a first name, a
- * hidden last name, a title and a company, but no email or LinkedIn yet. Those arrive on `commit`, for the people kept.
+ * Looks for real people from words. Claude searches the web (through Claude Code on this computer, or the API with a
+ * key) and brings back people with an email, a LinkedIn profile or an X handle it saw on a page. Nothing is added
+ * until the user presses Add; people already in Callum are left out.
  */
 export async function describe(
   ctx: Ctx,
   q: { query: string; filters?: string[]; projectId?: number | null },
 ): Promise<Described> {
-  if (!ctx.apollo) throw new UserError(NO_APOLLO, 422, { code: 'no_apollo' });
+  if (!ctx.finder) throw new UserError(NO_CLAUDE, 422, { code: 'no_claude' });
   const query = typeof q.query === 'string' ? q.query.trim() : '';
   if (query === '') throw new UserError('Describe who you want to meet first.');
   const filters = (q.filters ?? []).filter((f): f is string => typeof f === 'string' && f.trim() !== '');
   const projectId = resolveProject(ctx, q.projectId);
-  const chips = narrowing(filters);
-  const { words, city } = splitCity(query);
-  const cities = [...new Set([...(city ? [city] : []), ...chips.cities])];
-  let found;
+  const description = [query.slice(0, 500), ...filters.map(chipWords)].join(', ');
+  let people: PersonLead[];
   try {
-    found = await ctx.apollo.search({
-      query: words === '' ? null : words, titles: [], count: DESCRIBE_COUNT,
-      // Anyone already looked up is never shown again, so choosing them can never cost a second credit.
-      exclude: (id) => ctx.repo.hasApolloId(id),
-      ...(chips.employeeRanges.length > 0 ? { employeeRanges: chips.employeeRanges } : {}),
-      ...(cities.length > 0 ? { personLocations: cities } : {}),
-    });
+    people = await ctx.finder.find({ description, count: DESCRIBE_COUNT, known: knownNames(ctx) });
   } catch (e) {
-    if (e instanceof ApolloError) throw new UserError(e.message);
+    if (e instanceof FindError) throw new UserError(e.message);
     throw e;
   }
-  if (found.previews.length === 0) {
-    if (found.skippedKnown > 0) {
-      return { batchId: null, total: 0, people: [], narrow: null, line: `Everyone Callum found for '${query}' is already in Callum. Try a wider role or a nearby city.` };
-    }
-    return { batchId: null, total: 0, people: [], narrow: null, line: `Nobody matched '${query}'. Try a wider role or a nearby city.` };
+  if (people.length === 0) {
+    return { batchId: null, total: 0, people: [], narrow: null, line: `Callum found nobody for '${query}' it could reach. Try a wider role or a nearby city.` };
   }
-  const batchId = keep(ctx, { projectId, leads: [], unreadable: [], apollo: found.previews, known: new Set() });
-  const people = found.previews.map((p) => previewRow(p, projectId));
-  // A city the words already end with is already a location filter, so it is never offered again as a chip.
-  const offered = found.total > TOO_WIDE ? [SIZE_CHIP].filter((c) => !filters.includes(c)) : [];
-  const narrow = offered.length > 0 ? offered : null;
-  return {
-    batchId, total: found.total, people, narrow,
-    line: found.total > TOO_WIDE ? `That's about ${fmt(found.total)} people. Narrow it down?` : `Callum found ${people.length}`,
-  };
-}
-
-/** Stores the user's Apollo key after a search with it works. The key is kept in `channel_secrets` and never sent back. */
-export async function connectApollo(
-  ctx: Ctx,
-  key: string,
-  makeSource: (key: string) => ApolloSource = (k) => new ApolloSource(k),
-): Promise<{ connected: true }> {
-  const trimmed = typeof key === 'string' ? key.trim() : '';
-  if (trimmed === '') throw new UserError('Paste your Apollo API key first.');
-  const source = makeSource(trimmed);
-  try {
-    await source.search({ query: null, titles: ['founder'], count: 1 });
-  } catch (e) {
-    if (e instanceof ApolloError) throw new UserError(e.message);
-    throw e;
+  const known = await emailedBefore(ctx);
+  const dry = importPeople(ctx.repo, projectId, people, { dryRun: true, known, at: ctx.clock.now().toISOString() });
+  if (dry.added.length === 0) {
+    return { batchId: null, total: 0, people: [], narrow: null, line: `Everyone Callum found for '${query}' is already in Callum. Try a wider role or a nearby city.` };
   }
-  ctx.repo.setChannelSecret('apollo', { key: trimmed });
-  ctx.apollo = source;
-  ctx.bus.emit('settings');
-  return { connected: true };
+  const batchId = keep(ctx, { projectId, leads: people, unreadable: [], known });
+  const places = dry.addedAt ?? [];
+  const rows = dry.added.map((p, i) => previewOf(p, String(places[i] ?? i)));
+  return { batchId, total: rows.length, people: rows, narrow: null, line: `Callum found ${rows.length}` };
 }
 
 // ---- adding -----------------------------------------------------------------------------------------------
+
+const fmt = (n: number): string => n.toLocaleString('en-US');
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -322,32 +264,6 @@ function slotWords(at: Date, tz: string, now: Date): string {
   return `${DAY_NAMES[p.weekday]} at ${time}`;
 }
 
-const credits = (n: number): string => `${fmt(n)} Apollo ${n === 1 ? 'credit' : 'credits'}`;
-
-/**
- * Looks up the people the user kept, ten at a time. Whatever was found before a failure is kept, the failure comes
- * back in words, and the ids not yet looked up are named so adding again spends credits only on those.
- */
-async function enrichKept(
-  ctx: Ctx,
-  ids: string[],
-): Promise<{ found: ApolloEnrichment; warning?: string; remaining: string[] }> {
-  if (!ctx.apollo) throw new UserError(NO_APOLLO, 422, { code: 'no_apollo' });
-  const found: ApolloEnrichment = { people: [], creditsUsed: 0 };
-  for (let i = 0; i < ids.length; i += LOOKUP_CHUNK) {
-    try {
-      const got = await ctx.apollo.enrich(ids.slice(i, i + LOOKUP_CHUNK));
-      found.people.push(...got.people);
-      found.creditsUsed += got.creditsUsed;
-    } catch (e) {
-      if (!(e instanceof ApolloError)) throw e;
-      if (found.people.length > 0) return { found, warning: e.message, remaining: ids.slice(i) };
-      throw new UserError(e.message);
-    }
-  }
-  return { found, remaining: [] };
-}
-
 /** Where the first hellos stand, in words: when they go out, or what has to happen first. */
 function whenWords(project: Project, now: Date, tz: string): string {
   if (project.startedAt === null) return `They'll get hellos once ${project.name} starts.`;
@@ -356,67 +272,38 @@ function whenWords(project: Project, now: Date, tz: string): string {
 }
 
 /**
- * Adds the batch to a project as strangers. `drop` names the people the user said were not a fit. For people found by
- * description, Apollo looks up only the ones kept (that is what costs credits) and those without an email or a LinkedIn
- * link come back as skipped. In a project that has started, the new people get their first slot at once. Pressing Add
- * a second time for the same project gives the same answer and adds nobody, unless Apollo stopped part way and some
- * people are still to be looked up: then it looks up only those.
+ * Adds the batch to a project as strangers. `drop` names the people the user said were not a fit. In a project that
+ * has started, the new people get their first slot at once. Pressing Add a second time for the same project gives the
+ * same answer and adds nobody.
  */
 export async function commit(ctx: Ctx, batchId: string, opts: { projectId?: number; drop?: string[] } = {}): Promise<AddCommit> {
   const batch = batchOf(ctx, batchId);
   const projectId = opts.projectId ?? batch.projectId;
-  if (batch.added && !(batch.remaining && batch.remaining.length > 0)) {
+  if (batch.added) {
     if (batch.result && batch.addedTo === projectId) return batch.result;
     throw new UserError('Those people are already in.');
   }
   if (batch.committing) throw new UserError('Callum is still adding them.');
   const project = projectId === null ? null : ctx.repo.getProject(projectId);
   if (!project) throw new UserError('Choose the project they join first.');
-  if (batch.added && batch.addedTo !== project.id) throw new UserError('Those people are already in.');
   if (project.state === 'wrapped') throw new UserError(`${project.name} is wrapped up.`);
   const drop = new Set(opts.drop ?? []);
 
   batch.committing = true;
   try {
-    let leads: PersonLead[];
-    let creditsUsed: number | undefined;
-    let warning: string | undefined;
-    let remaining: string[] = [];
-    let known = batch.known;
-    if (batch.apollo) {
-      const wanted = (batch.remaining ?? batch.apollo.map((p) => p.apolloId)).filter((id) => !drop.has(id));
-      // Someone looked up since this list was made (another batch, a second press) is not paid for again.
-      const ids = wanted.filter((id) => !ctx.repo.hasApolloId(id));
-      if (ids.length === 0) {
-        throw new UserError(wanted.length > 0 ? 'Those people are already in Callum, so nothing more was spent.' : 'Everyone was left out. Bring someone back.');
-      }
-      const looked = await enrichKept(ctx, ids);
-      leads = looked.found.people;
-      creditsUsed = looked.found.creditsUsed;
-      warning = looked.warning;
-      remaining = looked.remaining;
-      known = await emailedBefore(ctx);
-    } else {
-      leads = batch.leads.filter((_, i) => !drop.has(String(i)));
-    }
-    const result = importPeople(ctx.repo, project.id, leads, { known });
+    const leads = batch.leads.filter((_, i) => !drop.has(String(i)));
+    const result = importPeople(ctx.repo, project.id, leads, { known: batch.known });
     const now = ctx.clock.now();
     const settings = ctx.repo.getSettings();
     const added = project.startedAt === null ? result.added : result.added.map((p) => scheduleFirst(ctx, p, settings.timezone, now));
-    batch.added = [...(batch.added ?? []), ...added.map((p) => p.id)];
+    batch.added = added.map((p) => p.id);
     batch.addedTo = project.id;
-    batch.remaining = remaining.length > 0 ? remaining : null;
     if (added.length > 0 || result.updated.length > 0) ctx.bus.emit('people');
 
-    let line = added.length === 0
+    const line = added.length === 0
       ? 'Nobody new joined.'
       : `${added.length === 1 ? '1 person joins' : `${fmt(added.length)} people join`} the river. ${whenWords(project, now, settings.timezone)}`;
-    if (creditsUsed !== undefined) line += ` That used ${credits(creditsUsed)}.`;
-    const answer: AddCommit = {
-      added, line, groups: groupSkips(batch.apollo ? result.skipped : [...batch.unreadable, ...result.skipped]),
-      ...(creditsUsed === undefined ? {} : { creditsUsed }), ...(warning === undefined ? {} : { warning }),
-      ...(remaining.length > 0 ? { remaining: remaining.length } : {}),
-    };
+    const answer: AddCommit = { added, line, groups: groupSkips([...batch.unreadable, ...result.skipped]) };
     batch.result = answer;
     return answer;
   } finally {
@@ -487,10 +374,7 @@ export async function sampleHello(
   const batch = input.batchId ? liveBatch(ctx, input.batchId) : undefined;
   let lead: PersonLead | undefined;
   if (batch && input.key !== undefined) {
-    const row = batch.apollo?.find((p) => p.apolloId === input.key);
-    lead = row
-      ? { name: row.firstName, firstName: row.firstName, source: 'apollo', ...(row.company ? { company: row.company } : {}), ...(row.title ? { role: row.title } : {}) }
-      : batch.leads[Number(input.key)];
+    lead = batch.leads[Number(input.key)];
   }
   const person: Person = lead
     ? sketchPerson(lead, lead.name, 0, at)

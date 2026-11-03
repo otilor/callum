@@ -29,8 +29,9 @@ export function getState(ctx: Ctx, auth: { password: boolean }): AppState {
     incidents: repo.listIncidents({ open: true }),
     brief: brief(ctx),
     demo: ctx.demo,
-    apolloConnected: ctx.apollo !== null,
+    canFind: ctx.finder !== null,
     claudeConnected: ctx.claudeKey !== null,
+    claudeEngine: ctx.model?.engine ?? null,
     auth,
   };
 }

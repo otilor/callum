@@ -10,9 +10,9 @@ services:
     environment:
       # Required. Callum listens on every interface in a container, so it asks for this password first.
       CALLUM_PASSWORD: ${CALLUM_PASSWORD:?Set CALLUM_PASSWORD in .env before you start Callum}
+      # Claude Code isn't in the container, so Claude runs here with an API key (see docs/SETUP.md#claude).
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       CALLUM_MODEL: ${CALLUM_MODEL:-}
-      APOLLO_API_KEY: ${APOLLO_API_KEY:-}
       CALLUM_MICROSOFT_CLIENT_ID: ${CALLUM_MICROSOFT_CLIENT_ID:-}
       TZ_DEFAULT: ${TZ_DEFAULT:-}
       # Set to 1 when an HTTPS reverse proxy sits in front of Callum (see the README).

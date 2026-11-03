@@ -53,7 +53,7 @@ function appState(over: Partial<AppState> = {}): AppState {
     outbox: people.map((p, i) => item(100 + i, p.id, `Hi ${p.firstName}, would a quick chat be useful?`)),
     incidents: [],
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: SLOT, line: '' },
-    demo: false, apolloConnected: false, claudeConnected: false, auth: { password: false },
+    demo: false, canFind: false, claudeEngine: null, claudeConnected: false, auth: { password: false },
     ...over,
   };
 }

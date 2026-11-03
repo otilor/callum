@@ -4,7 +4,8 @@ import type { AdapterFactory, ChannelAdapter } from '../channels/types.js';
 import { createCtx, type Ctx } from '../context.js';
 import { openDb } from '../db/db.js';
 import { fixedClock } from '../engine/clock.js';
-import { ApolloSource } from '../leads/apollo.js';
+import { FindError, type FindQuery, type PeopleFinder } from '../leads/finder.js';
+import type { PersonLead } from '../../shared/types.js';
 
 /** Monday, 11:00 in Lagos. */
 export const MONDAY = '2026-11-02T10:00:00.000Z';
@@ -55,49 +56,28 @@ export function setup(opts: { connected?: Channel[]; started?: boolean } = {}): 
   return { ctx, clock, scopes, projectId: project.id, sentTo, linkedin };
 }
 
-export interface Calls { search: URL[]; enrich: string[][]; keys: (string | undefined)[] }
-
-export function previewRow(n: number) {
-  return {
-    id: `apollo-${n}`, first_name: ['Kemi', 'Femi', 'Tunde', 'Ada'][n] ?? 'Sam', last_name_obfuscated: ['Ez***', 'Ad*', 'Be***', 'Ob*'][n] ?? 'Xx*',
-    title: 'Head of Finance', has_email: true, organization: { name: ['Oko Pay', 'Ledgerly', 'Sent Co', 'Pay Co'][n] ?? 'Co' },
-  };
-}
-
-export function matchRow(id: string, over: Record<string, unknown> = {}) {
-  const n = Number(id.replace('apollo-', ''));
-  const first = ['Kemi', 'Femi', 'Tunde', 'Ada'][n] ?? 'Sam';
+/** A person Claude's search could bring back. */
+export function foundPerson(n: number, over: Partial<PersonLead> = {}): PersonLead {
+  const first = ['Kemi', 'Femi', 'Tunde', 'Ada'][n] ?? `Sam${n}`;
   const last = ['Eze', 'Ade', 'Bello', 'Obi'][n] ?? 'Xx';
   return {
-    id, first_name: first, last_name: last, name: `${first} ${last}`, title: 'Head of Finance', email_status: 'verified',
-    email: `${first.toLowerCase()}@co${n}.com`, linkedin_url: `http://www.linkedin.com/in/${first.toLowerCase()}-${last.toLowerCase()}-${n}`,
-    organization: { name: 'Co' }, ...over,
+    name: `${first} ${last}`, role: 'Head of Finance', company: ['Oko Pay', 'Ledgerly', 'Sent Co', 'Pay Co'][n] ?? 'Co',
+    linkedinUrl: `https://www.linkedin.com/in/${first.toLowerCase()}-${last.toLowerCase()}-${n}`,
+    source: 'web', note: `Leads finance. Found on example.com.`, ...over,
   };
 }
 
-/** An Apollo that answers from a script and records what it was asked. */
-export function fakeApollo(script: {
-  total?: number; rows?: number; enrich?: (ids: string[]) => Record<string, unknown>[]; failEnrichAt?: number; failStatus?: number; failSearch?: number;
-}): { source: ApolloSource; calls: Calls } {
-  const calls: Calls = { search: [], enrich: [], keys: [] };
-  let enrichCalls = 0;
-  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
-    calls.keys.push((init?.headers as Record<string, string> | undefined)?.['x-api-key']);
-    const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-    if (url.pathname.endsWith('api_search')) {
-      calls.search.push(url);
-      if (script.failSearch) return json(script.failSearch, {});
-      const rows = Array.from({ length: script.rows ?? 3 }, (_, n) => previewRow(n));
-      return json(200, { people: rows, pagination: { total_entries: script.total ?? rows.length, total_pages: 1 } });
-    }
-    const ids = (JSON.parse(String(init?.body)) as { details: { id: string }[] }).details.map((d) => d.id);
-    calls.enrich.push(ids);
-    enrichCalls++;
-    if (script.failEnrichAt === enrichCalls) return json(script.failStatus ?? 429, {});
-    const matches = (script.enrich ?? ((i) => i.map((id) => matchRow(id))))(ids);
-    return json(200, { matches, credits_consumed: matches.length });
-  }) as typeof fetch;
-  return { source: new ApolloSource('key-123', fetchImpl, 'https://apollo.test'), calls };
+/** A people finder that answers from a script and records what it was asked. */
+export function fakeFinder(script: { people?: PersonLead[]; fail?: string } = {}): { finder: PeopleFinder; asked: FindQuery[] } {
+  const asked: FindQuery[] = [];
+  return {
+    asked,
+    finder: {
+      async find(q) {
+        asked.push(q);
+        if (script.fail) throw new FindError(script.fail);
+        return (script.people ?? [0, 1, 2].map((n) => foundPerson(n))).slice(0, q.count);
+      },
+    },
+  };
 }
-

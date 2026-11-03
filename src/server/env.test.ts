@@ -5,18 +5,18 @@ describe('readEnv', () => {
   it('has sensible defaults and stays on this computer', () => {
     expect(readEnv({})).toEqual({
       port: 4600, host: '127.0.0.1', dataDir: './data', demo: false, password: null,
-      anthropicKey: null, model: 'claude-opus-5-5', apolloKey: null, timezone: null, trustProxy: false,
+      anthropicKey: null, model: 'claude-opus-5-5', timezone: null, trustProxy: false,
     });
   });
 
   it('reads every variable', () => {
     const env = readEnv({
       PORT: '8080', CALLUM_DATA_DIR: '/var/callum', CALLUM_DEMO: 'true', CALLUM_PASSWORD: 'open sesame',
-      ANTHROPIC_API_KEY: 'sk-x', CALLUM_MODEL: 'claude-sonnet-5-5', APOLLO_API_KEY: 'ap', TZ_DEFAULT: 'Africa/Lagos', CALLUM_TRUST_PROXY: '1',
+      ANTHROPIC_API_KEY: 'sk-x', CALLUM_MODEL: 'claude-sonnet-5-5', TZ_DEFAULT: 'Africa/Lagos', CALLUM_TRUST_PROXY: '1',
     });
     expect(env).toEqual({
       port: 8080, host: '0.0.0.0', dataDir: '/var/callum', demo: true, password: 'open sesame',
-      anthropicKey: 'sk-x', model: 'claude-sonnet-5-5', apolloKey: 'ap', timezone: 'Africa/Lagos', trustProxy: true,
+      anthropicKey: 'sk-x', model: 'claude-sonnet-5-5', timezone: 'Africa/Lagos', trustProxy: true,
     });
   });
 
@@ -46,7 +46,7 @@ describe('readEnv', () => {
 
   it('treats an empty value as unset', () => {
     expect(
-      readEnv({ PORT: '', CALLUM_DATA_DIR: '', CALLUM_DEMO: '', CALLUM_PASSWORD: '', ANTHROPIC_API_KEY: '', CALLUM_MODEL: '', APOLLO_API_KEY: '', TZ_DEFAULT: '' }),
+      readEnv({ PORT: '', CALLUM_DATA_DIR: '', CALLUM_DEMO: '', CALLUM_PASSWORD: '', ANTHROPIC_API_KEY: '', CALLUM_MODEL: '', TZ_DEFAULT: '' }),
     ).toEqual(readEnv({}));
   });
 });

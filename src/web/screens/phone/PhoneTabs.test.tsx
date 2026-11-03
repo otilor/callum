@@ -390,10 +390,10 @@ describe('Ask tab', () => {
   it('does what Callum offers when told to, and says what happened', async () => {
     const user = await open();
     const action = { kind: 'find_more' as const, label: 'Find 10 more like Kemi', args: { likePersonId: 1, query: null, count: 10 } };
-    mocks.ask.mockResolvedValue({ text: 'Callum can look for 10 more like Kemi. That uses about 10 Apollo credits.', personIds: [1], action });
+    mocks.ask.mockResolvedValue({ text: 'Callum can look for 10 more like Kemi. It takes a few minutes.', personIds: [1], action });
     mocks.act.mockResolvedValue({ text: '10 people joined the river. Their first hellos go out tomorrow at 9:00.', personIds: [], action: null });
     await user.type(screen.getByRole('textbox', { name: 'Ask Callum' }), 'find more like Kemi{Enter}');
-    const offer = await screen.findByText('Callum can look for 10 more like Kemi. That uses about 10 Apollo credits.');
+    const offer = await screen.findByText('Callum can look for 10 more like Kemi. It takes a few minutes.');
     const card = offer.closest('.pa-answer') as HTMLElement;
     await user.click(within(card).getByRole('button', { name: 'Find 10 more like Kemi' }));
     expect(mocks.act).toHaveBeenCalledWith(action, 1);

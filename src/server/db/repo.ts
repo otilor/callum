@@ -33,7 +33,7 @@ const PERSON_KEYS = [
   'projectId', 'name', 'firstName', 'company', 'role', 'email', 'linkedinUrl', 'xHandle', 'timezone', 'channel',
   'stage', 'status', 'touches', 'lastTouchAt', 'nextTouchAt', 'linkedinState', 'invitedAt',
   'snoozedUntil', 'restUntil', 'badge', 'replyKind', 'suggested', 'draft', 'lastInbound', 'repliedAt',
-  'source', 'note', 'apolloId',
+  'source', 'note',
 ] as const;
 const PROJECT_KEYS = [
   'name', 'offer', 'audience', 'tone', 'sample', 'calendarUrl', 'approvalsLeft', 'startedAt', 'state', 'pausedUntil',
@@ -92,8 +92,8 @@ export interface InboundFailure {
   event: string; error: string; attempts: number; createdAt: string; updatedAt: string;
 }
 
-/** The rows of `channel_secrets`: one per channel, and the Apollo and Claude keys. */
-export type SecretKey = Channel | 'apollo' | 'anthropic';
+/** The rows of `channel_secrets`: one per channel, and the Claude key. */
+export type SecretKey = Channel | 'anthropic';
 
 export class DuplicateProjectName extends Error {
   constructor(name: string) {
@@ -338,21 +338,6 @@ export class Repo {
     });
   }
 
-  /**
-   * True when Apollo was already paid for this id: someone in Callum has it, or the look-up came back with nobody to
-   * write to (no email or LinkedIn) or the person was taken out again. Looking them up again would cost a credit twice.
-   */
-  hasApolloId(apolloId: string): boolean {
-    return this.db.prepare('SELECT 1 AS found FROM people WHERE apollo_id = ? UNION ALL SELECT 1 FROM apollo_seen WHERE apollo_id = ? LIMIT 1').get(apolloId, apolloId) !== undefined;
-  }
-
-  /** Remembers ids Apollo has been paid for, so a later search leaves them out. */
-  markApolloSeen(ids: Iterable<string>): void {
-    const insert = this.db.prepare('INSERT OR IGNORE INTO apollo_seen (apollo_id, created_at) VALUES (?, ?)');
-    const t = this.now();
-    for (const id of ids) insert.run(id, t);
-  }
-
   findPersonByHandle(h: { email?: string | null; linkedinUrl?: string | null; xHandle?: string | null }): Person | null {
     const clauses: string[] = [];
     const params: Param[] = [];
@@ -501,7 +486,7 @@ export class Repo {
   deleteAll(): void {
     this.transaction(() => {
       // `suppressions` is not here: someone who asked to stop is still not written to after the user's data is deleted.
-      for (const t of ['messages', 'outbox', 'incidents', 'inbound_failed', 'people', 'projects', 'channels', 'channel_secrets', 'settings', 'apollo_seen']) {
+      for (const t of ['messages', 'outbox', 'incidents', 'inbound_failed', 'people', 'projects', 'channels', 'channel_secrets', 'settings']) {
         this.db.exec(`DELETE FROM ${t}`);
       }
       this.db.exec("DELETE FROM sqlite_sequence WHERE name IN ('messages','outbox','incidents','inbound_failed','people','projects')");

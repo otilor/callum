@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createApp } from './api/app.js';
 import { FEATURE_ROUTES } from './api/features.js';
+import { findClaudeCode } from './ai/claudeCode.js';
 import { createCtx, type Ctx } from './context.js';
 import { openDb } from './db/db.js';
 import { seedScene } from './demo/seed.js';
@@ -97,7 +98,15 @@ export async function startServer(opts: StartOptions): Promise<RunningServer> {
   chmodSync(opts.dataDir, 0o700);
   const db = openDb(join(opts.dataDir, 'callum.db'));
   const conf = readEnv(env);
-  const ctx = createCtx({ db, demo: conf.demo, dataDir: opts.dataDir, env, ...(opts.clock ? { clock: opts.clock } : {}) });
+  // Claude Code on this computer, signed in with its owner's Claude plan, is Callum's Claude when no key is set.
+  // The demo never uses it, and CALLUM_CLAUDE_CODE=off turns it off (the end-to-end checks do).
+  const useClaudeCode = !conf.demo && env.CALLUM_CLAUDE_CODE?.trim().toLowerCase() !== 'off';
+  const ctx = createCtx({
+    db, demo: conf.demo, dataDir: opts.dataDir, env,
+    claudeCodePath: useClaudeCode ? findClaudeCode(env) : null,
+    ...(useClaudeCode ? { findClaudeCode: () => findClaudeCode(env) } : {}),
+    ...(opts.clock ? { clock: opts.clock } : {}),
+  });
   setDefaultTimezone(ctx, conf.timezone);
   // A demo Callum with nothing in it starts with a scene to look at.
   if (conf.demo && ctx.repo.listProjects().length === 0) {

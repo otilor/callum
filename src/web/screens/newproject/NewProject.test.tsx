@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
   commit: vi.fn(),
   undo: vi.fn(),
   describe: vi.fn(),
-  connectApollo: vi.fn(),
   sample: vi.fn(),
   discardProject: vi.fn(),
 }));
@@ -44,7 +43,7 @@ function appState(over: Partial<AppState> = {}): AppState {
     settings: { senderName: 'Ada', senderEmail: 'ada@example.com', timezone: 'Africa/Lagos', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null, morningBrief: true },
     projects: [project()],
     channels: [channel('email', 'connected'), channel('linkedin', 'connected'), channel('x', 'disconnected')],
-    people: [], outbox: [], incidents: [], demo: false, apolloConnected: false, claudeConnected: false, auth: { password: false },
+    people: [], outbox: [], incidents: [], demo: false, canFind: false, claudeEngine: null, claudeConnected: false, auth: { password: false },
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: null, line: '' },
     ...over,
   };
@@ -289,17 +288,17 @@ describe('NewProject, the voice and Start', () => {
     mocks.commit.mockResolvedValue({ added: [person(21, 'Yaw Mensah')], line: '', groups: [] });
     mocks.start.mockResolvedValue({ firstSendAt: '2026-11-03T08:00:00.000Z' });
     mocks.describe.mockResolvedValue({
-      batchId: 'apollo-batch', total: 2, narrow: null, line: 'Callum found 2',
+      batchId: 'web-batch', total: 2, narrow: null, line: 'Callum found 2',
       people: [
-        previewPerson('a1', 'Yaw Me***', { firstName: 'Yaw', source: 'apollo' }), previewPerson('a2', 'Efua Bo***', { firstName: 'Efua', source: 'apollo' }),
+        previewPerson('a1', 'Yaw Mensah', { firstName: 'Yaw', source: 'web' }), previewPerson('a2', 'Efua Boateng', { firstName: 'Efua', source: 'web' }),
       ],
     });
     await toPeople(user);
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'heads of people in Accra{Enter}');
     expect(mocks.describe).toHaveBeenCalledWith({ query: 'heads of people in Accra', filters: [], projectId: null });
     await screen.findByText('2 people join Payroll');
-    expect(screen.getByText('Adding uses about 2 Apollo credits.')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Efua, Kumasi Foods' }));
+    expect(screen.queryByText(/credit/i)).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Efua Boateng, Head of People at Kumasi Foods' }));
     await user.click(screen.getByRole('button', { name: 'Not a fit' }));
     await user.click(screen.getByRole('button', { name: 'These 1 look right' }));
 
@@ -313,24 +312,25 @@ describe('NewProject, the voice and Start', () => {
     await screen.findByRole('heading', { name: 'Payroll is ready' });
     expect(mocks.createProject).toHaveBeenCalledWith({ offer: OFFER, name: 'Payroll', tone: 'playful', audience: 'heads of people in Accra' });
     expect(mocks.updateProject).toHaveBeenCalledWith(2, { sample: 'Hi Yaw, who dreads the last Friday of the month?' });
-    expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'apollo-batch', projectId: 2, drop: ['a2'] });
+    expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'web-batch', projectId: 2, drop: ['a2'] });
   });
 
-  it('shows what Apollo spent and said on the ready screen', async () => {
+  it('shows no cost line on the ready screen', async () => {
     const user = userEvent.setup();
     show();
     mocks.createProject.mockResolvedValue(project({ id: 2, name: 'Payroll', startedAt: null }));
     mocks.commit.mockResolvedValue({
-      added: [person(21, 'Yaw Mensah')], groups: [], creditsUsed: 1, warning: "Apollo's lookup limit is reached. Try again in an hour.",
-      line: '1 person joins the river. First hellos from tomorrow at 9:00. That used 1 Apollo credit.',
+      added: [person(21, 'Yaw Mensah')], groups: [],
+      line: '1 person joins the river. First hellos from tomorrow at 9:00.',
     });
     mocks.start.mockResolvedValue({ firstSendAt: '2026-11-03T08:00:00.000Z' });
     await toPeople(user);
     await pasteThree(user);
     await user.click(screen.getByRole('button', { name: 'These 3 look right' }));
     await user.click(screen.getByRole('button', { name: 'Start Payroll' }));
-    expect(await screen.findByText('1 person joined. That used 1 Apollo credit.')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent("Apollo's lookup limit is reached. Try again in an hour.");
+    expect(await screen.findByRole('heading', { name: 'Payroll is ready' })).toBeInTheDocument();
+    expect(screen.queryByText(/credit/i)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('carries on from where it stopped when Start fails, without making the project twice', async () => {
@@ -495,18 +495,18 @@ describe('NewProject, the voice and Start', () => {
     expect(mocks.start).not.toHaveBeenCalled();
   });
 
-  it('says what adding will cost beside Start when the people were found by description', async () => {
+  it('shows people found by description with no cost line beside Start', async () => {
     const user = userEvent.setup();
     show();
     mocks.describe.mockResolvedValue({
-      batchId: 'apollo-batch', total: 2, narrow: null, line: 'Callum found 2',
-      people: [previewPerson('a1', 'Yaw Me***', { firstName: 'Yaw', source: 'apollo' }), previewPerson('a2', 'Efua Bo***', { firstName: 'Efua', source: 'apollo' })],
+      batchId: 'web-batch', total: 2, narrow: null, line: 'Callum found 2',
+      people: [previewPerson('a1', 'Yaw Mensah', { firstName: 'Yaw', source: 'web' }), previewPerson('a2', 'Efua Boateng', { firstName: 'Efua', source: 'web' })],
     });
     await toPeople(user);
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'heads of people{Enter}');
     await user.click(await screen.findByRole('button', { name: 'These 2 look right' }));
     expect(screen.getByRole('heading', { name: 'How should you sound?' })).toBeInTheDocument();
-    expect(screen.getByText('Adding uses about 2 Apollo credits.')).toBeInTheDocument();
+    expect(screen.queryByText(/credit/i)).toBeNull();
   });
 
   it('starts another project from the ready screen', async () => {
