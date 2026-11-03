@@ -41,12 +41,12 @@ function fromWords(firstSendAt: string, tz: string, now: Date): string {
 /** Starting a second (or third) project: what you offer, who to meet, how to sound, then Start. */
 export function NewProject({ state, refresh, onClose, onOpen, now = () => new Date() }: NewProjectProps) {
   const toast = useToast();
-  const finder = useWhoFinder(null, { initialWay: 'describe' });
   const [step, setStep] = useState<Step>(0);
   const [phase, setPhase] = useState<Phase>('flow');
   // Each question (and the two screens after them) announces itself: the cursor goes to its heading.
   const headingRef = useHeadingFocus(`${phase}-${step}`);
   const [offer, setOffer] = useState('');
+  const finder = useWhoFinder(null, { initialWay: 'describe', offer });
   const [nameOverride, setNameOverride] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -132,6 +132,8 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
       return;
     }
     setPhase('starting');
+    // Who is on screen now is who joins: the search stops asking for more before anything else is saved.
+    finder.settle();
     try {
       let made = project;
       const text = offer.trim();
@@ -139,8 +141,10 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
       if (!made) {
         made = await api.createProject({ offer: text, name, tone, ...(audience ? { audience } : {}) });
       } else {
-        const patch: { offer?: string; name?: string; tone?: Tone } = {};
+        const patch: { offer?: string; name?: string; tone?: Tone; audience?: string } = {};
         if (text !== (made.offer ?? '')) patch.offer = text;
+        // Chosen again after a lost list: the project describes who it is for now.
+        if (audience !== undefined && audience !== (made.audience ?? '')) patch.audience = audience;
         if (name !== made.name) patch.name = name;
         if (tone !== made.tone) patch.tone = tone;
         if (Object.keys(patch).length > 0) made = await api.updateProject(made.id, patch);
@@ -152,9 +156,11 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
       if (!added && found) {
         const drop = finder.dropped;
         try {
-          added = await peopleApi.commit({ batchId: found.batchId, projectId: made.id, drop });
+          added = await peopleApi.commit({ batchId: found.batchId, projectId: made.id, drop, ...(found.web ? { only: found.people.map((p) => p.key) } : {}) });
         } catch (e) {
           if (!(e instanceof ApiError && e.status === 410)) throw e;
+          // People Claude found cannot be found again as they were: a new search brings others, so the user chooses again.
+          if (found.web) return lostList();
           // Callum forgot the list while the person was setting up. Reading it again costs nothing, so try once more.
           const again = await finder.rerun();
           if (!again) return lostList();

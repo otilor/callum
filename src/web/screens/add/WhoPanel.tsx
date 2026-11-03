@@ -80,7 +80,7 @@ export function WhoPanel({ finder, order = ['csv', 'paste', 'link', 'describe'],
     : `${lines.length} ${lines.length === 1 ? 'person' : 'people'}${noWay > 0 ? `. ${noWay} ${noWay === 1 ? 'has' : 'have'} no email, LinkedIn or X yet, so Callum will skip ${noWay === 1 ? 'that row' : 'those rows'}.` : ', all reachable.'}`;
 
   const describing = way === 'describe' && phase !== 'preview';
-  const heading = found ? (title ? title(found, kept.length) : found.web ? `Callum found ${kept.length}` : `${kept.length} ${found.word}`) : '';
+  const heading = found ? (title ? title(found, kept.length) : found.web ? `Callum found ${kept.length}${finder.searching ? ' so far' : ''}` : `${kept.length} ${found.word}`) : '';
   const skippedTotal = found?.groups.reduce((n, g) => n + g.names.length, 0) ?? 0;
   const peek = finder.peek;
   const peekHint = hint ?? (found?.web
@@ -142,7 +142,7 @@ export function WhoPanel({ finder, order = ['csv', 'paste', 'link', 'describe'],
         ) : null}
         {phase === 'reading' && way === 'paste' ? <p className="ap-looking fade-in" role="status"><Pulses />Callum is reading your names</p> : null}
         {phase === 'reading' && way === 'link' ? <p className="ap-looking fade-in" role="status"><Pulses />Callum is reading the search on this computer</p> : null}
-        {phase === 'looking' ? <p className="ap-looking fade-in" role="status"><Pulses />Callum is looking on the web. This takes a few minutes.</p> : null}
+        {phase === 'looking' ? <p className="ap-looking fade-in" role="status"><Pulses />Callum is looking on the web. The first people show up in about a minute.</p> : null}
 
         {way === 'paste' && phase === 'idle' ? (
           <div className="ap-paste">
@@ -237,6 +237,7 @@ export function WhoPanel({ finder, order = ['csv', 'paste', 'link', 'describe'],
             <div className="ap-preview fade-in">
               <div className="ap-preview-main">
                 <p className="ap-preview-title">{heading}</p>
+                {finder.searching ? <p className="ap-looking ap-still fade-in" role="status"><Pulses />Still looking. Add these now, or wait for more.</p> : null}
                 <ul className="ap-faces" aria-label={heading}>
                   {kept.map((p, i) => {
                     const on = peek?.key === p.key;

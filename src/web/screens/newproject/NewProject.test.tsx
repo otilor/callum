@@ -295,7 +295,8 @@ describe('NewProject, the voice and Start', () => {
     });
     await toPeople(user);
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'heads of people in Accra{Enter}');
-    expect(mocks.describe).toHaveBeenCalledWith({ query: 'heads of people in Accra', filters: [], projectId: null });
+    // The offer typed on the first step goes with the search, so companies that sell the same thing are left out.
+    expect(mocks.describe).toHaveBeenCalledWith({ query: 'heads of people in Accra', filters: [], projectId: null, live: true, offer: OFFER });
     await screen.findByText('2 people join Payroll');
     expect(screen.queryByText(/credit/i)).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Efua Boateng, Head of People at Kumasi Foods' }));
@@ -312,7 +313,7 @@ describe('NewProject, the voice and Start', () => {
     await screen.findByRole('heading', { name: 'Payroll is ready' });
     expect(mocks.createProject).toHaveBeenCalledWith({ offer: OFFER, name: 'Payroll', tone: 'playful', audience: 'heads of people in Accra' });
     expect(mocks.updateProject).toHaveBeenCalledWith(2, { sample: 'Hi Yaw, who dreads the last Friday of the month?' });
-    expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'web-batch', projectId: 2, drop: ['a2'] });
+    expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'web-batch', projectId: 2, drop: ['a2'], only: ['a1', 'a2'] });
   });
 
   it('shows no cost line on the ready screen', async () => {
@@ -478,6 +479,37 @@ describe('NewProject, the voice and Start', () => {
     expect(mocks.commit).toHaveBeenNthCalledWith(1, { batchId: 'batch-1', projectId: 2, drop: [] });
     expect(mocks.commit).toHaveBeenNthCalledWith(2, { batchId: 'batch-2', projectId: 2, drop: [] });
     expect(mocks.createProject).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks to choose again, rather than search again, when Callum forgot people it found on the web', async () => {
+    const user = userEvent.setup();
+    show();
+    mocks.createProject.mockResolvedValue(project({ id: 2, name: 'Payroll', startedAt: null }));
+    mocks.commit.mockRejectedValue(new ApiError(410, 'That list is no longer here. Bring it again.'));
+    mocks.describe.mockResolvedValue({
+      batchId: 'web-batch', total: 2, narrow: null, line: 'Callum found 2', searching: false,
+      people: [previewPerson('0', 'Yaw Mensah', { firstName: 'Yaw', source: 'web' }), previewPerson('1', 'Efua Boateng', { firstName: 'Efua', source: 'web' })],
+    });
+    await toPeople(user);
+    await user.type(screen.getByLabelText('Describe who you want to meet'), 'heads of people in Accra{Enter}');
+    await screen.findByText('2 people join Payroll');
+    await user.click(screen.getByRole('button', { name: 'These 2 look right' }));
+    await user.click(screen.getByRole('button', { name: 'Start Payroll' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Callum lost that list while you were setting up. Choose who to meet again.');
+    expect(mocks.describe).toHaveBeenCalledTimes(1);
+    expect(mocks.commit).toHaveBeenCalledTimes(1);
+
+    // Described again: the project made the first time now says who it is for.
+    mocks.commit.mockReset();
+    mocks.commit.mockResolvedValue({ added: [person(21, 'Yaw Mensah')], line: '', groups: [] });
+    mocks.updateProject.mockImplementation(async (_id: number, patch: Partial<Project>) => project({ id: 2, name: 'Payroll', startedAt: null, ...patch }));
+    mocks.start.mockResolvedValue({ firstSendAt: '2026-11-03T08:00:00.000Z' });
+    await user.type(screen.getByLabelText('Describe who you want to meet'), 'founders in Lagos{Enter}');
+    await user.click(await screen.findByRole('button', { name: 'These 2 look right' }));
+    await user.click(screen.getByRole('button', { name: 'Start Payroll' }));
+    await screen.findByRole('heading', { name: 'Payroll is ready' });
+    expect(mocks.createProject).toHaveBeenCalledTimes(1);
+    expect(mocks.updateProject).toHaveBeenCalledWith(2, expect.objectContaining({ audience: 'founders in Lagos' }));
   });
 
   it('goes back to choosing who to meet, in plain words, when the list cannot be read again', async () => {

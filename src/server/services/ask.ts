@@ -8,6 +8,7 @@ import { resumeChannel } from '../runner/incidents.js';
 import { assertCanResume } from './channels.js';
 import { CHANNEL_NAME, cancelPendingRefunding, joinList, plural, requireProject, userTz, whenText } from './common.js';
 import { UserError } from './errors.js';
+import { sender } from './addPeople.js';
 
 const NEEDS_CLAUDE = 'Finding people needs Claude. Sign in to Claude Code on this computer, or add a Claude key in Your Callum.';
 const UNKNOWN = "Callum can find people, pause a channel, change the tone, or tell you who's warming up.";
@@ -171,7 +172,7 @@ async function findMore(ctx: Ctx, projectId: number, args: { likePersonId: numbe
   let found;
   try {
     const known = ctx.repo.listPeople().slice().reverse().map((p) => (p.company ? `${p.name} (${p.company})` : p.name));
-    found = await finder.find({ description, count, known });
+    found = await finder.find({ description, count, known, ...sender(ctx, projectId) });
   } catch (e) {
     if (e instanceof FindError) throw new UserError(e.message);
     throw e;

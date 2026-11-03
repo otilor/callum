@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import type { Tone } from '../../../shared/types.js';
 import type { Ctx } from '../../context.js';
-import { commit, describe, discardProject, preview, sampleHello, undoBatch, type AddSource } from '../../services/addPeople.js';
+import { commit, describe, describeStatus, discardProject, preview, sampleHello, undoBatch, type AddSource } from '../../services/addPeople.js';
 import { UserError } from '../../services/errors.js';
 
 type Body = Record<string, unknown>;
@@ -58,6 +58,8 @@ export function peopleRoutes(ctx: Ctx): Hono {
     return commit(ctx, text(b.batchId) ?? '', {
       ...(typeof projectId === 'number' ? { projectId } : {}),
       drop: texts(b.drop),
+      // Present but not a list adds nobody, rather than everyone.
+      ...(b.only === undefined ? {} : { only: texts(b.only) }),
     });
   }));
 
@@ -70,8 +72,11 @@ export function peopleRoutes(ctx: Ctx): Hono {
 
   routes.post('/people/describe', answer((b) => {
     const projectId = projectOf(b.projectId);
-    return describe(ctx, { query: text(b.query) ?? '', filters: texts(b.filters), ...(projectId === undefined ? {} : { projectId }) });
+    return describe(ctx, { query: text(b.query) ?? '', filters: texts(b.filters), live: b.live === true, offer: text(b.offer) ?? null, ...(projectId === undefined ? {} : { projectId }) });
   }));
+
+  // Who a live description search has found so far.
+  routes.post('/people/describe/status', answer((b) => describeStatus(ctx, text(b.batchId) ?? '')));
 
   routes.post('/people/sample', answer((b) => {
     const batchId = text(b.batchId);

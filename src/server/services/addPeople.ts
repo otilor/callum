@@ -11,6 +11,7 @@ import { FindError } from '../leads/finder.js';
 import { importPeople, sketchPerson } from '../leads/import.js';
 import { decodeLeadFile, ImportFileError, parseCsv, parsePaste, type Skipped } from '../leads/parse.js';
 import { UserError } from './errors.js';
+import { domainOf } from '../leads/site.js';
 
 /** A preview waits this long for the user to press Add, and an added batch can be undone for as long. Each use starts it again. */
 export const BATCH_MS = 10 * 60_000;
@@ -20,7 +21,8 @@ export const MAX_BATCHES = 20;
 export const MAX_ROWS = 5000;
 const TOO_MANY = `That's a lot of people. Add up to ${MAX_ROWS} at a time.`;
 /** How many people a described search brings back to look at. */
-export const DESCRIBE_COUNT = 10;
+/** How many people a description looks for. They show as they are found, so this is how far the search goes, not a wait. */
+export const DESCRIBE_COUNT = 25;
 /** A LinkedIn search link is read up to this many people. */
 export const LINKEDIN_COUNT = 100;
 
@@ -50,6 +52,8 @@ interface Batch {
   /** The project they were added to, and what was said, so pressing Add again gets the same answer. */
   addedTo: number | null;
   result: AddCommit | null;
+  /** A description search: what was typed, whether Claude is still looking, and why it stopped when it failed. */
+  search?: { query: string; looking: boolean; failure: string | null; mailboxRead: boolean };
 }
 
 const stores = new WeakMap<Ctx, Map<string, Batch>>();
@@ -203,6 +207,17 @@ function chipWords(chip: string): string {
   return city ? `in ${city} only` : t;
 }
 
+/** What the sender offers and their own company's site, so a search leaves out competitors and colleagues. */
+export function sender(ctx: Ctx, projectId: number | null, typed?: string | null): { offer: string | null; ownSite: string | null } {
+  const email = ctx.repo.getSettings().senderEmail;
+  // A project still being set up has no offer saved yet: the words typed for it stand in.
+  const saved = projectId === null ? null : ctx.repo.getProject(projectId)?.offer ?? null;
+  return {
+    offer: saved?.trim() ? saved : typed?.trim() ? typed.trim().slice(0, 1000) : null,
+    ownSite: email ? domainOf(email) : null,
+  };
+}
+
 /** People already in Callum, as "Name (Company)", newest first, so a search doesn't bring them back. */
 function knownNames(ctx: Ctx): string[] {
   return ctx.repo.listPeople()
@@ -215,36 +230,78 @@ function knownNames(ctx: Ctx): string[] {
  * Looks for real people from words. Claude searches the web (through Claude Code on this computer, or the API with a
  * key) and brings back people with an email, a LinkedIn profile or an X handle it saw on a page. Nothing is added
  * until the user presses Add; people already in Callum are left out.
+ *
+ * With `live`, it answers at once with an empty batch that fills as Claude finds people: `describeStatus` says who is
+ * there so far and whether it is still looking. Without it, the answer waits for the whole search.
  */
 export async function describe(
   ctx: Ctx,
-  q: { query: string; filters?: string[]; projectId?: number | null },
+  q: { query: string; filters?: string[]; projectId?: number | null; live?: boolean; offer?: string | null },
 ): Promise<Described> {
-  if (!ctx.finder) throw new UserError(NO_CLAUDE, 422, { code: 'no_claude' });
+  const finder = ctx.finder;
+  if (!finder) throw new UserError(NO_CLAUDE, 422, { code: 'no_claude' });
   const query = typeof q.query === 'string' ? q.query.trim() : '';
   if (query === '') throw new UserError('Describe who you want to meet first.');
   const filters = (q.filters ?? []).filter((f): f is string => typeof f === 'string' && f.trim() !== '');
   const projectId = resolveProject(ctx, q.projectId);
   const description = [query.slice(0, 500), ...filters.map(chipWords)].join(', ');
-  let people: PersonLead[];
-  try {
-    people = await ctx.finder.find({ description, count: DESCRIBE_COUNT, known: knownNames(ctx) });
-  } catch (e) {
-    if (e instanceof FindError) throw new UserError(e.message);
-    throw e;
+  const batchId = keep(ctx, { projectId, leads: [], unreadable: [], known: new Set() });
+  const batch = batchOf(ctx, batchId);
+  const search = { query, looking: true, failure: null as string | null, mailboxRead: false };
+  batch.search = search;
+  // The Sent folder is read while Claude looks, not before: a slow mailbox does not hold up the first people.
+  const mailbox = emailedBefore(ctx).then((known) => {
+    batch.known = known;
+    search.mailboxRead = true;
+  });
+  const shown = new Set<string>();
+  const take = (people: PersonLead[]) => {
+    // Once the user pressed Add, people who turn up later are not slipped into what they added.
+    if (batch.added || batch.committing) return;
+    for (const p of people) {
+      // The finder's last answer repeats who it already showed: the same person is one row.
+      const keys = [p.email, p.linkedinUrl, p.xHandle && `x:${p.xHandle}`, `${p.name}|${p.company ?? ''}`.toLowerCase()].filter(Boolean) as string[];
+      if (keys.some((k) => shown.has(k))) continue;
+      for (const k of keys) shown.add(k);
+      batch.leads.push(p);
+    }
+    // A long search keeps its batch: it is not forgotten while people are still turning up.
+    batch.expires = Math.max(batch.expires, ctx.clock.now().getTime() + BATCH_MS);
+  };
+  const found = finder.find({ description, count: DESCRIBE_COUNT, known: knownNames(ctx), ...sender(ctx, projectId, q.offer), onFound: take })
+    .then(take, (e: unknown) => {
+      search.failure = e instanceof FindError ? e.message : 'Callum could not finish looking. Try again.';
+      if (!(e instanceof FindError)) ctx.onError(e);
+    })
+  const done = Promise.all([found, mailbox]).finally(() => {
+    search.looking = false;
+  });
+  if (!q.live) {
+    await done;
+    if (search.failure && batch.leads.length === 0) throw new UserError(search.failure);
   }
-  if (people.length === 0) {
-    return { batchId: null, total: 0, people: [], narrow: null, line: `Callum found nobody for '${query}' it could reach. Try a wider role or a nearby city.` };
-  }
-  const known = await emailedBefore(ctx);
-  const dry = importPeople(ctx.repo, projectId, people, { dryRun: true, known, at: ctx.clock.now().toISOString() });
-  if (dry.added.length === 0) {
-    return { batchId: null, total: 0, people: [], narrow: null, line: `Everyone Callum found for '${query}' is already in Callum. Try a wider role or a nearby city.` };
-  }
-  const batchId = keep(ctx, { projectId, leads: people, unreadable: [], known });
+  return describeStatus(ctx, batchId);
+}
+
+/** Who a description search has found so far, and whether Claude is still looking. Keys stay the same as more arrive. */
+export function describeStatus(ctx: Ctx, batchId: string): Described {
+  const batch = batchOf(ctx, batchId);
+  const search = batch.search;
+  if (!search) throw new UserError('That list is no longer here. Bring it again.', 410);
+  const looking = search.looking && !batch.added;
+  if (!looking && search.failure && batch.leads.length === 0) throw new UserError(search.failure);
+  // Until the Sent folder is read, nobody is shown: a row must not appear and then vanish as someone already emailed.
+  const ready = search.mailboxRead ? batch.leads : [];
+  const dry = importPeople(ctx.repo, batch.projectId, ready, { dryRun: true, known: batch.known, at: ctx.clock.now().toISOString() });
   const places = dry.addedAt ?? [];
   const rows = dry.added.map((p, i) => previewOf(p, String(places[i] ?? i)));
-  return { batchId, total: rows.length, people: rows, narrow: null, line: `Callum found ${rows.length}` };
+  if (!looking && rows.length === 0) {
+    const line = batch.leads.length === 0
+      ? `Callum found nobody for '${search.query}' it could reach. Try a wider role or a nearby city.`
+      : `Everyone Callum found for '${search.query}' is already in Callum. Try a wider role or a nearby city.`;
+    return { batchId: null, total: 0, people: [], narrow: null, line, searching: false };
+  }
+  return { batchId, total: rows.length, people: rows, narrow: null, line: `Callum found ${rows.length}`, searching: looking };
 }
 
 // ---- adding -----------------------------------------------------------------------------------------------
@@ -276,7 +333,7 @@ function whenWords(project: Project, now: Date, tz: string): string {
  * has started, the new people get their first slot at once. Pressing Add a second time for the same project gives the
  * same answer and adds nobody.
  */
-export async function commit(ctx: Ctx, batchId: string, opts: { projectId?: number; drop?: string[] } = {}): Promise<AddCommit> {
+export async function commit(ctx: Ctx, batchId: string, opts: { projectId?: number; drop?: string[]; only?: string[] } = {}): Promise<AddCommit> {
   const batch = batchOf(ctx, batchId);
   const projectId = opts.projectId ?? batch.projectId;
   if (batch.added) {
@@ -291,7 +348,9 @@ export async function commit(ctx: Ctx, batchId: string, opts: { projectId?: numb
 
   batch.committing = true;
   try {
-    const leads = batch.leads.filter((_, i) => !drop.has(String(i)));
+    // A live search may have found more since the screen last asked: only the people the user saw are added.
+    const only = opts.only ? new Set(opts.only) : null;
+    const leads = batch.leads.filter((_, i) => !drop.has(String(i)) && (!only || only.has(String(i))));
     // Someone emailed since the batch was made (a search takes minutes) is not said hello to again.
     const known = new Set([...batch.known, ...(await emailedBefore(ctx))]);
     // The project may have been wrapped up while the mailbox was read.

@@ -237,6 +237,9 @@ describe('act find_more', () => {
     const res = await act(h.ctx, h.project.id, find(kemi.id, null));
     expect(fake.asked[0]?.description).toBe('People in the same kind of role as Kemi Eze: Head of Finance, at companies like Oko Pay. Not Kemi Eze.');
     expect(fake.asked[0]?.known).toEqual(['Kemi Eze (Oko Pay)']);
+    // What the project offers goes along, so the search leaves out companies that sell the same thing.
+    expect(fake.asked[0]?.offer).toBe(h.ctx.repo.getProject(h.project.id)?.offer);
+    expect(fake.asked[0]).toHaveProperty('ownSite');
     expect(res.text).toBe('Added 2 people. They start as strangers.');
     const added = h.ctx.repo.listPeople().filter((p) => p.id !== kemi.id);
     expect(added.map((p) => [p.name, p.status, p.stage, p.source, p.projectId])).toEqual([

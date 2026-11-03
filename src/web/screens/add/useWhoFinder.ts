@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Described, PreviewPerson, SkipGroup } from '../../../shared/types.js';
 import { ApiError, peopleApi } from '../../api.js';
 
@@ -45,6 +45,9 @@ function rowsIn(buf: ArrayBuffer): number {
   return Math.max(0, lines.length - 1);
 }
 
+/** How often a live search is asked who it has found so far. */
+export const POLL_MS = 1500;
+
 const isNoClaude = (detail: unknown): boolean => typeof detail === 'object' && detail !== null && (detail as { code?: unknown }).code === 'no_claude';
 
 export interface WhoFinder {
@@ -79,7 +82,11 @@ export interface WhoFinder {
 
   descText: string;
   setDescText(text: string): void;
+  /** Claude is still looking: the people shown are the first ones, and more may join them. */
+  searching: boolean;
   look(query?: string): void;
+  /** Stops asking a live search for more: the user is adding who is on screen now. */
+  settle(): void;
   narrow: { described: Described; selected: string[] } | null;
   toggleNarrow(chip: string): void;
   findClosest(): void;
@@ -92,7 +99,10 @@ export interface WhoFinder {
  * Everything the four ways of adding people have in common: what the user gave, what the server made of it, and who
  * was left out. `projectId` is the project they join, or null while the project is still being set up.
  */
-export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way } = {}): WhoFinder {
+export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way; offer?: string } = {}): WhoFinder {
+  // What a project still being set up offers, so the search leaves out companies that sell the same thing.
+  const offer = useRef(opts.offer);
+  offer.current = opts.offer;
   const [way, setWayState] = useState<Way>(opts.initialWay ?? 'csv');
   const [phase, setPhase] = useState<Phase>('idle');
   const [found, setFound] = useState<Found | null>(null);
@@ -108,14 +118,20 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
   const [descText, setDescText] = useState('');
   const [narrow, setNarrow] = useState<{ described: Described; selected: string[] } | null>(null);
   const [nobodyLine, setNobodyLine] = useState('');
+  const [searching, setSearching] = useState(false);
   const [noClaudeLine, setNoClaudeLine] = useState('');
 
   // An answer that arrives after the person moved on is ignored.
   const ticket = useRef(0);
+  // Closing the panel stops asking a live search for more.
+  useEffect(() => () => {
+    ticket.current++;
+  }, []);
   const last = useRef<((again: boolean) => Promise<Found | null>) | null>(null);
 
   const clear = useCallback(() => {
     ticket.current++;
+    setSearching(false);
     setFound(null);
     setNarrow(null);
     setDropped([]);
@@ -207,29 +223,38 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
     }, 'people from the search'));
   }, [bring, fresh, linkText, projectId]);
 
-  const lookFor = useCallback(async (query: string, filters: string[], keepRows = false): Promise<Found | null> => {
+  const lookFor = useCallback(async (query: string, filters: string[], _keepRows = false): Promise<Found | null> => {
     const mine = ++ticket.current;
     setError('');
     setPhase('looking');
+    setSearching(true);
     try {
-      const d = await peopleApi.describe({ query, filters, projectId });
-      if (mine !== ticket.current) return null;
-      if (!d.batchId || d.people.length === 0) {
-        setNobodyLine(d.line);
-        setPhase('nobody');
-        return null;
+      // The search runs on the server; the people it has found so far are shown, and asked for again until it is done.
+      const typed = projectId === null ? offer.current?.trim() : undefined;
+      let d = await peopleApi.describe({ query, filters, projectId, live: true, ...(typed ? { offer: typed } : {}) });
+      const batchId = d.batchId;
+      for (;;) {
+        if (mine !== ticket.current) return null;
+        const still = Boolean(d.searching);
+        if (d.batchId && d.people.length > 0) {
+          const next: Found = { batchId: d.batchId, people: d.people, groups: [], web: true, word: 'close fits' };
+          setFound(next);
+          setPhase('preview');
+          setSearching(still);
+          if (!still) return next;
+        } else if (!still) {
+          setNobodyLine(d.line);
+          setPhase('nobody');
+          setSearching(false);
+          return null;
+        }
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        if (mine !== ticket.current || !batchId) return null;
+        d = await peopleApi.describeStatus(batchId);
       }
-      if (d.narrow && filters.length === 0 && !keepRows) {
-        setNarrow({ described: d, selected: [] });
-        setPhase('narrow');
-        return null;
-      }
-      const next: Found = { batchId: d.batchId, people: d.people, groups: [], web: true, word: 'close fits' };
-      setFound(next);
-      setPhase('preview');
-      return next;
     } catch (e) {
       if (mine !== ticket.current) return null;
+      setSearching(false);
       if (e instanceof ApiError && isNoClaude(e.detail)) {
         setNoClaudeLine(e.message);
         setPhase('nosource');
@@ -251,6 +276,11 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
     setNarrow(null);
     void fresh((again) => lookFor(text, [], again));
   }, [descText, fresh, lookFor]);
+
+  const settle = useCallback(() => {
+    ticket.current++;
+    setSearching(false);
+  }, []);
 
   const toggleNarrow = useCallback((chip: string) => {
     setNarrow((n) => (n ? { ...n, selected: n.selected.includes(chip) ? n.selected.filter((c) => c !== chip) : [...n.selected, chip] } : n));
@@ -304,7 +334,7 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
     fileName, readTotal, chooseFile,
     pasteText, setPasteText, readPaste,
     linkText, setLinkText: (text) => { setLinkText(text); setLinkBad(false); }, linkBad, readLink,
-    descText, setDescText, look, narrow, toggleNarrow, findClosest, nobodyLine,
+    descText, setDescText, searching, look, settle, narrow, toggleNarrow, findClosest, nobodyLine,
     noClaudeLine,
   };
 }
