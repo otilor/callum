@@ -32,7 +32,11 @@ Notes:
 - `CALLUM_DEMO=1` works in the desktop app too. `CALLUM_USER_DATA=<folder>` keeps its data somewhere else, which the end-to-end test uses.
 - The tests: `npm test` covers the tray menu, notifications, open at login and the LinkedIn browser choice. `xvfb-run -a npm run e2e:desktop` starts the real app (drop `xvfb-run -a` on a computer with a screen).
 - The builds have no developer certificate, which is why macOS and Windows warn the first time (see the README). The macOS app is signed ad hoc, so Apple Silicon does not call it damaged; it still opens through right-click, Open.
-- Releases (tags `v*`, `.github/workflows/desktop.yml`) attach a dmg for Apple Silicon and one for Intel, a Windows installer, and an AppImage and a `.deb` for Linux.
+- Releases attach a dmg for Apple Silicon and one for Intel, a Windows installer, and an AppImage and a `.deb` for Linux. There are two ways to make one:
+    - From GitHub: open Actions, choose Release, press Run workflow and type a version such as `0.2.0`. It checks main, creates the `v0.2.0` tag and release, and builds every installer (`.github/workflows/release.yml`).
+    - From git: push a tag, `git tag v0.2.0 && git push origin v0.2.0` (`.github/workflows/desktop.yml`).
+
+    Both build through `.github/workflows/installers.yml`, which stamps the release's version into the app. Don't make the release with GitHub's "Draft a new release" page: the workflow would then find it already there and stop before the installers.
 
 ## What is where
 
