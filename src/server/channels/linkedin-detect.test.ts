@@ -92,7 +92,9 @@ describe('degreeOf', () => {
     expect(degreeOf('Arlan Rakhmetzhanov · 3rd\nFounder & CEO at Nozomio')).toBe(3);
     expect(degreeOf('Kemi Okoye\n· 2nd\nHead of Payments')).toBe(2);
     expect(degreeOf('Ada Obi · 1st')).toBe(1);
-    expect(degreeOf('Ada Obi 3rd+')).toBe(3);
+    expect(degreeOf('Ada Obi\n3rd+')).toBe(3);
+    expect(degreeOf('Ada Obi\n2nd generation founder')).toBeNull();
+    expect(degreeOf('Builder · 2nd generation founder')).toBeNull();
     expect(degreeOf('Founder at 1stRound Labs')).toBeNull();
     expect(degreeOf('Cleo Famous\nAuthor and speaker')).toBeNull();
   });

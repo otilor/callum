@@ -12,7 +12,6 @@ import { planProjectNow } from '../runner/runner.js';
 import { afterSaved, canWriteBy, cancelPendingRefunding, parseWhen, requirePerson, requireProject, userTz } from './common.js';
 import { asUserError, UserError, userFacing } from './errors.js';
 
-/** A LinkedIn invitation note can be this long at most. */
 type HandKind = 'reply' | 'booking' | 'close';
 
 function requireItem(ctx: Ctx, id: number): OutboxItem {

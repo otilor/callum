@@ -397,7 +397,6 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
         if (degree !== 2 && degree !== 3 && (await locate(top, SELECTORS.messageButton))) {
           throw new Stop(fail('already_connected', `You're already connected to ${msg.to.name} on LinkedIn.`));
         }
-        if (degree === 2 || degree === 3) throw new Stop(fail('invalid_recipient', `LinkedIn doesn't offer Connect for ${msg.to.name}.`));
         if (await locate(top, SELECTORS.followButton)) throw new Stop(fail('invalid_recipient', `LinkedIn doesn't offer Connect for ${msg.to.name}.`));
         throw unexpectedPage('find Connect');
       }
@@ -911,11 +910,12 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
             if (await blocker(page, status)) return [{ type: 'checkpoint' as const, at }];
             const events = await collectAccepted(page, at);
             if (!self?.name && !selfChecked) {
-              selfChecked = true;
               // Needed to tell the user's own messages from the other person's; the header is on the feed.
               await open(page, '/feed/');
               if (await blocker(page)) return [...events, { type: 'checkpoint' as const, at }];
               self = await readSelf(page);
+              // Looked for once the page could be read; a check or a failed load leaves it for the next poll.
+              selfChecked = true;
             }
             const messaging = await open(page, '/messaging/');
             if (await blocker(page, messaging)) return [...events, { type: 'checkpoint' as const, at }];

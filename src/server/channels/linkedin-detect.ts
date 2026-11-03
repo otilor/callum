@@ -244,7 +244,8 @@ export function parseListTimestamp(text: string, now: Date): Date | null {
  * null when the card does not say.
  */
 export function degreeOf(text: string): 1 | 2 | 3 | null {
-  const m = /(?:^|[\s·•])(1st|2nd|3rd\+?)(?=\s|$|[·•])/i.exec(text);
+  // The badge follows a bullet ("· 3rd") or stands on its own line, so a headline like "2nd generation founder" is not it.
+  const m = /(?:[·•]\s*|^[ \t]*)(1st|2nd|3rd\+?)[ \t]*(?=$|[·•])/im.exec(text);
   if (!m?.[1]) return null;
   const d = m[1].toLowerCase();
   return d === '1st' ? 1 : d === '2nd' ? 2 : 3;
