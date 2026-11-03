@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { updateProject, wrapProject } from '../services/projects.js';
-import { askForOffer, offerSaysEnough, offerWithSite } from './offer.js';
+import { askForOffer, offerSaysEnough, offerWithSite, takeBackBlankDrafts } from './offer.js';
 import { Runner } from './runner.js';
 import { ctxWith, harness, NOW } from './testing.test-helpers.js';
 
@@ -53,6 +53,30 @@ describe('asking for what the user offers', () => {
     expect(h.ctx.repo.listIncidents({ open: true })).toHaveLength(1);
     wrapProject(h.ctx, h.project.id);
     expect(h.ctx.repo.listIncidents({ open: true })).toEqual([]);
+  });
+});
+
+describe('taking back drafts with a blank', () => {
+  it('takes back an empty draft too, and only the planned project\'s when one project is planned', () => {
+    const h = harness();
+    const other = h.ctx.repo.insertProject({ name: 'Payroll', offer: 'Payroll for small teams' });
+    const mine = h.person();
+    const theirs = h.ctx.repo.insertPerson({ projectId: other.id, name: 'Ola Bello', source: 'csv', email: 'ola@payco.com', channel: 'email' });
+    const empty = h.ctx.outbox.queueAuto(mine.id, 'hello', '   ', 'Hello', h.clock.now(), true);
+    const blank = h.ctx.outbox.queueAuto(theirs.id, 'hello', 'Hi Ola, I help with [WHAT PAYROLL DOES].', 'Hello', h.clock.now(), true);
+    expect(takeBackBlankDrafts(h.ctx, h.project.id)).toBe(1);
+    expect(h.ctx.repo.getOutbox(empty.id)?.state).toBe('cancelled');
+    expect(h.ctx.repo.getOutbox(blank.id)?.state).toBe('awaiting_ok');
+    expect(takeBackBlankDrafts(h.ctx)).toBe(1);
+    expect(h.ctx.repo.getOutbox(blank.id)?.state).toBe('cancelled');
+  });
+
+  it('keeps the ask open when something other than the offer changes', () => {
+    const h = harness();
+    h.ctx.repo.updateProject(h.project.id, { offer: 'foo bar baz' });
+    askForOffer(h.ctx, h.project, 'What does Tethers do, and for whom?');
+    updateProject(h.ctx, h.project.id, { calendarUrl: 'https://cal.example.com/new' });
+    expect(h.ctx.repo.listIncidents({ open: true })).toHaveLength(1);
   });
 });
 

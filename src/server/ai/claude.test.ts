@@ -60,6 +60,14 @@ describe('ClaudeWriter request shape', () => {
     expect(req.messages[0]!.content).toContain('Kemi Eze');
     expect(req.messages[0]!.content).toContain('Oko Pay');
   });
+  it('takes any bracketed words in what Claude wrote for a blank, even lower case', async () => {
+    for (const body of ['Hi Kemi, I help with [your offer].', 'Hi Kemi, see [link] for more.']) {
+      const { writer } = writerWith({ parsed_output: { why: 'x', body, missing: null } });
+      const out = await writer.write('follow_up', testCtx());
+      expect(out.body, body).not.toContain('[');
+    }
+  });
+
   it('keeps low effort and no value brief for a reply, a booking or a close, and never sends the why', async () => {
     for (const kind of ['reply', 'booking', 'close'] as const) {
       const { writer, parse } = writerWith({ parsed_output: { why: 'n/a', body: 'Hi Kemi, Thursday at 9:00 works.', missing: null } });

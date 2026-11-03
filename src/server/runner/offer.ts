@@ -1,23 +1,11 @@
-import type { Incident, OutKind, Project } from '../../shared/types.js';
+import type { Incident, Project } from '../../shared/types.js';
 import type { Ctx } from '../context.js';
-import { findPlaceholders } from '../engine/guard.js';
+import { findPlaceholders, offerSaysEnough } from '../../shared/placeholders.js';
 import { publicFetch } from '../leads/finder.js';
 import { fetchSiteText } from '../leads/site.js';
 
-/** The messages that say what the sender offers, and so are not written until Callum knows it. */
-export const SAYS_OFFER = new Set<OutKind>(['hello', 'invite', 'thanks']);
-
-/** Enough words to say what the sender does: not empty, no blank to fill in, and more than a link or a name. */
-export function offerSaysEnough(offer: string | null): boolean {
-  const text = offer?.trim() ?? '';
-  if (!text || findPlaceholders(text).length > 0) return false;
-  const words = text
-    .replace(/\bhttps?:\/\/\S+/gi, ' ')
-    .replace(/\b[\w-]+(?:\.[\w-]+)+(?:\/\S*)?/g, ' ')
-    .split(/\s+/)
-    .filter((w) => /\p{L}/u.test(w));
-  return words.length >= 3;
-}
+export { SAYS_OFFER } from '../ai/writer.js';
+export { offerSaysEnough } from '../../shared/placeholders.js';
 
 interface Detail { projectId: number; question: string }
 
@@ -61,14 +49,17 @@ export function offerSettled(ctx: Ctx, projectId: number): void {
  * taken back: the person is written to again once Callum knows what to say. Returns how many. (A message that reached
  * its send time with a blank is stopped there and waits for the user's edit, so nothing with a blank ever goes.)
  */
-export function takeBackBlankDrafts(ctx: Ctx): number {
+export function takeBackBlankDrafts(ctx: Ctx, projectId?: number): number {
   let n = 0;
   for (const item of ctx.repo.listOutbox({ state: ['awaiting_ok'] })) {
     if (item.origin !== 'auto') continue;
-    if (findPlaceholders(item.body).length === 0 && (!item.subject || findPlaceholders(item.subject).length === 0)) continue;
+    const blank = item.body.trim() === '' || findPlaceholders(item.body).length > 0 || (item.subject !== null && findPlaceholders(item.subject).length > 0);
+    if (!blank) continue;
+    const person = ctx.repo.getPerson(item.personId);
+    // Planning one project leaves the others' drafts to their own pass.
+    if (projectId !== undefined && person?.projectId !== projectId) continue;
     ctx.repo.updateOutbox(item.id, { state: 'cancelled' });
     n++;
-    const person = ctx.repo.getPerson(item.personId);
     const project = person ? ctx.repo.getProject(person.projectId) : null;
     // With a good offer the hello is simply written again; without one, the user is asked for it.
     if (project && project.state !== 'wrapped' && !offerSaysEnough(project.offer)) askForOffer(ctx, project);

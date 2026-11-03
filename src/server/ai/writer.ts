@@ -37,3 +37,6 @@ export function createWriter(env: { ANTHROPIC_API_KEY?: string; CALLUM_MODEL?: s
   const model = env.CALLUM_MODEL?.trim() || DEFAULT_MODEL;
   return new ClaudeWriter(key, model, templates, undefined, systemClock);
 }
+
+/** The messages that say what the sender offers, and so are not written until Callum knows it. */
+export const SAYS_OFFER: ReadonlySet<OutKind> = new Set<OutKind>(['hello', 'invite', 'thanks']);

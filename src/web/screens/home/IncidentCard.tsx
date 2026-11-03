@@ -1,3 +1,4 @@
+import { findPlaceholders, offerSaysEnough } from '../../../shared/placeholders.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AppState, Channel, Incident, OutboxItem, Person } from '../../../shared/types.js';
 import { api, ApiError } from '../../api.js';
@@ -240,9 +241,14 @@ function OfferAsk({ incident, state, refresh, titleId }: { incident: Incident; s
     setBusy(true);
     setError(null);
     try {
-      await api.updateProject(project.id, { offer });
-      toast(`Thanks. Callum writes to people in ${project.name} now.`);
+      const saved = await api.updateProject(project.id, { offer });
       await refresh();
+      // A bare link Callum could not read, a name, or a blank: still not enough to write from.
+      if (!offerSaysEnough(saved.offer)) {
+        setError(`Callum still can't say what ${project.name} does from that. Say it in a few words, like the example.`);
+        return;
+      }
+      toast(`Thanks. Callum writes to people in ${project.name} now.`);
     } catch (e) {
       setError(messageOf(e));
     } finally {
@@ -266,10 +272,10 @@ function OfferAsk({ incident, state, refresh, titleId }: { incident: Incident; s
           value={text}
           maxLength={300}
           autoComplete="off"
-          placeholder="I help founders hire engineers, or just your website"
+          placeholder="I help founders hire engineers, or paste https://yoursite.com"
           onChange={(e) => setText(e.target.value)}
         />
-        {project.offer ? <p className="inc-ask-was">You said: {project.offer}</p> : null}
+        {project.offer && findPlaceholders(project.offer).length === 0 ? <p className="inc-ask-was">You said: {project.offer}</p> : null}
         {error ? <ErrorNote>{error}</ErrorNote> : null}
         <div className="inc-actions">
           <button type="submit" className="inc-primary" aria-busy={busy} disabled={!text.trim() || busy}>Save</button>
@@ -726,7 +732,9 @@ export function IncidentCards({ state, refresh, onReconnect, onOpenPerson, inclu
     };
   }, []);
 
-  const open = state.incidents.filter((i) => i.state === 'open' && !dismissed.has(i.id) && (include ? include(i) : true));
+  // An ask about a project that is gone has nothing to draw, so it does not leave an empty stack behind.
+  const drawable = (i: Incident) => i.kind !== 'needs_offer' || state.projects.some((p) => p.id === offerAskOf(i)?.projectId);
+  const open = state.incidents.filter((i) => i.state === 'open' && !dismissed.has(i.id) && drawable(i) && (include ? include(i) : true));
   const lingering = kept.filter((k) => !open.some((o) => o.id === k.id));
   const shown = [...open, ...lingering].sort((a, b) => a.id - b.id);
   if (shown.length === 0) return null;

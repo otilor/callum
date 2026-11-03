@@ -115,7 +115,7 @@ export function updateProject(ctx: Ctx, id: number, patch: ProjectPatch): Projec
   if (patch.calendarUrl !== undefined) next.calendarUrl = cleanCalendar(patch.calendarUrl);
   const project = ctx.repo.updateProject(id, next);
   ctx.bus.emit('projects');
-  if (offerSaysEnough(project.offer)) offerSettled(ctx, id);
+  if (patch.offer !== undefined && offerSaysEnough(project.offer)) offerSettled(ctx, id);
   // First hellos still waiting for an OK were written with the old words: they are written again with the new ones.
   if (project.offer !== before.offer || project.tone !== before.tone) rewriteWaitingHellos(ctx, id);
   return project;

@@ -450,12 +450,26 @@ describe('IncidentCards: Callum needs to know what the user offers', () => {
   });
 
   it('saves the line as the offer and refreshes', async () => {
-    mocks.updateProject.mockResolvedValue({});
+    mocks.updateProject.mockResolvedValue(project({ name: 'Tethers', offer: 'I help YC founders find their first enterprise customers' }));
     const { user } = setup(state());
     await user.type(screen.getByLabelText('What does Tethers do, and for whom, in one line?'), 'I help YC founders find their first enterprise customers');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(mocks.updateProject).toHaveBeenCalledWith(1, { offer: 'I help YC founders find their first enterprise customers' });
     expect(refresh).toHaveBeenCalled();
+  });
+
+  it('says it is still not enough when the answer was a link Callum could not read, and keeps the card', async () => {
+    mocks.updateProject.mockResolvedValue(project({ name: 'Tethers', offer: 'tethers.com' }));
+    const { user } = setup(state());
+    await user.type(screen.getByLabelText('What does Tethers do, and for whom, in one line?'), 'tethers.com{Enter}');
+    expect(await screen.findByText("Callum still can't say what Tethers does from that. Say it in a few words, like the example.")).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('never shows an old blank as what the user said', () => {
+    setup(appState({ projects: [project({ name: 'Tethers', offer: '[WHAT TETHERS DOES]' })], incidents: [ask()] }));
+    expect(screen.queryByText(/You said/)).toBeNull();
+    expect(document.body.textContent).not.toContain('[WHAT TETHERS DOES]');
   });
 
   it('says so in words when saving fails, and keeps what was typed', async () => {
@@ -470,5 +484,6 @@ describe('IncidentCards: Callum needs to know what the user offers', () => {
   it('draws nothing for a project that is gone', () => {
     setup(appState({ projects: [], incidents: [ask()] }));
     expect(screen.queryByRole('heading', { name: 'Callum needs one line from you' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Needs your attention' })).not.toBeInTheDocument();
   });
 });

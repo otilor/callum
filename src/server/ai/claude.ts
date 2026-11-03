@@ -6,15 +6,13 @@ import { type Clock, systemClock } from '../engine/clock.js';
 import { findPlaceholders } from '../engine/guard.js';
 import { OFFER_PLACEHOLDER, classifyOptions, isExplicitOptOut, messageDate, stripQuoted } from './templates.js';
 import { ApiModel, type AskOptions, type Model } from './model.js';
-import type { AskIntent, Classification, Writer, WriteContext, Written } from './writer.js';
+import { SAYS_OFFER, type AskIntent, type Classification, type Writer, type WriteContext, type Written } from './writer.js';
 
 const CHANNELS = ['email', 'linkedin', 'x'] as const;
 
 /** The prompt asks for under 90 words; this is the limit the code enforces, with room to spare. */
 const MAX_WORDS: Record<OutKind, number> = { hello: 120, invite: 60, thanks: 120, follow_up: 120, reply: 160, booking: 120, close: 120 };
 
-/** The messages that say what the sender offers, and so cannot be written without knowing it. */
-const OFFERS_KIND = new Set<OutKind>(['hello', 'invite', 'thanks']);
 
 const COPY_RULES = [
   'You write for Callum, a calm outreach assistant, on behalf of one person (the sender).',
@@ -148,7 +146,7 @@ export class ClaudeWriter implements Writer {
         ? `What the sender offers (their own words; write it in first person, "I help ..."): ${project.offer}`
         : 'The sender has not said what they offer.',
       OPENERS.has(kind) ? VALUE_RULES : '',
-      OFFERS_KIND.has(kind)
+      SAYS_OFFER.has(kind)
         ? 'If you cannot say in plain words what the sender does and for whom from what you were given (it is missing, only a link or a name, or too vague to say anything true), do not write the message: leave "body" empty and set "missing" to one short question for the sender that would let you write it, such as "What does Tethers do, and for whom, in one line?".'
         : '',
       project.audience ? `Who the sender usually writes to: ${project.audience}` : '',
@@ -170,11 +168,13 @@ export class ClaudeWriter implements Writer {
     const out = await this.ask(writeSchema, system, user, OPENERS.has(kind) ? { effort: 'medium' } : {});
     if (!out) return template;
     const missing = out.missing?.replace(/\s+/g, ' ').trim();
-    if (missing && OFFERS_KIND.has(kind)) return { subject: template.subject, body: '', missing: missing.slice(0, 200) };
+    if (missing && SAYS_OFFER.has(kind)) return { subject: template.subject, body: '', missing: missing.slice(0, 200) };
     let body = out.body.trim().replace(/!/g, '.').replace(/\u00A1/g, '');
     if (kind === 'invite') body = clampNote(body);
     // A blank left to fill in is never sent: the templates take over, and the runner asks for what they lack.
-    const blank = findPlaceholders(body).length > 0;
+    // Claude's own words never need square brackets, so any (even "[your offer]") is taken for a blank. The user's own
+    // messages keep ordinary brackets such as "[attached]".
+    const blank = findPlaceholders(body).length > 0 || /\[[^\]\n]*\p{L}[^\]\n]*\]/u.test(body);
     const words = body.split(/\s+/).filter(Boolean).length;
     if (!body || words > MAX_WORDS[kind] || body.length > 1500 || blank) return template;
     return { subject: template.subject, body };

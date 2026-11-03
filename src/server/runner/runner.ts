@@ -92,7 +92,7 @@ export async function planDue(ctx: Ctx, opts: PlanOptions = {}): Promise<number>
   const accounts = repo.listChannels();
   const reachable = accounts.filter((c) => c.status === 'connected').map((c) => c.channel);
   // Never anything with a blank in it: such a message waiting from before is taken back, and written again later.
-  takeBackBlankDrafts(ctx);
+  takeBackBlankDrafts(ctx, opts.projectId);
   const open = repo.listOutbox({ state: ['awaiting_ok', 'scheduled', 'sending', 'blocked', 'failed'] });
   const itemsOf = new Map<number, OutboxItem[]>();
   for (const i of open) itemsOf.set(i.personId, [...(itemsOf.get(i.personId) ?? []), i]);
