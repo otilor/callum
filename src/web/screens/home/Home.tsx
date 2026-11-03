@@ -12,7 +12,7 @@
  *   dayOne        { left, onOpen }  App passes it while this project still has hellos to OK and more than one project
  *                 runs: a banner in the water, so replies are never stuck behind Day one.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { AppState, Channel, Person, Project } from '../../../shared/types.js';
 import type { FaceReaction } from './incidentVariants.js';
 import { api } from '../../api.js';
@@ -20,6 +20,7 @@ import { River } from '../../river/River.js';
 import { isStill, stillChannels } from '../../river/state.js';
 import { AccountMenu, type AccountSlots } from '../../ui/AccountMenu.js';
 import { CrossFade } from '../../ui/CrossFade.js';
+import { Sheet } from '../../ui/Sheet.js';
 import { marbleBackground } from '../../ui/Marble.js';
 import { Wordmark } from '../../ui/Wordmark.js';
 import { formatSlot, joinNames, theirSlot } from '../../ui/format.js';
@@ -53,13 +54,34 @@ export interface HomeProps {
   onNewProject?: () => void;
   onOpenPerson?: (id: number) => void;
   dayOne?: { left: number; onOpen: () => void };
+  /**
+   * A page that rises over Home (a person, Your Callum). The river settles along the bottom and keeps moving under it,
+   * and a face in the river opens that person in the sheet.
+   */
+  sheet?: HomeSheet | null;
 }
+
+export interface HomeSheet {
+  node: ReactNode;
+  label: string;
+  onClose(): void;
+  /** The person the sheet is about, ringed in the river. */
+  personId?: number | null;
+}
+
+/** The river while a sheet is up: shorter, along the bottom of the window. */
+export const SHEET_RIVER_H = 150;
+/** The counts under the water, and the gap under them. */
+const ZONES_H = 64;
+const BOTTOM_GAP = 16;
+/** Where a sheet stops, measured up from the bottom of the window. */
+export const SHEET_BOTTOM = SHEET_RIVER_H + ZONES_H + BOTTOM_GAP + 8;
 
 const ALL_CHANNELS: Channel[] = ['email', 'linkedin', 'x'];
 const IDLE = "You're all caught up. Callum will tap you when someone replies.";
 
 /** `Email and LinkedIn are connected.` plus what is paused or needs a look, and where LinkedIn runs. */
-function channelLine(state: AppState): string {
+export function channelLine(state: AppState): string {
   const by = (status: string) => state.channels.filter((c) => c.status === status).map((c) => channelName(c.channel));
   const connected = by('connected');
   const paused = by('paused');
@@ -91,7 +113,7 @@ function PlayGlyph() {
   );
 }
 
-export function Home({ state, project, refresh, now, account = {}, incident, quiet, overlay, reactions, onAddPeople, onNewProject, onOpenPerson, dayOne }: HomeProps) {
+export function Home({ state, project, refresh, now, account = {}, incident, quiet, overlay, reactions, onAddPeople, onNewProject, onOpenPerson, dayOne, sheet = null }: HomeProps) {
   const clock = useMemo(() => now ?? (() => new Date()), [now]);
   const toasts = useUndoToasts();
   const riverHeight = useRiverHeight();
@@ -103,6 +125,25 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
   const [prefill, setPrefill] = useState<{ text: string; n: number } | null>(null);
   const opener = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
+  const [channelsOpen, setChannelsOpen] = useState(false);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const covered = sheet !== null;
+  // How far the river slides down to make room for a sheet, measured from where it sits on Home.
+  const [sink, setSink] = useState(0);
+  useLayoutEffect(() => {
+    if (!covered) return;
+    const measure = () => {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const natural = stage.getBoundingClientRect().top + RIVER_TOP;
+      const target = window.innerHeight - SHEET_RIVER_H - ZONES_H - BOTTOM_GAP;
+      setSink(Math.max(0, Math.round(target - natural)));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [covered]);
+  const shownView = covered ? 'river' : view;
 
   // Faces that wait on someone and snoozed people who come due change with the clock, not only with the server.
   useEffect(() => {
@@ -123,7 +164,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
   const stillAll = isStill(state, project);
   const allPaused = state.settings.pauseState !== 'running';
   const others = running.filter((p) => p.id !== project.id && p.state === 'running');
-  const selectedPerson: Person | null = selected === null ? null : inRiver.find((p) => p.id === selected) ?? null;
+  const selectedPerson: Person | null = covered || selected === null ? null : inRiver.find((p) => p.id === selected) ?? null;
 
   // Tell the person, once, about replies and accepted invitations that arrive while the screen is open.
   const seen = useRef<Map<number, { status: Person['status']; link: Person['linkedinState'] }> | null>(null);
@@ -259,7 +300,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
   );
 
   return (
-    <main className="home" data-screen="home">
+    <main className={`home${covered ? ' has-sheet' : ''}`} data-screen="home">
       {toasts.node}
       <div className={`home-main${deck ? ' is-dimmed' : ''}`} inert={deck !== null}>
         <header className="home-bar">
@@ -269,13 +310,24 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
             <ProjectSwitcher state={state} project={project} refresh={refresh} now={clock} {...(onNewProject ? { onNewProject } : {})} />
           </div>
           <div className="home-right">
-            <span className="home-pill">
-              <span className={`home-status ${allPaused || stillAll ? 'is-still' : 'is-running'}`} aria-hidden="true" />
-              {allPaused || stillAll ? 'Paused' : 'Running'}
-            </span>
+            <div className="home-pill-wrap">
+              <button
+                type="button"
+                className="home-pill"
+                aria-expanded={channelsOpen}
+                aria-controls="home-channels"
+                onClick={() => setChannelsOpen((o) => !o)}
+                onBlur={() => setChannelsOpen(false)}
+              >
+                <span className={`home-status ${allPaused || stillAll ? 'is-still' : 'is-running'}`} aria-hidden="true" />
+                {allPaused || stillAll ? 'Paused' : 'Running'}
+              </button>
+              <p id="home-channels" className="home-channels" hidden={!channelsOpen}>{channelLine(state)}</p>
+            </div>
             <div className="home-toggle" role="group" aria-label="How to show people">
-              <button type="button" aria-pressed={view === 'river'} className={view === 'river' ? 'is-on' : ''} onClick={() => setView('river')}>River</button>
-              <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? 'is-on' : ''} onClick={() => setView('list')}>List</button>
+              {/* With a sheet up neither is pressed, and River is the way back down to it. */}
+              <button type="button" aria-pressed={!covered && view === 'river'} className={!covered && view === 'river' ? 'is-on' : ''} onClick={() => { setView('river'); sheet?.onClose(); }}>River</button>
+              <button type="button" aria-pressed={!covered && view === 'list'} className={!covered && view === 'list' ? 'is-on' : ''} onClick={() => { setView('list'); sheet?.onClose(); }}>List</button>
             </div>
             {onAddPeople ? (
               <button type="button" className="home-add" onClick={onAddPeople}>Add people</button>
@@ -291,9 +343,14 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
             <AccountMenu slots={account} />
           </div>
         </header>
-        <p className="home-channels">{channelLine(state)}</p>
+        {sheet ? (
+          <Sheet label={sheet.label} onClose={sheet.onClose} bottom={SHEET_BOTTOM}>
+            {sheet.node}
+          </Sheet>
+        ) : null}
 
-        <div className={`home-stage ${view === 'list' ? 'is-list' : 'is-river'}`} style={{ '--river-h': `${riverHeight}px` } as CSSProperties}>
+        <div ref={stageRef} className={`home-stage ${shownView === 'list' ? 'is-list' : 'is-river'}`} style={{ '--river-h': `${riverHeight}px` } as CSSProperties}>
+          <div className="home-dock" inert={covered}>
           <Dock
             people={waiting}
             projects={state.projects}
@@ -305,23 +362,25 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
             above={
               <>
                 {incident}
-                <Brief state={state} now={at} />
+                {/* When people are waiting, they are the news; the rest of the brief waits for a quiet moment. */}
+                {waiting.length === 0 ? <Brief state={state} now={at} /> : null}
               </>
             }
             onOpenDeck={openDeck}
           />
+          </div>
 
-          {view === 'river' ? (
-            <div className="home-river" style={{ top: RIVER_TOP }}>
+          {shownView === 'river' ? (
+            <div className="home-river" style={{ top: RIVER_TOP, transform: covered ? `translateY(${sink}px)` : undefined }}>
               <CrossFade id={project.id}>
                 <River
                   people={inRiver}
                   running={!stillAll}
                   still={stillAll ? ALL_CHANNELS : stillChannels(state)}
-                  height={riverHeight}
+                  height={covered ? SHEET_RIVER_H : riverHeight}
                   sendingIds={[...sending]}
-                  selectedId={selectedPerson?.id ?? null}
-                  onFace={(p) => setSelected((s) => (s === p.id ? null : p.id))}
+                  selectedId={covered ? sheet.personId ?? null : selectedPerson?.id ?? null}
+                  onFace={(p) => (covered && onOpenPerson ? onOpenPerson(p.id) : setSelected((s) => (s === p.id ? null : p.id)))}
                   onGroup={() => setView('list')}
                   {...(reactions ? { reactions } : {})}
                   popover={
@@ -338,7 +397,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
                       />
                     ) : null
                   }
-                  overlay={water}
+                  overlay={covered ? null : water}
                 />
               </CrossFade>
             </div>
@@ -358,7 +417,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
           )}
         </div>
 
-        {view === 'river' && nextPerson && nextItem ? (
+        {shownView === 'river' && !covered && nextPerson && nextItem ? (
           <p className="home-next">
             <span className="home-next-face" aria-hidden="true" style={{ background: marbleBackground(300 + nextPerson.id) }} />
             <span className="home-next-text">
@@ -368,6 +427,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
           </p>
         ) : null}
 
+        <div className="home-ask" inert={covered}>
         <AskBar
           key={project?.id ?? 0}
           project={project}
@@ -379,6 +439,7 @@ export function Home({ state, project, refresh, now, account = {}, incident, qui
           caret={empty && !stillAll}
           {...(onAddPeople ? { onBringList: onAddPeople } : {})}
         />
+        </div>
       </div>
 
       {deck ? (

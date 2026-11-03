@@ -33,6 +33,8 @@ export function Actions({ detail, busy, onNudge, onHold, onResume, onWake, onMov
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // Moving someone is the rare choice, so the channels and projects wait behind one button.
+  const [moving, setMoving] = useState(false);
   const neverRef = useRef<HTMLButtonElement>(null);
   const backToNever = useRef(false);
 
@@ -75,6 +77,29 @@ export function Actions({ detail, busy, onNudge, onHold, onResume, onWake, onMov
     }
   }
   const firstOn = actions.findIndex((a) => !a.off);
+  const isMove = (a: Action) => a.key.startsWith('move-');
+  const main = actions.filter((a) => !isMove(a));
+  const moves = actions.filter(isMove);
+  const canMove = moves.length > 0 || detail.projectMoves.length > 0;
+  const primaryKey = actions[firstOn]?.key;
+  const button = (a: Action) => (
+    <button
+      key={a.key}
+      type="button"
+      className="pv-act"
+      data-primary={a.key === primaryKey ? 'true' : undefined}
+      aria-disabled={a.off || busy}
+      aria-describedby={a.reason ? `pv-why-${a.key}` : undefined}
+      onClick={() => !a.off && !busy && a.run()}
+    >
+      {a.label}
+    </button>
+  );
+  const reason = (a: Action) => (
+    <p className="pv-reason fade-in" id={`pv-why-${a.key}`} key={a.key}>
+      <span className="pv-reason-dot" aria-hidden="true" />{a.reason}
+    </p>
+  );
 
   const save = (e: FormEvent) => {
     e.preventDefault();
@@ -92,62 +117,66 @@ export function Actions({ detail, busy, onNudge, onHold, onResume, onWake, onMov
   return (
     <div className="pv-actions">
       <div className="pv-btns">
-        {actions.map((a, i) => (
+        {main.map(button)}
+        {canMove ? (
           <button
-            key={a.key}
             type="button"
-            className="pv-act"
-            data-primary={i === firstOn ? 'true' : undefined}
-            aria-disabled={a.off || busy}
-            aria-describedby={a.reason ? `pv-why-${a.key}` : undefined}
-            onClick={() => !a.off && !busy && a.run()}
+            className="pv-act pv-move-toggle"
+            aria-expanded={moving}
+            aria-controls="pv-moving"
+            data-primary={main.length === 0 && !moving ? 'true' : undefined}
+            onClick={() => setMoving((m) => !m)}
           >
-            {a.label}
+            Move {first}
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
-        ))}
+        ) : null}
       </div>
-      {actions.filter((a) => a.reason).map((a) => (
-        <p className="pv-reason fade-in" id={`pv-why-${a.key}`} key={a.key}>
-          <span className="pv-reason-dot" aria-hidden="true" />{a.reason}
-        </p>
-      ))}
+      {main.filter((a) => a.reason).map(reason)}
 
-      {adding ? (
-        <form className="pv-handle fade-in" onSubmit={save}>
-          <label className="sr-only" htmlFor="pv-handle">{FIELD[adding].label(first)}</label>
-          <input
-            id="pv-handle"
-            type={FIELD[adding].type}
-            value={value}
-            placeholder={FIELD[adding].placeholder}
-            autoComplete="off"
-            autoFocus
-            onChange={(e) => {
-              setValue(e.target.value);
-              setError(null);
-            }}
-          />
-          <button type="submit" aria-disabled={value.trim() === '' || busy}>Save</button>
-        </form>
-      ) : null}
-      {error ? <p className="pv-error fade-in" role="alert">{error}</p> : null}
+      {moving ? (
+        <div id="pv-moving" className="pv-moving fade-in">
+          {moves.length > 0 ? <div className="pv-btns">{moves.map(button)}</div> : null}
+          {moves.filter((a) => a.reason).map(reason)}
 
-      {detail.projectMoves.length > 0 ? (
-        <div className="pv-moves" role="group" aria-label="Move to another project">
-          {detail.projectMoves.map((m) => (
-            <div className="pv-move" key={m.projectId}>
-              <button
-                type="button"
-                className="pv-act"
-                aria-disabled={m.reason !== null || busy}
-                aria-describedby={m.reason ? `pv-proj-${m.projectId}` : undefined}
-                onClick={() => m.reason === null && !busy && onMoveProject(m.projectId)}
-              >
-                Move to {m.name}
-              </button>
-              {m.reason ? <span className="pv-reason-beside" id={`pv-proj-${m.projectId}`}>{m.reason}</span> : null}
+          {adding ? (
+            <form className="pv-handle fade-in" onSubmit={save}>
+              <label className="sr-only" htmlFor="pv-handle">{FIELD[adding].label(first)}</label>
+              <input
+                id="pv-handle"
+                type={FIELD[adding].type}
+                value={value}
+                placeholder={FIELD[adding].placeholder}
+                autoComplete="off"
+                autoFocus
+                onChange={(e) => {
+                  setValue(e.target.value);
+                  setError(null);
+                }}
+              />
+              <button type="submit" aria-disabled={value.trim() === '' || busy}>Save</button>
+            </form>
+          ) : null}
+          {error ? <p className="pv-error fade-in" role="alert">{error}</p> : null}
+
+          {detail.projectMoves.length > 0 ? (
+            <div className="pv-moves" role="group" aria-label="Move to another project">
+              {detail.projectMoves.map((m) => (
+                <div className="pv-move" key={m.projectId}>
+                  <button
+                    type="button"
+                    className="pv-act"
+                    aria-disabled={m.reason !== null || busy}
+                    aria-describedby={m.reason ? `pv-proj-${m.projectId}` : undefined}
+                    onClick={() => m.reason === null && !busy && onMoveProject(m.projectId)}
+                  >
+                    Move to {m.name}
+                  </button>
+                  {m.reason ? <span className="pv-reason-beside" id={`pv-proj-${m.projectId}`}>{m.reason}</span> : null}
+                </div>
+              ))}
             </div>
-          ))}
+          ) : null}
         </div>
       ) : null}
 

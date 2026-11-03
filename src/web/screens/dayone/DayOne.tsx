@@ -96,7 +96,11 @@ export function DayOne({ state, project, refresh, now, onLeave, account = {}, sw
     if (earliest) remembered.current = earliest;
   }, [earliest]);
   const slotIso = earliest ?? remembered.current ?? state.brief.nextSendAt;
-  const slot = slotIso ? formatSlot(slotIso, tz, clock()) : 'tomorrow at 9:00';
+  // The cards say 9:00 their time. When the first hello lands at another hour here, the pill says whose time it means,
+  // so "8:00" next to "9:00 their time" reads as the same moment and not as two different starts.
+  const firstItem = earliest ? awaiting.find((o) => o.sendAfter === earliest) : undefined;
+  const firstZone = firstItem ? state.people.find((p) => p.id === firstItem.personId)?.timezone ?? null : null;
+  const slot = slotIso ? `${formatSlot(slotIso, tz, clock())}${firstZone && firstZone !== tz ? ' your time' : ''}` : 'tomorrow at 9:00';
 
   const marks = useMemo(() => {
     const out: Record<number, FaceMark> = {};

@@ -567,3 +567,82 @@
     display: none;
   }
 }
+
+/* ---- the status pill: tap it to hear what is connected ---- */
+.home-pill-wrap {
+  position: relative;
+}
+button.home-pill {
+  border: none;
+  color: var(--ink);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+button.home-pill:hover {
+  background: var(--line);
+}
+.home-pill-wrap .home-channels {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: max-content;
+  max-width: 320px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--white);
+  box-shadow: var(--lift), var(--hairline);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--slate);
+  animation: home-channels-in 0.2s var(--ease) both;
+}
+@keyframes home-channels-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* ---- a sheet over Home: the dock and the Ask bar step aside, the river settles along the bottom ---- */
+.home.has-sheet {
+  height: 100vh;
+  overflow: hidden;
+}
+.home-dock {
+  display: contents;
+}
+.home-dock > *,
+.home-ask,
+.home-next {
+  transition: opacity 0.3s ease, transform 0.42s var(--ease);
+}
+.has-sheet .home-dock > *,
+.has-sheet .home-ask {
+  opacity: 0;
+  pointer-events: none;
+}
+.has-sheet .home-dock > .stage-preview {
+  transform: translateY(-12px);
+}
+.has-sheet .home-ask {
+  transform: translateY(16px);
+}
+.home-river {
+  transition: transform 0.6s var(--ease);
+}
+.home-river .river-field {
+  transition: height 0.6s var(--ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-dock > *,
+  .home-ask,
+  .home-river,
+  .home-river .river-field,
+  .home-pill-wrap .home-channels {
+    transition: none;
+    animation: none;
+  }
+}

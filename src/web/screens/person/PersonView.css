@@ -687,3 +687,34 @@
     transition: none !important;
   }
 }
+
+/* ---- in a sheet over Home: no page of its own, so no padding, height or bar ---- */
+.pv.is-embedded {
+  min-height: 0;
+  padding: 0 56px 0 0;
+  background: transparent;
+}
+
+/* ---- Move: channels and projects wait behind one button ---- */
+.pv-move-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.pv-move-toggle svg {
+  transition: transform 0.2s var(--ease);
+}
+.pv-move-toggle[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+.pv-moving {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 20px;
+  background: var(--mist);
+}
+.pv-moving .pv-act:not([data-primary]) {
+  background: var(--white);
+}

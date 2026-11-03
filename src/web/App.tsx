@@ -3,7 +3,7 @@ import type { AppState, Channel, Project } from '../shared/types.js';
 import { api } from './api.js';
 import { DayOne } from './screens/dayone/DayOne.js';
 import { FirstRun } from './screens/firstrun/FirstRun.js';
-import { Home } from './screens/home/Home.js';
+import { Home, type HomeSheet } from './screens/home/Home.js';
 import { dockPeople } from './screens/home/people.js';
 import { IncidentCards } from './screens/home/IncidentCard.js';
 import { faceReactions, incidentVariant } from './screens/home/incidentVariants.js';
@@ -123,6 +123,35 @@ export function App() {
   const addPeople = () => (currentProject ? setView({ kind: 'add', projectId: currentProject.id }) : undefined);
   const newProject = () => setView({ kind: 'new-project' });
 
+  // On a desktop Home, a person and Your Callum rise over the river as a sheet instead of replacing it.
+  let sheet: HomeSheet | null = null;
+  if (state && currentProject && !phone && screen === 'home' && dayOneFor !== currentProject.id) {
+    if (view.kind === 'person' && state.people.some((p) => p.id === view.id)) {
+      const who = state.people.find((p) => p.id === view.id);
+      sheet = {
+        label: who?.name ?? 'A person',
+        personId: view.id,
+        onClose: back,
+        node: <PersonView key="person" state={state} personId={view.id} onOpen={openPerson} onBack={back} embedded />,
+      };
+    } else if (view.kind === 'settings') {
+      sheet = {
+        label: 'Your Callum',
+        onClose: back,
+        node: (
+          <YourCallum
+            state={state}
+            refresh={refresh}
+            onBack={back}
+            onLeave={() => setView({ kind: 'leave' })}
+            onAddPeople={(projectId) => setView({ kind: 'add', projectId })}
+            embedded
+          />
+        ),
+      };
+    }
+  }
+
   let body: ReactNode;
   if (locked) {
     body = <SignIn mode="locked" refresh={() => refresh({ strict: true })} />;
@@ -139,7 +168,7 @@ export function App() {
     body = <FirstRun state={state} refresh={refresh} />;
   } else if (screen === 'wrapped') {
     body = <Wrapped state={state} refresh={refresh} />;
-  } else if (onMain && view.kind === 'settings') {
+  } else if (onMain && view.kind === 'settings' && !sheet) {
     body = (
       <YourCallum
         state={state}
@@ -151,7 +180,7 @@ export function App() {
     );
   } else if (onMain && view.kind === 'leave') {
     body = <LeaveSheet state={state} refresh={refresh} onClose={back} />;
-  } else if (onMain && view.kind === 'person') {
+  } else if (onMain && view.kind === 'person' && !sheet) {
     body = <PersonView state={state} personId={view.id} onOpen={openPerson} onBack={back} />;
   } else if (onMain && view.kind === 'add' && state.projects.some((p) => p.id === view.projectId)) {
     const target = state.projects.find((p) => p.id === view.projectId) as Project;
@@ -200,6 +229,7 @@ export function App() {
         onAddPeople={addPeople}
         onNewProject={newProject}
         onOpenPerson={openPerson}
+        sheet={sheet}
         {...(reactions ? { reactions } : {})}
         {...(banner ? { dayOne: { left: Math.min(currentProject.approvalsLeft, awaitingHellos(state, currentProject).length), onOpen: () => setDayOneFor(currentProject.id) } } : {})}
         incident={
