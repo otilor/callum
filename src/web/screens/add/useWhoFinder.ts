@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Described, PreviewPerson, SkipGroup } from '../../../shared/types.js';
 import { ApiError, peopleApi } from '../../api.js';
 
@@ -123,6 +123,10 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way;
 
   // An answer that arrives after the person moved on is ignored.
   const ticket = useRef(0);
+  // Closing the panel stops asking a live search for more.
+  useEffect(() => () => {
+    ticket.current++;
+  }, []);
   const last = useRef<((again: boolean) => Promise<Found | null>) | null>(null);
 
   const clear = useCallback(() => {

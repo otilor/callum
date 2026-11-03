@@ -187,7 +187,7 @@ export interface PreviewBody { csv?: string; csvBase64?: string; paste?: string;
 
 export const peopleApi = {
   preview: (body: PreviewBody) => post<AddPreview>('/people/preview', body),
-  commit: (body: { batchId: string; projectId?: number; drop?: string[] }) => post<AddCommit>('/people/commit', body),
+  commit: (body: { batchId: string; projectId?: number; drop?: string[]; only?: string[] }) => post<AddCommit>('/people/commit', body),
   undo: (batchId: string) => post<{ removed: number }>('/people/undo', { batchId }),
   describe: (body: { query: string; filters?: string[]; projectId?: number | null; live?: boolean; offer?: string }) => post<Described>('/people/describe', body),
   /** Who a live description search has found so far. */

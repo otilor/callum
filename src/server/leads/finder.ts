@@ -279,16 +279,18 @@ export class ModelFinder implements PeopleFinder {
     let settled = 0;
     const run = async (i: number): Promise<void> => {
       const found = people.map((p) => (p.company ? `${p.name} (${p.company})` : p.name));
+      let fresh: PersonLead[] = [];
       try {
         // One to spare, since a found person can still be dropped for a bad link or a repeat.
         const want = Math.min(PER_ROUND, count - people.length + 1);
-        const fresh = keep(await this.round(q, description, want, [...known, ...found], ANGLES[Math.min(i, ANGLES.length - 1)] as string));
-        if (fresh.length > 0) q.onFound?.(fresh);
+        fresh = keep(await this.round(q, description, want, [...known, ...found], ANGLES[Math.min(i, ANGLES.length - 1)] as string));
       } catch (err) {
         errors.push(err);
       } finally {
         settled++;
       }
+      // Outside the try: a problem showing people is not a failed search.
+      if (fresh.length > 0) q.onFound?.(fresh);
     };
     // The first two start at once from different ends, and each shows its people as soon as it is back.
     await Promise.all([run(0), run(1)]);

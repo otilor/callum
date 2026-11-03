@@ -253,7 +253,7 @@ describe('AddPeople, describing who', () => {
     expect(mocks.commit).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Add 2 people' }));
-    expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'web-batch', projectId: 1, drop: ['web-1'] });
+    expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'web-batch', projectId: 1, drop: ['web-1'], only: ['web-0', 'web-1', 'web-2'] });
     expect(await screen.findByText('First hellos go out from tomorrow at 9:00, within your daily limits.')).toBeInTheDocument();
   });
 
@@ -272,11 +272,16 @@ describe('AddPeople, describing who', () => {
       expect(screen.getByText('Still looking. Add these now, or wait for more.')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Kemi Eze, Head of Finance at Oko Pay' })).toBeInTheDocument();
 
+      // Someone set aside stays set aside when more people arrive.
+      await user.click(screen.getByRole('button', { name: 'Kemi Eze, Head of Finance at Oko Pay' }));
+      await user.click(screen.getByRole('button', { name: 'Not a fit' }));
       await vi.advanceTimersByTimeAsync(POLL_MS);
-      expect(await screen.findByText('Callum found 2 so far')).toBeInTheDocument();
+      expect(await screen.findByText('Callum found 1 so far')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Kemi Eze, Head of Finance at Oko Pay' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Femi Ade, Head of Finance at Ledgerly' })).toBeInTheDocument();
       expect(mocks.describeStatus).toHaveBeenLastCalledWith('web-batch');
       await vi.advanceTimersByTimeAsync(POLL_MS);
-      expect(await screen.findByText('Callum found 3')).toBeInTheDocument();
+      expect(await screen.findByText('Callum found 2')).toBeInTheDocument();
       expect(screen.queryByText('Still looking. Add these now, or wait for more.')).toBeNull();
       await vi.advanceTimersByTimeAsync(POLL_MS * 3);
       expect(mocks.describeStatus).toHaveBeenCalledTimes(2);
@@ -296,7 +301,7 @@ describe('AddPeople, describing who', () => {
       await user.click(screen.getByRole('tab', { name: 'Describe who' }));
       await user.type(screen.getByLabelText('Describe who you want to meet'), 'cfo{Enter}');
       await user.click(await screen.findByRole('button', { name: 'Add 2 people' }));
-      expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'web-batch', projectId: 1, drop: [] });
+      expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'web-batch', projectId: 1, drop: [], only: ['web-0', 'web-1'] });
       expect(await screen.findByText('First hellos go out from tomorrow at 9:00, within your daily limits.')).toBeInTheDocument();
       const asked = mocks.describeStatus.mock.calls.length;
       await vi.advanceTimersByTimeAsync(POLL_MS * 3);

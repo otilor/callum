@@ -132,6 +132,8 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
       return;
     }
     setPhase('starting');
+    // Who is on screen now is who joins: the search stops asking for more before anything else is saved.
+    finder.settle();
     try {
       let made = project;
       const text = offer.trim();
@@ -150,10 +152,9 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
       if (words !== undefined && words !== made.sample) made = await api.updateProject(made.id, { sample: words });
       let added = imported;
       if (!added && found) {
-        finder.settle();
         const drop = finder.dropped;
         try {
-          added = await peopleApi.commit({ batchId: found.batchId, projectId: made.id, drop });
+          added = await peopleApi.commit({ batchId: found.batchId, projectId: made.id, drop, ...(found.web ? { only: found.people.map((p) => p.key) } : {}) });
         } catch (e) {
           if (!(e instanceof ApiError && e.status === 410)) throw e;
           // Callum forgot the list while the person was setting up. Reading it again costs nothing, so try once more.

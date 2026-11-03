@@ -313,7 +313,7 @@ describe('NewProject, the voice and Start', () => {
     await screen.findByRole('heading', { name: 'Payroll is ready' });
     expect(mocks.createProject).toHaveBeenCalledWith({ offer: OFFER, name: 'Payroll', tone: 'playful', audience: 'heads of people in Accra' });
     expect(mocks.updateProject).toHaveBeenCalledWith(2, { sample: 'Hi Yaw, who dreads the last Friday of the month?' });
-    expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'web-batch', projectId: 2, drop: ['a2'] });
+    expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'web-batch', projectId: 2, drop: ['a2'], only: ['a1', 'a2'] });
   });
 
   it('shows no cost line on the ready screen', async () => {

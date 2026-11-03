@@ -53,7 +53,7 @@ interface Batch {
   addedTo: number | null;
   result: AddCommit | null;
   /** A description search: what was typed, whether Claude is still looking, and why it stopped when it failed. */
-  search?: { query: string; looking: boolean; failure: string | null };
+  search?: { query: string; looking: boolean; failure: string | null; mailboxRead: boolean };
 }
 
 const stores = new WeakMap<Ctx, Map<string, Batch>>();
@@ -245,10 +245,15 @@ export async function describe(
   const filters = (q.filters ?? []).filter((f): f is string => typeof f === 'string' && f.trim() !== '');
   const projectId = resolveProject(ctx, q.projectId);
   const description = [query.slice(0, 500), ...filters.map(chipWords)].join(', ');
-  const batchId = keep(ctx, { projectId, leads: [], unreadable: [], known: await emailedBefore(ctx) });
+  const batchId = keep(ctx, { projectId, leads: [], unreadable: [], known: new Set() });
   const batch = batchOf(ctx, batchId);
-  const search = { query, looking: true, failure: null as string | null };
+  const search = { query, looking: true, failure: null as string | null, mailboxRead: false };
   batch.search = search;
+  // The Sent folder is read while Claude looks, not before: a slow mailbox does not hold up the first people.
+  const mailbox = emailedBefore(ctx).then((known) => {
+    batch.known = known;
+    search.mailboxRead = true;
+  });
   const shown = new Set<string>();
   const take = (people: PersonLead[]) => {
     // Once the user pressed Add, people who turn up later are not slipped into what they added.
@@ -260,15 +265,17 @@ export async function describe(
       for (const k of keys) shown.add(k);
       batch.leads.push(p);
     }
+    // A long search keeps its batch: it is not forgotten while people are still turning up.
+    batch.expires = Math.max(batch.expires, ctx.clock.now().getTime() + BATCH_MS);
   };
-  const done = finder.find({ description, count: DESCRIBE_COUNT, known: knownNames(ctx), ...sender(ctx, projectId, q.offer), onFound: take })
+  const found = finder.find({ description, count: DESCRIBE_COUNT, known: knownNames(ctx), ...sender(ctx, projectId, q.offer), onFound: take })
     .then(take, (e: unknown) => {
       search.failure = e instanceof FindError ? e.message : 'Callum could not finish looking. Try again.';
       if (!(e instanceof FindError)) ctx.onError(e);
     })
-    .finally(() => {
-      search.looking = false;
-    });
+  const done = Promise.all([found, mailbox]).finally(() => {
+    search.looking = false;
+  });
   if (!q.live) {
     await done;
     if (search.failure && batch.leads.length === 0) throw new UserError(search.failure);
@@ -283,7 +290,9 @@ export function describeStatus(ctx: Ctx, batchId: string): Described {
   if (!search) throw new UserError('That list is no longer here. Bring it again.', 410);
   const looking = search.looking && !batch.added;
   if (!looking && search.failure && batch.leads.length === 0) throw new UserError(search.failure);
-  const dry = importPeople(ctx.repo, batch.projectId, batch.leads, { dryRun: true, known: batch.known, at: ctx.clock.now().toISOString() });
+  // Until the Sent folder is read, nobody is shown: a row must not appear and then vanish as someone already emailed.
+  const ready = search.mailboxRead ? batch.leads : [];
+  const dry = importPeople(ctx.repo, batch.projectId, ready, { dryRun: true, known: batch.known, at: ctx.clock.now().toISOString() });
   const places = dry.addedAt ?? [];
   const rows = dry.added.map((p, i) => previewOf(p, String(places[i] ?? i)));
   if (!looking && rows.length === 0) {
@@ -324,7 +333,7 @@ function whenWords(project: Project, now: Date, tz: string): string {
  * has started, the new people get their first slot at once. Pressing Add a second time for the same project gives the
  * same answer and adds nobody.
  */
-export async function commit(ctx: Ctx, batchId: string, opts: { projectId?: number; drop?: string[] } = {}): Promise<AddCommit> {
+export async function commit(ctx: Ctx, batchId: string, opts: { projectId?: number; drop?: string[]; only?: string[] } = {}): Promise<AddCommit> {
   const batch = batchOf(ctx, batchId);
   const projectId = opts.projectId ?? batch.projectId;
   if (batch.added) {
@@ -339,7 +348,9 @@ export async function commit(ctx: Ctx, batchId: string, opts: { projectId?: numb
 
   batch.committing = true;
   try {
-    const leads = batch.leads.filter((_, i) => !drop.has(String(i)));
+    // A live search may have found more since the screen last asked: only the people the user saw are added.
+    const only = opts.only ? new Set(opts.only) : null;
+    const leads = batch.leads.filter((_, i) => !drop.has(String(i)) && (!only || only.has(String(i))));
     // Someone emailed since the batch was made (a search takes minutes) is not said hello to again.
     const known = new Set([...batch.known, ...(await emailedBefore(ctx))]);
     // The project may have been wrapped up while the mailbox was read.

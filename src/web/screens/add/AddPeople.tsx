@@ -62,7 +62,8 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
     setError('');
     finder.settle();
     try {
-      const result = await peopleApi.commit({ batchId: found.batchId, projectId: project.id, drop: finder.dropped });
+      // From a live search, only the people on screen: others found since are not added unseen.
+      const result = await peopleApi.commit({ batchId: found.batchId, projectId: project.id, drop: finder.dropped, ...(found.web ? { only: found.people.map((p) => p.key) } : {}) });
       const brought = result.added;
       setDone(result);
       setJoined((all) => [...all, ...result.added]);

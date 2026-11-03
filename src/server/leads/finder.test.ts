@@ -230,7 +230,9 @@ describe('ModelFinder', () => {
     expect(asked).toHaveLength(6);
     expect(people).toHaveLength(24);
     expect(asked.every((u) => u.includes('How many to find: 5'))).toBe(true);
-    expect(asked[5]).toContain('Person A');
+    // Every search after the first two is told who the earlier ones found.
+    for (const later of asked.slice(2)) expect(later).toMatch(/Person A\n[\s\S]*Person E/);
+    expect(asked[3]).toContain('Person D');
     expect(asked[5]).toContain('Look in places they did not');
   });
 

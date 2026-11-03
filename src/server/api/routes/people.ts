@@ -58,6 +58,7 @@ export function peopleRoutes(ctx: Ctx): Hono {
     return commit(ctx, text(b.batchId) ?? '', {
       ...(typeof projectId === 'number' ? { projectId } : {}),
       drop: texts(b.drop),
+      ...(Array.isArray(b.only) ? { only: texts(b.only) } : {}),
     });
   }));
 

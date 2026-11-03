@@ -346,6 +346,7 @@ describe('describe', () => {
     const batchId = first.batchId as string;
 
     send([foundPerson(0)]);
+    await new Promise((r) => setTimeout(r, 0));
     const some = describeStatus(s.ctx, batchId);
     expect(some).toMatchObject({ total: 1, searching: true, line: 'Callum found 1' });
     expect(some.people.map((p) => [p.key, p.name])).toEqual([['0', 'Kemi Eze']]);
@@ -390,12 +391,45 @@ describe('describe', () => {
     expect(describeStatus(s.ctx, b.batchId as string)).toMatchObject({ total: 1, searching: false });
   });
 
+  it('adds only the people the screen showed, when people turned up after it last asked', async () => {
+    let send: (p: PersonLead[]) => void = () => {};
+    s.ctx.finder = { find: (q) => { send = (p) => q.onFound?.(p); return new Promise<PersonLead[]>(() => {}); } };
+    const { batchId } = await describePeople(s.ctx, { query: 'cfo', live: true });
+    send([foundPerson(0), foundPerson(1)]);
+    await new Promise((r) => setTimeout(r, 0));
+    const seen = describeStatus(s.ctx, batchId as string).people.map((p) => p.key);
+    send([foundPerson(2)]);
+    await commit(s.ctx, batchId as string, { only: seen, drop: ['1'] });
+    expect(s.ctx.repo.listPeople().map((p) => p.name)).toEqual(['Kemi Eze']);
+  });
+
+  it('starts looking before the Sent folder is read, and shows nobody until it is', async () => {
+    let read: (list: string[]) => void = () => {};
+    s.ctx.adapters.get('email')!.knownAddresses = () => new Promise<string[]>((r) => { read = r; });
+    let send: (p: PersonLead[]) => void = () => {};
+    let asked = false;
+    s.ctx.finder = { find: (q) => { asked = true; send = (p) => q.onFound?.(p); return new Promise<PersonLead[]>(() => {}); } };
+    const { batchId } = await describePeople(s.ctx, { query: 'cfo', live: true });
+    expect(asked).toBe(true);
+    send([foundPerson(0), { ...foundPerson(1), email: 'femi@ledgerly.com' }]);
+    expect(describeStatus(s.ctx, batchId as string)).toMatchObject({ total: 0, searching: true });
+    read(['femi@ledgerly.com']);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(describeStatus(s.ctx, batchId as string).people.map((p) => p.name)).toEqual(['Kemi Eze']);
+  });
+
   it('passes on what the sender offers and their own site, so competitors and colleagues are left out', async () => {
     s.ctx.repo.updateProject(s.projectId, { offer: 'Tethers builds mobile apps for YC founders' });
     const found = fakeFinder();
     s.ctx.finder = found.finder;
+    s.ctx.repo.updateSettings({ senderEmail: 'gabriel@tethers.com' });
     await describePeople(s.ctx, { query: 'YC founders', projectId: s.projectId });
     expect(found.asked[0]?.offer).toBe('Tethers builds mobile apps for YC founders');
+    expect(found.asked[0]?.ownSite).toBe('tethers.com');
+    // A free mail address says nothing about where the sender works.
+    s.ctx.repo.updateSettings({ senderEmail: 'gabriel@gmail.com' });
+    await describePeople(s.ctx, { query: 'YC founders', projectId: s.projectId });
+    expect(found.asked[1]?.ownSite).toBeNull();
   });
 
   it('passes on what went wrong with Claude, in words', async () => {
