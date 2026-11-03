@@ -250,7 +250,10 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
               setOfferError('');
             }}
             site={site?.domain ?? ''}
-            onSiteEdit={() => setSite(null)}
+            onSiteEdit={() => {
+              setSite(null);
+              setOffer('');
+            }}
             onReadSite={(line, domain) => {
               setOffer(line);
               setSite({ domain, line });

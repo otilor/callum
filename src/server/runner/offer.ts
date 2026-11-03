@@ -111,7 +111,7 @@ export async function offerWithSite(ctx: Ctx, typed: string | null, read: SiteRe
   if (words.length >= 8) return typed;
   // A line already written from the site, with the site kept beside it ("You help ... (tethers.com)"), is not read again.
   const said = text.replace(/\(\s*[^()]*\)\s*$/, '').trim();
-  if (said !== text && SITE.exec(text.slice(said.length))?.[1]?.toLowerCase() === site[1].toLowerCase() && offerSaysEnough(said)) return typed;
+  if (said !== text && SITE.exec(text.slice(said.length))?.[1]?.toLowerCase() === site[1].toLowerCase() && offerSaysEnough(said) && !writtenWithBlank(said)) return typed;
   const domain = site[1].toLowerCase();
   try {
     const page = await read(domain);

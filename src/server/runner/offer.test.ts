@@ -155,5 +155,8 @@ describe('offerFromSite', () => {
     const read = async () => { reads++; return page; };
     expect(await offerWithSite(h.ctx, 'You help founders keep customers. (tethers.com)', read)).toBe('You help founders keep customers. (tethers.com)');
     expect(reads).toBe(0);
+    // A line with a blank in it is read again, not kept.
+    expect(await offerWithSite(h.ctx, 'You help [who] keep customers. (tethers.com)', read)).toBe('You help YC founders close their first enterprise deals. (You help [who] keep customers. (tethers.com))');
+    expect(reads).toBe(1);
   });
 });

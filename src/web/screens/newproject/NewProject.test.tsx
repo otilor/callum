@@ -98,13 +98,13 @@ async function toPeople(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Next' }));
 }
 
-async function pasteThree(user: ReturnType<typeof userEvent.setup>) {
+async function pasteThree(user: ReturnType<typeof userEvent.setup>, project = 'Payroll') {
   mocks.preview.mockResolvedValue(THREE);
   await user.click(screen.getByRole('tab', { name: 'Paste names' }));
   await user.click(screen.getByLabelText(/One person per line/));
   await user.paste('Yaw Mensah, yaw@kumasifoods.com\nEfua Boateng, efua@osuhealth.com\nKwame Asante, kwame@temacables.com');
   await user.click(screen.getByRole('button', { name: 'Read the names' }));
-  await screen.findByText(/^3 people join /);
+  await screen.findByText(`3 people join ${project}`);
 }
 
 describe('NewProject, the offer', () => {
@@ -137,6 +137,9 @@ describe('NewProject, the offer', () => {
     // Changing the website takes back the line from the old one until the new one is read.
     await user.type(screen.getByLabelText('Your website'), 'x');
     expect(screen.queryByLabelText('What you offer, in one line')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'Describe it' }));
+    expect(screen.getByLabelText('What you offer, in one line')).toHaveValue('');
+    await user.click(screen.getByRole('radio', { name: 'Use my website' }));
     expect(screen.getByRole('button', { name: 'Next' })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByText('Read your site first, or describe it in your own words.')).toBeInTheDocument();
   });
@@ -152,7 +155,7 @@ describe('NewProject, the offer', () => {
     mocks.createProject.mockResolvedValue(project({ id: 2, name: 'Tethers', startedAt: null }));
     mocks.commit.mockResolvedValue({ added: [person(21, 'Yaw Mensah')], line: '', groups: [] });
     mocks.start.mockResolvedValue({ firstSendAt: '2026-11-03T08:00:00.000Z' });
-    await pasteThree(user);
+    await pasteThree(user, 'Tethers');
     await user.click(screen.getByRole('button', { name: 'These 3 look right' }));
     await screen.findByRole('heading', { name: 'How should you sound?' });
     expect(mocks.sample).toHaveBeenCalledWith(expect.objectContaining({ offer: 'You help YC founders keep their first customers. (tethers.com)' }));

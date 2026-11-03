@@ -288,7 +288,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
                     setSite({ domain, line });
                     setNameError('');
                   }}
-                  onEdit={() => setSite(null)}
+                  onEdit={() => { setSite(null); setOffer(''); }}
                 />
               ) : null}
               {way === 'words' || site ? (
