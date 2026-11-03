@@ -111,7 +111,9 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
   const claudeSummary = state.demo
     ? 'Its own templates'
     : engine === 'claude_code'
-      ? claudeInfo && !claudeInfo.claudeCode.signedIn ? 'Claude Code, not signed in' : 'Your Claude plan'
+      ? claudeInfo?.claudeCode.runs === false
+        ? 'Claude Code could not start'
+        : claudeInfo && !claudeInfo.claudeCode.signedIn ? 'Claude Code, not signed in' : 'Your Claude plan'
       : engine === 'api' ? 'Your Claude key' : 'Not set up';
   const toggleRow = (key: string) => setOpen((o) => ({ ...o, [key]: !o[key] }));
 
@@ -229,7 +231,8 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
 
   const claudeOpen = Boolean(open.claude);
   useEffect(() => {
-    if (!claudeOpen || state.demo) return;
+    // Looked up on arrival, so the summary is right before the row opens, and again each time it opens.
+    if (state.demo) return;
     // A slow answer to an earlier look never replaces a newer one.
     let live = true;
     claudeKeyApi.info().then((i) => { if (live) setClaudeInfo(i); }, () => { if (live) setClaudeInfo(null); });

@@ -586,11 +586,16 @@ describe('Claude', () => {
     expect(await screen.findByText("Claude Code is on this computer but isn't signed in. Open a terminal, run claude, and sign in with your Claude account.")).toBeInTheDocument();
   });
 
-  it('says so in the row itself when Claude Code is chosen but not signed in', async () => {
+  it('says so in the row itself, before it opens, when Claude Code is chosen but not signed in', async () => {
     mocks.claudeInfo.mockResolvedValue(info({ engine: 'claude_code', claudeCode: { found: true, signedIn: false, account: null } }));
-    const user = setup(appState({ canFind: true, claudeEngine: 'claude_code' }));
-    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    setup(appState({ canFind: true, claudeEngine: 'claude_code' }));
     expect(await screen.findByRole('button', { name: /^Claude Claude Code, not signed in/ })).toBeInTheDocument();
+  });
+
+  it('says in the row that Claude Code could not start, not that it needs signing in', async () => {
+    mocks.claudeInfo.mockResolvedValue(info({ engine: 'claude_code', claudeCode: { found: true, runs: false, signedIn: false, account: null } }));
+    setup(appState({ canFind: true, claudeEngine: 'claude_code' }));
+    expect(await screen.findByRole('button', { name: /^Claude Claude Code could not start/ })).toBeInTheDocument();
   });
 
   it('names the variable to unset for a key in the environment, with no Remove that would do nothing', async () => {
