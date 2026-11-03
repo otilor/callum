@@ -37,3 +37,12 @@ export function offerSaysEnough(offer: string | null | undefined): boolean {
     .filter((w) => /\p{L}/u.test(w));
   return words.length >= 3;
 }
+
+/**
+ * A blank in words Callum wrote itself (never the user's own): any placeholder, and also square brackets around words,
+ * even "[your offer]". The user's own messages keep ordinary brackets such as "[attached]".
+ */
+export function writtenWithBlank(text: string | null | undefined): boolean {
+  if (!text) return false;
+  return findPlaceholders(text).length > 0 || /\[[^\]\n]*\p{L}[^\]\n]*\]/u.test(text);
+}

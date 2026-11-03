@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Channel, Message, OutKind, Tone } from '../../shared/types.js';
 import { clampNote } from '../channels/linkedin-detect.js';
 import { type Clock, systemClock } from '../engine/clock.js';
-import { findPlaceholders } from '../engine/guard.js';
+import { writtenWithBlank } from '../../shared/placeholders.js';
 import { OFFER_PLACEHOLDER, classifyOptions, isExplicitOptOut, messageDate, stripQuoted } from './templates.js';
 import { ApiModel, type AskOptions, type Model } from './model.js';
 import { SAYS_OFFER, type AskIntent, type Classification, type Writer, type WriteContext, type Written } from './writer.js';
@@ -172,9 +172,8 @@ export class ClaudeWriter implements Writer {
     let body = out.body.trim().replace(/!/g, '.').replace(/\u00A1/g, '');
     if (kind === 'invite') body = clampNote(body);
     // A blank left to fill in is never sent: the templates take over, and the runner asks for what they lack.
-    // Claude's own words never need square brackets, so any (even "[your offer]") is taken for a blank. The user's own
-    // messages keep ordinary brackets such as "[attached]".
-    const blank = findPlaceholders(body).length > 0 || /\[[^\]\n]*\p{L}[^\]\n]*\]/u.test(body);
+    // Claude's own words never need square brackets, so any (even "[your offer]") is taken for a blank.
+    const blank = writtenWithBlank(body);
     const words = body.split(/\s+/).filter(Boolean).length;
     if (!body || words > MAX_WORDS[kind] || body.length > 1500 || blank) return template;
     return { subject: template.subject, body };

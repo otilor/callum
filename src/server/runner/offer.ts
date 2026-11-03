@@ -1,6 +1,6 @@
 import type { Incident, Project } from '../../shared/types.js';
 import type { Ctx } from '../context.js';
-import { findPlaceholders, offerSaysEnough } from '../../shared/placeholders.js';
+import { findPlaceholders, offerSaysEnough, writtenWithBlank } from '../../shared/placeholders.js';
 import { publicFetch } from '../leads/finder.js';
 import { fetchSiteText } from '../leads/site.js';
 
@@ -53,7 +53,7 @@ export function takeBackBlankDrafts(ctx: Ctx, projectId?: number): number {
   let n = 0;
   for (const item of ctx.repo.listOutbox({ state: ['awaiting_ok'] })) {
     if (item.origin !== 'auto') continue;
-    const blank = item.body.trim() === '' || findPlaceholders(item.body).length > 0 || (item.subject !== null && findPlaceholders(item.subject).length > 0);
+    const blank = item.body.trim() === '' || writtenWithBlank(item.body) || writtenWithBlank(item.subject);
     if (!blank) continue;
     const person = ctx.repo.getPerson(item.personId);
     // Planning one project leaves the others' drafts to their own pass.

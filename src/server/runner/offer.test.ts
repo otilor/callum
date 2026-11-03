@@ -69,6 +69,9 @@ describe('taking back drafts with a blank', () => {
     expect(h.ctx.repo.getOutbox(blank.id)?.state).toBe('awaiting_ok');
     expect(takeBackBlankDrafts(h.ctx)).toBe(1);
     expect(h.ctx.repo.getOutbox(blank.id)?.state).toBe('cancelled');
+    const lower = h.ctx.outbox.queueAuto(mine.id, 'hello', 'Hi, I help with [your offer].', 'Hello', h.clock.now(), true);
+    expect(takeBackBlankDrafts(h.ctx)).toBe(1);
+    expect(h.ctx.repo.getOutbox(lower.id)?.state).toBe('cancelled');
   });
 
   it('keeps the ask open when something other than the offer changes', () => {

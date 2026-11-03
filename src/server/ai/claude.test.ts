@@ -68,6 +68,16 @@ describe('ClaudeWriter request shape', () => {
     }
   });
 
+  it('thinks harder and works out the value for every first note: hello, invite, thanks and follow-up', async () => {
+    for (const kind of ['hello', 'invite', 'thanks', 'follow_up'] as const) {
+      const { writer, parse } = writerWith({ parsed_output: { why: 'x', body: 'Hi Kemi, I take reconciliation off ops teams.', missing: null } });
+      await writer.write(kind, testCtx());
+      const req = requestOf(parse);
+      expect(req.output_config.effort, kind).toBe('medium');
+      expect(req.system, kind).toContain('"what do they do, and why me"');
+    }
+  });
+
   it('keeps low effort and no value brief for a reply, a booking or a close, and never sends the why', async () => {
     for (const kind of ['reply', 'booking', 'close'] as const) {
       const { writer, parse } = writerWith({ parsed_output: { why: 'n/a', body: 'Hi Kemi, Thursday at 9:00 works.', missing: null } });
