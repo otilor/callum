@@ -29,7 +29,8 @@ export function hasWeeklyLimitText(text: string): boolean {
   return /weekly\s+invitation\s+limit|reached\s+the\s+weekly\s+limit/i.test(text);
 }
 
-const NOTE_MAX = 280;
+/** LinkedIn's limit on a connection note for a free account (it was 300; it is 200 since 2025). */
+export const NOTE_MAX = 200;
 
 /** Cuts a connection note to LinkedIn's limit at a sentence end when that keeps most of it, else at a word end. */
 export function clampNote(text: string): string {
@@ -239,6 +240,21 @@ export function parseListTimestamp(text: string, now: Date): Date | null {
 }
 
 /**
+ * How far away LinkedIn says a person is in your network, from the text of their top card ("· 3rd"): 1, 2 or 3, or
+ * null when the card does not say.
+ */
+export function degreeOf(text: string): 1 | 2 | 3 | null {
+  const m = /(?:^|[\s·•])(1st|2nd|3rd\+?)(?=\s|$|[·•])/i.exec(text);
+  if (!m?.[1]) return null;
+  const d = m[1].toLowerCase();
+  return d === '1st' ? 1 : d === '2nd' ? 2 : 3;
+}
+
+/** The invitation dialog: older markup has role="dialog", newer markup an aria-modal element or a <dialog>. */
+const MODALS = ['[role="dialog"]', '[aria-modal="true"]', 'dialog[open]', '.artdeco-modal'];
+const inModal = (...selectors: string[]): string[] => selectors.flatMap((sel) => MODALS.map((m) => `${m} ${sel}`));
+
+/**
  * Every selector the LinkedIn adapter uses, in one place, so a markup change is fixed here.
  * Each entry is a list of alternatives, tried in order, most specific first: the first one that
  * finds something visible wins. (A CSS comma list would be a union in page order, and a broad
@@ -251,26 +267,40 @@ export const SELECTORS = {
   feedName: ['.feed-identity-module__actor-meta .t-16', '.profile-card-member-details h3', '[data-view-name="profile-card-name"]'],
 
   // Profile page. Everything is scoped to the top card so "People also viewed" is never clicked.
-  topCard: ['main section:has(h1)', 'section:has(h1)'],
-  profileName: ['h1'],
-  connectButton: ['[aria-label^="Invite"][aria-label$="to connect"]', 'button:text-is("Connect")', 'a:text-is("Connect")'],
-  moreButton: ['button[aria-label="More actions"]', 'button[aria-label^="More actions" i]', 'button[id$="profile-overflow-action"]'],
-  moreMenuConnect: ['[role="menu"] [aria-label^="Invite"][aria-label$="to connect"]', '.artdeco-dropdown__content [aria-label^="Invite"][aria-label$="to connect"]'],
-  pendingMarker: ['[aria-label^="Pending"]', 'button:text-is("Pending")'],
-  moreMenuPending: ['[role="menu"] [aria-label^="Pending"]', '.artdeco-dropdown__content [aria-label^="Pending"]'],
-  followButton: ['[aria-label^="Follow"]', 'button:text-is("Follow")'],
-  messageButton: ['[aria-label^="Message"]', 'a:text-is("Message")', 'button:text-is("Message")'],
+  // Since late 2026 the name is an h2 in a card LinkedIn marks as the "Topcard"; before that it was the page's only h1.
+  topCard: ['main [componentkey*="Topcard" i]', 'main section:has(h1)', 'section:has(h1)', 'main section:has(h2)'],
+  profileName: ['h1', 'h2'],
+  connectButton: [
+    '[aria-label^="Invite"][aria-label$="to connect"]', 'a[href*="/preload/custom-invite/"]', 'button:text-is("Connect")', 'a:text-is("Connect")',
+    'button:has(> :text-is("Connect"))', 'a:has(> :text-is("Connect"))',
+  ],
+  moreButton: ['button[aria-label="More actions"]', 'button[aria-label^="More actions" i]', 'button[id$="profile-overflow-action"]', 'button[aria-label="More"]'],
+  moreMenuConnect: [
+    '[role="menu"] [aria-label^="Invite"][aria-label$="to connect"]', '.artdeco-dropdown__content [aria-label^="Invite"][aria-label$="to connect"]',
+    '[role="menu"] a[href*="/preload/custom-invite/"]', '[role="menu"] [role="menuitem"]:text-is("Connect")', '[role="menu"] [role="menuitem"]:has(:text-is("Connect"))',
+  ],
+  pendingMarker: ['[aria-label^="Pending"]', 'button:text-is("Pending")', 'a:text-is("Pending")', 'button:has(> :text-is("Pending"))', 'a:has(> :text-is("Pending"))'],
+  moreMenuPending: ['[role="menu"] [aria-label^="Pending"]', '.artdeco-dropdown__content [aria-label^="Pending"]', '[role="menu"] [role="menuitem"]:has-text("Pending")'],
+  // `:text-is` matches the element that holds the text itself, so a label inside a <span> needs the `:has(> ...)` form.
+  followButton: ['[aria-label^="Follow"]', 'button:text-is("Follow")', 'button:has(> :text-is("Follow"))'],
+  messageButton: ['[aria-label^="Message"]', 'a:text-is("Message")', 'button:text-is("Message")', 'a:has(> :text-is("Message"))', 'button:has(> :text-is("Message"))'],
 
   // Invitation dialog.
-  dialog: ['[role="dialog"]', '.artdeco-modal'],
-  addNoteButton: ['[role="dialog"] button[aria-label="Add a note"]', '[role="dialog"] button:text-is("Add a note")'],
-  noteTextarea: ['[role="dialog"] textarea#custom-message', '[role="dialog"] textarea[name="message"]', '[role="dialog"] textarea'],
-  sendInviteButton: ['[role="dialog"] button[aria-label="Send invitation"]', '[role="dialog"] button[aria-label="Send now"]', '[role="dialog"] button:text-is("Send")'],
-  sendWithoutNoteButton: ['[role="dialog"] button[aria-label="Send without a note"]', '[role="dialog"] button[aria-label="Send now"]', '[role="dialog"] button:text-is("Send without a note")'],
-  dialogDismiss: ['[role="dialog"] button[aria-label="Dismiss"]', '[role="dialog"] button:text-is("Got it")', '[role="dialog"] button:text-is("Close")'],
-  premiumUpsell: ['[role="dialog"]:has-text("Premium")'],
+  dialog: MODALS,
+  addNoteButton: [...inModal('button[aria-label="Add a note"]', 'button:text-is("Add a note")'), 'button[aria-label="Add a note"]'],
+  noteTextarea: [...inModal('textarea#custom-message', 'textarea[name="message"]', 'textarea'), 'textarea#custom-message'],
+  sendInviteButton: [
+    ...inModal('button[aria-label="Send invitation"]', 'button[aria-label="Send now"]', 'button:text-is("Send")'),
+    'button[aria-label="Send invitation"]',
+  ],
+  sendWithoutNoteButton: [
+    ...inModal('button[aria-label="Send without a note"]', 'button[aria-label="Send now"]', 'button:text-is("Send without a note")'),
+    'button[aria-label="Send without a note"]',
+  ],
+  dialogDismiss: inModal('button[aria-label="Dismiss"]', 'button:text-is("Got it")', 'button:text-is("Close")'),
+  premiumUpsell: MODALS.map((m) => `${m}:has-text("Premium")`),
   // Where LinkedIn shows notices such as the weekly limit. Only these are read for limit text.
-  notices: ['[role="dialog"]', '[role="alert"]', '.artdeco-toast-item'],
+  notices: [...MODALS, '[role="alert"]', '.artdeco-toast-item'],
 
   // Message bubbles (the chat windows at the bottom of the page) and their composer.
   messageBubble: ['.msg-overlay-conversation-bubble'],

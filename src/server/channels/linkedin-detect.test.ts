@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  SELECTORS, clampNote, lastSender, hasSendFailureText, sameParticipant, headerNameCandidates, isUnavailableProfileText, normalizeText, snippetMatches, hasWeeklyLimitText, humanDelayMs, isBlockedStatus, isCheckpointUrl, isOwnSnippet, isSignInUrl,
+  SELECTORS, clampNote, degreeOf, lastSender, hasSendFailureText, sameParticipant, headerNameCandidates, isUnavailableProfileText, normalizeText, snippetMatches, hasWeeklyLimitText, humanDelayMs, isBlockedStatus, isCheckpointUrl, isOwnSnippet, isSignInUrl,
   cleanName, memberIdFromHref, parseListTimestamp, profileUrlFromHref, replyProfile, splitHeadline,
 } from './linkedin-detect.js';
 
@@ -61,29 +61,40 @@ describe('clampNote', () => {
   it('keeps a short note as written', () => {
     expect(clampNote('  Hi Kemi, I enjoyed your talk.  ')).toBe('Hi Kemi, I enjoyed your talk.');
   });
-  it('cuts a 400 character note to 280 or fewer at a word boundary without a trailing space', () => {
+  it('cuts a 400 character note to 200 or fewer, the LinkedIn limit on free accounts at a word boundary without a trailing space', () => {
     const text = Array.from({ length: 80 }, (_, i) => `word${i}`).join(' ').slice(0, 400);
-    expect(text.length).toBeGreaterThan(280);
+    expect(text.length).toBeGreaterThan(200);
     const out = clampNote(text);
-    expect(out.length).toBeLessThanOrEqual(280);
+    expect(out.length).toBeLessThanOrEqual(200);
     expect(out).not.toMatch(/\s$/);
     expect(text.startsWith(out)).toBe(true);
     expect(text[out.length]).toBe(' ');
   });
   it('prefers the last full sentence when it keeps most of the note', () => {
-    const first = `${'a'.repeat(200)}.`;
+    const first = `${'a'.repeat(150)}.`;
     const text = `${first} ${'b'.repeat(150)} and more words after that`;
     expect(clampNote(text)).toBe(first);
   });
   it('falls back to a word boundary when the only sentence end is early', () => {
     const text = `Hi. ${Array.from({ length: 60 }, () => 'banana').join(' ')}`;
     const out = clampNote(text);
-    expect(out.length).toBeLessThanOrEqual(280);
+    expect(out.length).toBeLessThanOrEqual(200);
     expect(out.endsWith('banana')).toBe(true);
   });
   it('hard-cuts text with no spaces and drops a dangling comma', () => {
-    expect(clampNote('x'.repeat(400))).toHaveLength(280);
-    expect(clampNote(`${'word '.repeat(55)}end, ${'more '.repeat(20)}`).endsWith(',')).toBe(false);
+    expect(clampNote('x'.repeat(400))).toHaveLength(200);
+    expect(clampNote(`${'word '.repeat(39)}end, ${'more '.repeat(20)}`).endsWith(',')).toBe(false);
+  });
+});
+
+describe('degreeOf', () => {
+  it('reads how far away LinkedIn says a person is', () => {
+    expect(degreeOf('Arlan Rakhmetzhanov · 3rd\nFounder & CEO at Nozomio')).toBe(3);
+    expect(degreeOf('Kemi Okoye\n· 2nd\nHead of Payments')).toBe(2);
+    expect(degreeOf('Ada Obi · 1st')).toBe(1);
+    expect(degreeOf('Ada Obi 3rd+')).toBe(3);
+    expect(degreeOf('Founder at 1stRound Labs')).toBeNull();
+    expect(degreeOf('Cleo Famous\nAuthor and speaker')).toBeNull();
   });
 });
 

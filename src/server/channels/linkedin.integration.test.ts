@@ -27,6 +27,18 @@ describe('linkedin adapter against a local LinkedIn stand-in', () => {
       expect(li.fixture.hits).toContain('GET /feed/');
     });
 
+    it("reads the name from the user's own profile when the header has no Me menu it knows", async () => {
+      li.fixture.newHeader = true;
+      try {
+        const adapter = await li.build(null);
+        const result = await adapter.connect({ liAt: VALID_COOKIE });
+        expect(result).toEqual({ identity: FIXTURE_USER, secret: { liAt: VALID_COOKIE } });
+        expect(li.fixture.hits).toContain('GET /in/me/');
+      } finally {
+        li.fixture.newHeader = false;
+      }
+    });
+
     it('explains in plain words when LinkedIn cannot be reached', async () => {
       const unreachable = 'http://127.0.0.1:1';
       const offline = "Couldn't open LinkedIn. Check your internet connection and try again.";

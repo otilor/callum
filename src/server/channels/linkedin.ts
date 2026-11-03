@@ -5,7 +5,7 @@ import type { PersonLead } from '../../shared/types.js';
 import { findBrowser as findInstalledBrowser, installedChannel, type BrowserChoice } from './browser.js';
 import { systemClock, type Clock } from '../engine/clock.js';
 import {
-  SELECTORS, clampNote, cleanName, hasWeeklyLimitText, headerNameCandidates, humanDelayMs, isBlockedStatus, isCheckpointUrl,
+  SELECTORS, clampNote, cleanName, degreeOf, hasWeeklyLimitText, headerNameCandidates, humanDelayMs, isBlockedStatus, isCheckpointUrl,
   hasSendFailureText, isOwnSnippet, lastSender, isSignInUrl, isUnavailableProfileText, memberIdFromHref, normalizeText, parseListTimestamp, profileUrlFromHref, replyProfile,
   sameParticipant, snippetMatches, splitHeadline,
 } from './linkedin-detect.js';
@@ -150,6 +150,8 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
   let session: Record<string, string> | null = secret;
   // Who the signed-in user is, to tell their messages from the other person's. Read at connect, or at the first poll.
   let self: { name: string | null; url: string | null } | null = null;
+  // The name is looked for once per run when sign-in could not read it, not on every poll.
+  let selfChecked = false;
   let context: BrowserContext | null = null;
   let contextHeadless = headless;
   // The user agent to force, per mode, once a probe has shown the browser announces itself as headless.
@@ -299,6 +301,17 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
       const card = await locate(page, SELECTORS.feedName, 1500);
       name = card ? cleanName((await card.innerText().catch(() => '')) || '') : null;
     }
+    if (!name) {
+      // LinkedIn's header changes often; the user's own profile (/in/me/ goes there) always shows their name.
+      const status = await open(page, '/in/me/').catch(() => 0);
+      if (status > 0 && status < 400) {
+        const top = await locate(page, SELECTORS.topCard, 5000);
+        const heading = top ? await locate(top, SELECTORS.profileName) : null;
+        name = heading ? cleanName((await heading.innerText().catch(() => '')) || '') : null;
+        const landed = profileUrlFromHref(page.url());
+        if (!profile && landed && !landed.endsWith('/in/me')) profile = landed;
+      }
+    }
     return { name, url: profile };
   }
 
@@ -379,7 +392,12 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
       }
       if (!connect) {
         // Only say something about the person when the page shows why; otherwise the page is not what Callum expects.
-        if (await locate(top, SELECTORS.messageButton)) throw new Stop(fail('already_connected', `You're already connected to ${msg.to.name} on LinkedIn.`));
+        // Open profiles show Message to people who are not connected, so Message alone does not mean connected.
+        const degree = degreeOf(await top.innerText().catch(() => ''));
+        if (degree !== 2 && degree !== 3 && (await locate(top, SELECTORS.messageButton))) {
+          throw new Stop(fail('already_connected', `You're already connected to ${msg.to.name} on LinkedIn.`));
+        }
+        if (degree === 2 || degree === 3) throw new Stop(fail('invalid_recipient', `LinkedIn doesn't offer Connect for ${msg.to.name}.`));
         if (await locate(top, SELECTORS.followButton)) throw new Stop(fail('invalid_recipient', `LinkedIn doesn't offer Connect for ${msg.to.name}.`));
         throw unexpectedPage('find Connect');
       }
@@ -406,6 +424,8 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
           box = await locate(page, SELECTORS.noteTextarea);
           return box !== null || (await locate(page, SELECTORS.premiumUpsell)) !== null;
         });
+        // A dialog can mention Premium before its text box shows; give the box a moment before deciding there is none.
+        box ??= await locate(page, SELECTORS.noteTextarea, Math.min(1500, settleMs));
         if (box) {
           await (box as Locator).fill(note);
           await pause();
@@ -890,7 +910,8 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
             const status = await open(page, '/mynetwork/invite-connect/connections/');
             if (await blocker(page, status)) return [{ type: 'checkpoint' as const, at }];
             const events = await collectAccepted(page, at);
-            if (!self) {
+            if (!self?.name && !selfChecked) {
+              selfChecked = true;
               // Needed to tell the user's own messages from the other person's; the header is on the feed.
               await open(page, '/feed/');
               if (await blocker(page)) return [...events, { type: 'checkpoint' as const, at }];

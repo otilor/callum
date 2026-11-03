@@ -27,6 +27,26 @@ describe('linkedin invitations against a local LinkedIn stand-in', () => {
       expect(li.fixture.invites.some((i) => i.slug.startsWith('decoy'))).toBe(false);
     });
 
+    describe("LinkedIn's late-2026 profile page", () => {
+      it('finds the top card by its h2 name, opens "More", and sends from the Connect link with the note', async () => {
+        const before = li.fixture.invites.length;
+        const result = await li.main.send(message('arlan', { body: 'Hi Arlan, congrats on the seed.' }));
+        expect(result).toEqual({ ok: true, externalId: null });
+        expect(li.fixture.invites.slice(before)).toEqual([{ slug: 'arlan', note: 'Hi Arlan, congrats on the seed.' }]);
+        expect(li.fixture.invites.some((i) => i.slug.startsWith('decoy'))).toBe(false);
+      });
+
+      it('sends without the note when the monthly notes are used up', async () => {
+        const before = li.fixture.invites.length;
+        expect(await li.main.send(message('nora', { body: 'Hello Nora.' }))).toEqual({ ok: true, externalId: null, noteDropped: true });
+        expect(li.fixture.invites.slice(before)).toEqual([{ slug: 'nora', note: '' }]);
+      });
+
+      it('says already connected only for a 1st-degree card, never because an open profile shows Message', async () => {
+        expect(await li.main.send(message('ife'))).toMatchObject({ ok: false, error: { code: 'already_connected' } });
+      });
+    });
+
     it('treats an invitation that is already pending as sent, without sending another', async () => {
       const before = li.fixture.invites.length;
       expect(await li.main.send(message('pia'))).toEqual({ ok: true, externalId: null });

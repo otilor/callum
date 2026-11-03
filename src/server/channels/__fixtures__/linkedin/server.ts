@@ -11,11 +11,14 @@ const read = (file: string) => readFileSync(new URL(file, DIR), 'utf8');
 export const VALID_COOKIE = 'valid-li-at';
 export const FIXTURE_USER = 'Gabriel Femi';
 
-type Variant = 'connect' | 'more' | 'message' | 'pending' | 'follow' | 'nothing';
+/** `open` and `first` use LinkedIn's late-2026 markup: the name in an h2, a "More" button, Connect as a menu link. */
+type Variant = 'connect' | 'more' | 'message' | 'pending' | 'follow' | 'nothing' | 'open' | 'first';
 interface Profile {
   name: string;
   headline: string;
   variant: Variant;
+  /** How far away the person is, as the new top card says it ("3rd"). */
+  degree?: string;
   limit?: 'on-connect' | 'on-send';
   /** Free account that has used its personalised notes: "Add a note" opens a Premium offer. */
   notes?: 'upsell';
@@ -45,6 +48,10 @@ export const PROFILES: Record<string, Profile> = {
   mute: { name: 'Mu Te', headline: 'Editor', variant: 'message', send: 'silent', history: ['Hello Mute.'] },
   odd: { name: 'Odd Page', headline: 'Writer', variant: 'nothing' },
   pia: { name: 'Pia Pending', headline: 'Designer', variant: 'pending' },
+  arlan: { name: 'Arlan Rakhmetzhanov', headline: 'Founder & CEO at Nozomio', variant: 'open', degree: '3rd' },
+  nora: { name: 'Nora Free', headline: 'Founder at Ledgerly', variant: 'open', degree: '2nd', notes: 'upsell' },
+  ife: { name: 'Ife Close', headline: 'CTO at Fernhill', variant: 'first', degree: '1st' },
+  'gabriel-femi': { name: FIXTURE_USER, headline: 'Founder at Callum', variant: 'first' },
   celeb: { name: 'Cleo Famous', headline: 'Author and speaker', variant: 'follow' },
   capped: { name: 'Cap Ed', headline: 'Engineer at Ceiling Co', variant: 'connect', limit: 'on-connect' },
   limited: { name: 'Lim Ited', headline: 'Engineer at Ceiling Co', variant: 'connect', limit: 'on-send' },
@@ -95,6 +102,8 @@ export interface LinkedinFixture {
   hidePreviews: boolean;
   /** Thread headers link to the member-id address (/in/ACo...) of people who have one, as LinkedIn sometimes does. */
   memberIdHeaders: boolean;
+  /** The feed's header has no Me menu Callum knows, as after a LinkedIn redesign: the name is only on the user's profile. */
+  newHeader: boolean;
   close(): Promise<void>;
 }
 
@@ -120,8 +129,10 @@ function signedIn(req: IncomingMessage): boolean {
 
 function profilePage(slug: string, p: Profile): string {
   const first = p.name.split(' ')[0] ?? p.name;
-  const actions = fill(read(`actions-${p.variant}.html`), { name: esc(p.name), first: esc(first) });
-  return fill(read('profile.html'), {
+  const actions = fill(read(`actions-${p.variant}.html`), { name: esc(p.name), first: esc(first), slug: esc(slug) });
+  const newMarkup = p.variant === 'open' || p.variant === 'first';
+  return fill(read(newMarkup ? 'profile-new.html' : 'profile.html'), {
+    degree: esc(p.degree ?? ''),
     slug: esc(slug),
     name: esc(p.name),
     headline: esc(p.headline),
@@ -199,6 +210,7 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
     challengeLists: false,
     hidePreviews: false,
     memberIdHeaders: false,
+    newHeader: false,
     close: async () => undefined,
   };
 
@@ -222,7 +234,11 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
 
     if (!signedIn(req)) return redirect(res, `/authwall?trk=${encodeURIComponent(path)}`);
 
-    if (path === '/feed/') return html(res, 200, fill(read('feed.html'), { me: esc(FIXTURE_USER) }));
+    if (path === '/feed/') {
+      const feed = fill(read('feed.html'), { me: esc(FIXTURE_USER) });
+      return html(res, 200, fixture.newHeader ? feed.replace(/<div class="global-nav__me">[\s\S]*?<\/nav>/, '</nav>') : feed);
+    }
+    if (path === '/in/me/') return redirect(res, '/in/gabriel-femi/');
 
     if (path === '/__env' && req.method === 'POST') {
       fixture.env.push(JSON.parse(await bodyOf(req)) as { webdriver: boolean | null; userAgent: string });
