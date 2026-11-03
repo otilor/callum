@@ -31,16 +31,20 @@ const requestOf = (parse: ReturnType<typeof fakeClient>['parse']) => parse.mock.
 };
 
 describe('ClaudeWriter request shape', () => {
-  it('sends model, low effort, a JSON schema, a system prompt and the user message', async () => {
+  it('sends model, medium effort for a first note, a JSON schema, a system prompt and the user message', async () => {
     const { writer, parse } = writerWith({ parsed_output: { body: 'Hi Kemi, a short and honest note.' } });
     await writer.write('hello', testCtx({ project: testProject({ tone: 'direct', sample: 'Hey Tola, saw your post on payouts.' }) }));
     expect(parse).toHaveBeenCalledOnce();
     const req = requestOf(parse);
     expect(req.model).toBe('claude-opus-5-5');
     expect(req.max_tokens).toBeGreaterThanOrEqual(2000);
-    expect(req.output_config.effort).toBe('low');
+    expect(req.output_config.effort).toBe('medium');
     expect(req.output_config.format.type).toBe('json_schema');
-    expect(Object.keys(req.output_config.format.schema.properties)).toEqual(['body', 'missing']);
+    // Claude says what is in it for them before it writes the note, and that reason is never sent.
+    expect(Object.keys(req.output_config.format.schema.properties)).toEqual(['why', 'body', 'missing']);
+    expect(req.system).toContain('what it would get them');
+    expect(req.system).toContain('"what do they do, and why me"');
+    expect(req.system).toContain('I came across');
     expect(req.thinking).toBeUndefined();
     expect(req.temperature).toBeUndefined();
     expect(req.messages).toHaveLength(1);
@@ -56,6 +60,20 @@ describe('ClaudeWriter request shape', () => {
     expect(req.messages[0]!.content).toContain('Kemi Eze');
     expect(req.messages[0]!.content).toContain('Oko Pay');
   });
+  it('keeps low effort and no value brief for a reply, a booking or a close, and never sends the why', async () => {
+    for (const kind of ['reply', 'booking', 'close'] as const) {
+      const { writer, parse } = writerWith({ parsed_output: { why: 'n/a', body: 'Hi Kemi, Thursday at 9:00 works.', missing: null } });
+      const out = await writer.write(kind, testCtx());
+      const req = requestOf(parse);
+      expect(req.output_config.effort, kind).toBe('low');
+      expect(req.system, kind).not.toContain('"what do they do, and why me"');
+      expect(out.body).toBe('Hi Kemi, Thursday at 9:00 works.');
+    }
+    const { writer } = writerWith({ parsed_output: { why: 'Their ops team reconciles by hand.', body: 'Hi Kemi, I take reconciliation off ops teams.', missing: null } });
+    const out = await writer.write('hello', testCtx());
+    expect(out).toEqual({ subject: expect.any(String), body: 'Hi Kemi, I take reconciliation off ops teams.' });
+  });
+
   it('mentions the 280-character limit for an invite and carries the calendar link for a booking', async () => {
     const a = writerWith({ parsed_output: { body: 'Hi Kemi, glad to connect.' } });
     await a.writer.write('invite', testCtx({ channel: 'linkedin' }));
@@ -317,7 +335,7 @@ describe('ClaudeWriter with the real SDK against a local server', () => {
         res.setHeader('content-type', 'application/json');
         res.end(JSON.stringify({
           id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: 'end_turn', stop_sequence: null,
-          content: [{ type: 'text', text: JSON.stringify({ body: 'Hi Kemi, a short note about reconciliation.', missing: null }) }],
+          content: [{ type: 'text', text: JSON.stringify({ why: 'Oko Pay reconciles by hand; the sender takes that off ops.', body: 'Hi Kemi, a short note about reconciliation.', missing: null }) }],
           usage: { input_tokens: 10, output_tokens: 10 },
         }));
       });
@@ -330,7 +348,7 @@ describe('ClaudeWriter with the real SDK against a local server', () => {
       expect(out.body).toBe('Hi Kemi, a short note about reconciliation.');
       expect(seen.url).toBe('/v1/messages');
       expect(seen.headers?.authorization).toBe(`Bearer ${KEY}`);
-      expect(seen.body).toMatchObject({ model: 'claude-opus-5-5', output_config: { effort: 'low', format: { type: 'json_schema' } } });
+      expect(seen.body).toMatchObject({ model: 'claude-opus-5-5', output_config: { effort: 'medium', format: { type: 'json_schema' } } });
       expect(seen.body).not.toHaveProperty('thinking');
       expect(seen.body).not.toHaveProperty('temperature');
     } finally {

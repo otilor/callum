@@ -5,7 +5,7 @@ import { clampNote } from '../channels/linkedin-detect.js';
 import { type Clock, systemClock } from '../engine/clock.js';
 import { findPlaceholders } from '../engine/guard.js';
 import { OFFER_PLACEHOLDER, classifyOptions, isExplicitOptOut, messageDate, stripQuoted } from './templates.js';
-import { ApiModel, type Model } from './model.js';
+import { ApiModel, type AskOptions, type Model } from './model.js';
 import type { AskIntent, Classification, Writer, WriteContext, Written } from './writer.js';
 
 const CHANNELS = ['email', 'linkedin', 'x'] as const;
@@ -22,6 +22,7 @@ const COPY_RULES = [
   '- Write like a calm colleague: first names, plain words, short sentences.',
   '- No exclamation marks. No emojis. No hype, no buzzwords, no flattery.',
   '- It must not read like a mail merge or a template. Say one specific, true thing.',
+  '- No filler: never "I came across", "I hope this finds you well", "I wanted to reach out", "I\'d be glad to connect", "I\'d love to pick your brain", "quick question", "just checking in", "touching base", "circling back".',
   '- Under 90 words.',
   '- Give exact times ("Thursday at 9:00"), never "soon" or "sometime".',
   '- Never invent facts: no prices, links, customers, numbers, dates or claims you were not given.',
@@ -38,16 +39,27 @@ const TONES: Record<Tone, string> = {
 };
 
 const KIND_BRIEF: Record<OutKind, string> = {
-  hello: 'A first hello. Say why you are writing, in one line about what the sender offers, and ask one easy question.',
-  invite: 'A LinkedIn connection note. At most 280 characters including spaces. No pitch beyond one line.',
-  thanks: 'A short thank-you for accepting the LinkedIn connection, with one line on what the sender offers and an easy next step.',
-  follow_up: 'A follow-up to an earlier note that got no reply. Add something useful or a lighter ask. If this is the last one, say so kindly and leave the door open.',
+  hello: 'A first hello. Open with them: the one thing about them or their company that makes the sender write. Then say in one plain sentence what the sender does and what it gets them. End with one easy question they can answer in a line.',
+  invite: 'A LinkedIn connection note. At most 280 characters including spaces. Why them, and what the sender could do for them, in a line each.',
+  thanks: 'A short thank-you for accepting the LinkedIn connection. Then what the sender does and what it gets them, in one plain sentence, and an easy next step.',
+  follow_up: 'A follow-up to an earlier note that got no reply. Do not repeat the first note: bring a new reason it matters to them, or a lighter ask. If this is the last one, say so kindly and leave the door open.',
   reply: 'A reply to what they last wrote. Answer what they asked. If they asked about something you were not given, say you will come back to them on it.',
   booking: 'Offer to book a time. Include the calendar link exactly as given.',
   close: 'A gracious close: thank them, say you will not follow up again, wish them well.',
 };
 
-const writeSchema = z.object({ body: z.string(), missing: z.string().nullable() });
+/** `why` comes first, so Claude works out what is in it for this person before it writes a word to them. It is never sent. */
+const writeSchema = z.object({ why: z.string(), body: z.string(), missing: z.string().nullable() });
+
+/** The messages that open a conversation, worth more thought than the rest. */
+const OPENERS = new Set<OutKind>(['hello', 'invite', 'thanks', 'follow_up']);
+
+const VALUE_RULES = [
+  'Before you write, work out in "why" (it is never sent): what this person\'s company does or is trying to do, from the note and their role; which part of what the sender offers matters to them in particular; and what it would get them, in their terms (time saved, customers won, a launch sooner, a risk gone). One or two sentences.',
+  'Then write the message from "why". It must say plainly what the sender does and what it would get this person. A reader should be able to answer "what do they do, and why me" after one read.',
+  'Make the benefit concrete and specific to them. Not "help with growth" or "I work with founders like you": say what changes for them.',
+  'Only use what you were given about them. When you know little about them, tie the benefit to their role and kind of company, and do not pretend to know more.',
+].join('\n');
 const classifySchema = z.object({
   kind: z.enum(['interested', 'question', 'not_now', 'not_interested', 'stop', 'hostile', 'out_of_office', 'referral']),
   suggested: z.enum(['reply', 'book', 'snooze', 'close']),
@@ -119,8 +131,8 @@ export class ClaudeWriter implements Writer {
     return this.model.lastError;
   }
 
-  private ask<S extends z.ZodType>(schema: S, system: string, user: string): Promise<z.infer<S> | null> {
-    return this.model.ask(schema, system, user);
+  private ask<S extends z.ZodType>(schema: S, system: string, user: string, opts?: AskOptions): Promise<z.infer<S> | null> {
+    return this.model.ask(schema, system, user, opts);
   }
 
   async write(kind: OutKind, ctx: WriteContext): Promise<Written> {
@@ -135,6 +147,7 @@ export class ClaudeWriter implements Writer {
       project.offer
         ? `What the sender offers (their own words; write it in first person, "I help ..."): ${project.offer}`
         : 'The sender has not said what they offer.',
+      OPENERS.has(kind) ? VALUE_RULES : '',
       OFFERS_KIND.has(kind)
         ? 'If you cannot say in plain words what the sender does and for whom from what you were given (it is missing, only a link or a name, or too vague to say anything true), do not write the message: leave "body" empty and set "missing" to one short question for the sender that would let you write it, such as "What does Tethers do, and for whom, in one line?".'
         : '',
@@ -154,7 +167,7 @@ export class ClaudeWriter implements Writer {
       `Conversation so far:\n${transcript(ctx.history)}`,
     ].filter(Boolean).join('\n\n');
 
-    const out = await this.ask(writeSchema, system, user);
+    const out = await this.ask(writeSchema, system, user, OPENERS.has(kind) ? { effort: 'medium' } : {});
     if (!out) return template;
     const missing = out.missing?.replace(/\s+/g, ' ').trim();
     if (missing && OFFERS_KIND.has(kind)) return { subject: template.subject, body: '', missing: missing.slice(0, 200) };
