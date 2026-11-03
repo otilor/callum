@@ -498,3 +498,8 @@
     stroke-dashoffset: 0;
   }
 }
+.np-read-note {
+  padding-left: 6px;
+  font-size: 14px;
+  color: var(--slate);
+}

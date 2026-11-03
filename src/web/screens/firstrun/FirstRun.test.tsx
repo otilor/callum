@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   microsoftPoll: vi.fn(),
   channelSummary: vi.fn(),
   suggestOffer: vi.fn(),
+  readSite: vi.fn(),
   createProject: vi.fn(),
   updateProject: vi.fn(),
   importLeads: vi.fn(),
@@ -248,6 +249,23 @@ describe('Offer', () => {
     expect(screen.getByText('Callum will call this')).toBeInTheDocument();
     expect(screen.getByText('Reconciliation')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Rename this project' })).toBeInTheDocument();
+  });
+
+  it('reads a website the person gives, and saves the line with the site beside it', async () => {
+    const user = setup();
+    mocks.suggestOffer.mockResolvedValue({ offer: null });
+    await reachOffer(user);
+    await user.click(screen.getByRole('radio', { name: 'Use my website' }));
+    expect(screen.queryByLabelText('What you offer, in one line')).not.toBeInTheDocument();
+    mocks.readSite.mockResolvedValue({ domain: 'tethers.com', offer: 'You help YC founders keep their first customers.' });
+    await user.type(screen.getByLabelText('Your website'), 'https://tethers.com{Enter}');
+    expect(await screen.findByDisplayValue('You help YC founders keep their first customers.')).toBeInTheDocument();
+    expect(screen.getByText(/Callum read tethers.com and wrote this/)).toBeInTheDocument();
+    expect(screen.getByText('Tethers')).toBeInTheDocument();
+    mocks.createProject.mockResolvedValue(project({ name: 'Tethers' }));
+    await user.click(screen.getByRole('button', { name: 'Looks right' }));
+    await screen.findByRole('heading', { name: 'Who do you want to meet?' });
+    expect(mocks.createProject).toHaveBeenCalledWith({ offer: 'You help YC founders keep their first customers. (tethers.com)', name: 'Tethers' });
   });
 
   it('creates the project from the offer, and the header becomes callum · name', async () => {

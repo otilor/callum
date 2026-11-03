@@ -205,6 +205,14 @@ describe('channels and settings', () => {
 });
 
 describe('projects', () => {
+  it('asks for a real website before reading one', async () => {
+    const h = setup();
+    const res = await h.post('/api/offer/site', { site: 'we help founders' });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ error: 'Type a website, like yourcompany.com.' });
+    expect((await h.post('/api/offer/site', {})).status).toBe(422);
+  });
+
   it('creates, lists, and refuses a name that is taken', async () => {
     const h = setup();
     const one = await h.post('/api/projects', { offer: 'Reconciliation for fintech teams', name: 'Reconciliation' });

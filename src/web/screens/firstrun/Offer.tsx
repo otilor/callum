@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '../../ui/Button.js';
 import { ErrorLine, GlobeIcon, PencilIcon } from './icons.js';
+import { OfferWays, SiteField, type OfferWay } from '../offer/OfferSource.js';
 
 export interface OfferProps {
   offer: string;
@@ -18,9 +19,15 @@ export interface OfferProps {
   busy: boolean;
   onBack(): void;
   onNext(): void;
+  /** Describe it in words, or give a website for Callum to read. */
+  way: OfferWay;
+  onWay(way: OfferWay): void;
+  /** The website read last, to start the box with. */
+  site: string;
+  onReadSite(line: string, domain: string): void;
 }
 
-export function Offer({ offer, onOffer, readFrom, reading, name, onRename, error, nameProblem, busy, onBack, onNext }: OfferProps) {
+export function Offer({ offer, onOffer, readFrom, reading, name, onRename, error, nameProblem, busy, onBack, onNext, way, onWay, site, onReadSite }: OfferProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [nameError, setNameError] = useState('');
@@ -41,27 +48,33 @@ export function Offer({ offer, onOffer, readFrom, reading, name, onRename, error
     <section className="fr-step fr-offer step-in" aria-labelledby="q2">
       <h1 id="q2" className="fr-title">What do you offer?</h1>
       <div className="fr-offer-col">
-        <span className="fr-offer-note">
-          {readFrom ? (
-            <>
-              <GlobeIcon />
-              Callum read {readFrom} and wrote this. Change any word.
-            </>
-          ) : reading ? (
-            'Callum is reading your site'
-          ) : (
-            'One line, in your words'
-          )}
-        </span>
-        <label htmlFor="offer" className="sr-only">What you offer, in one line</label>
-        <textarea
-          id="offer"
-          className="fr-offer-line"
-          rows={2}
-          value={offer}
-          placeholder="One line, in your words"
-          onChange={(e) => onOffer(e.target.value)}
-        />
+        <OfferWays way={way} onWay={onWay} />
+        {way === 'site' ? <SiteField initial={site} onRead={onReadSite} /> : null}
+        {way === 'words' || site !== '' ? (
+          <>
+            <span className="fr-offer-note">
+              {readFrom ? (
+                <>
+                  <GlobeIcon />
+                  Callum read {readFrom} and wrote this. Change any word.
+                </>
+              ) : reading ? (
+                'Callum is reading your site'
+              ) : (
+                'One line, in your words'
+              )}
+            </span>
+            <label htmlFor="offer" className="sr-only">What you offer, in one line</label>
+            <textarea
+              id="offer"
+              className="fr-offer-line"
+              rows={2}
+              value={offer}
+              placeholder="One line, in your words"
+              onChange={(e) => onOffer(e.target.value)}
+            />
+          </>
+        ) : null}
         <div className="fr-name">
           {name ? (
             <>

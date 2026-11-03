@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { updateProject, wrapProject } from '../services/projects.js';
-import { askForOffer, offerSaysEnough, offerWithSite, takeBackBlankDrafts } from './offer.js';
+import { askForOffer, offerFromSite, offerSaysEnough, offerWithSite, siteDomain, takeBackBlankDrafts } from './offer.js';
 import { Runner } from './runner.js';
 import { ctxWith, harness, NOW } from './testing.test-helpers.js';
 
@@ -109,5 +109,32 @@ describe('offerWithSite', () => {
     expect(await offerWithSite(h.ctx, 'tethers.com', async () => '')).toBe('tethers.com');
     expect(await offerWithSite(h.ctx, 'tethers.com', async () => 'Welcome. Sign in.')).toBe('tethers.com');
     expect(await offerWithSite(h.ctx, 'tethers.com', async () => { throw new Error('offline'); })).toBe('tethers.com');
+  });
+});
+
+describe('offerFromSite', () => {
+  const page = 'We help YC founders close their first enterprise deals. Tethers pairs you with buyers.';
+
+  it('takes a website in any usual form, and nothing else', () => {
+    for (const [typed, domain] of [['tethers.com', 'tethers.com'], ['https://www.Tethers.com/about', 'tethers.com'], [' http://app.tethers.io ', 'app.tethers.io']] as const) {
+      expect(siteDomain(typed)).toBe(domain);
+    }
+    for (const bad of ['', 'Tethers', 'we help founders', 'gabriel@tethers.com', 'tethers.com is ours']) expect(siteDomain(bad)).toBeNull();
+  });
+
+  it('reads the site and writes one line about what the company does', async () => {
+    const h = harness();
+    const asked: string[] = [];
+    const res = await offerFromSite(h.ctx, 'https://www.tethers.com/about', async (d) => { asked.push(d); return page; });
+    expect(res).toEqual({ domain: 'tethers.com', offer: 'You help YC founders close their first enterprise deals.' });
+    expect(asked).toEqual(['tethers.com']);
+  });
+
+  it('says it could not tell when the site is empty, says too little, or cannot be reached', async () => {
+    const h = harness();
+    expect(await offerFromSite(h.ctx, 'tethers.com', async () => '')).toEqual({ domain: 'tethers.com', offer: null });
+    expect(await offerFromSite(h.ctx, 'tethers.com', async () => 'Welcome. Sign in.')).toEqual({ domain: 'tethers.com', offer: null });
+    expect(await offerFromSite(h.ctx, 'tethers.com', async () => { throw new Error('offline'); })).toEqual({ domain: 'tethers.com', offer: null });
+    expect(await offerFromSite(h.ctx, 'not a site', async () => page)).toEqual({ domain: null, offer: null });
   });
 });

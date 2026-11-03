@@ -78,6 +78,31 @@ const readSite: SiteReader = (domain) => fetchSiteText(domain, publicFetch, { ti
  * What the user typed as their offer, with a website in it read for them: "tethers.com" becomes "You help ... (tethers.com)".
  * Left as typed when it already says enough in words, has no website, is the demo, or the site can't be read or says too little.
  */
+/** The plain domain of a website the user typed ("https://www.tethers.com/about" is "tethers.com"), or null. */
+export function siteDomain(typed: string): string | null {
+  const text = typed.trim();
+  if (!text || /\s/.test(text) || text.includes('@')) return null;
+  const site = SITE.exec(text);
+  return site?.index === 0 && site[1] ? site[1].toLowerCase() : null;
+}
+
+/**
+ * What a website says its company does, as an offer line Callum can write from: "You help ...".
+ * `offer` is null when the address isn't a website, the site can't be read, or it says too little.
+ */
+export async function offerFromSite(ctx: Ctx, typed: string, read: SiteReader = readSite): Promise<{ domain: string | null; offer: string | null }> {
+  const domain = siteDomain(typed);
+  if (!domain) return { domain: null, offer: null };
+  try {
+    const page = await read(domain);
+    if (!page.trim()) return { domain, offer: null };
+    const line = (await ctx.writer.offerLine(page, domain)).replace(/\s+/g, ' ').trim();
+    return { domain, offer: line && findPlaceholders(line).length === 0 && offerSaysEnough(line) ? line : null };
+  } catch {
+    return { domain, offer: null };
+  }
+}
+
 export async function offerWithSite(ctx: Ctx, typed: string | null, read: SiteReader = readSite): Promise<string | null> {
   const text = typed?.replace(/\s+/g, ' ').trim() ?? '';
   const site = SITE.exec(text);

@@ -25,7 +25,7 @@ import { eventStream } from './sse.js';
 import { staticHandler } from './static.js';
 import { afterSaved } from '../services/common.js';
 import { planProjectNow } from '../runner/runner.js';
-import { offerWithSite } from '../runner/offer.js';
+import { offerFromSite, offerWithSite, siteDomain } from '../runner/offer.js';
 
 export interface AppOptions {
   password: string | null;
@@ -175,6 +175,13 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
     return c.json(next);
   });
   api.get('/offer/suggest', async (c) => c.json({ offer: await onboarding.suggestOffer(ctx) }));
+  // A website the user typed: what its company does, in a line Callum can write from.
+  api.post('/offer/site', async (c) => {
+    const b = await readBody(c);
+    const site = typeof b.site === 'string' ? b.site : '';
+    if (!siteDomain(site)) throw new UserError('Type a website, like yourcompany.com.');
+    return c.json(await offerFromSite(ctx, site));
+  });
   api.get('/sample', async (c) => {
     const tone = toneOf(c.req.query('tone'));
     return c.json(await onboarding.sample(ctx, projectIdOf(ctx, c.req.query('projectId')), tone));

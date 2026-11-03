@@ -17,11 +17,12 @@ const mocks = vi.hoisted(() => ({
   describe: vi.fn(),
   sample: vi.fn(),
   discardProject: vi.fn(),
+  readSite: vi.fn(),
 }));
 vi.mock('../../api.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../api.js')>();
-  const { createProject, updateProject, start, setCurrentProject, ...people } = mocks;
-  return { ...real, api: { ...real.api, createProject, updateProject, start, setCurrentProject }, peopleApi: people };
+  const { createProject, updateProject, start, setCurrentProject, readSite, ...people } = mocks;
+  return { ...real, api: { ...real.api, createProject, updateProject, start, setCurrentProject, readSite }, peopleApi: people };
 });
 
 const MONDAY = new Date('2026-11-02T10:00:00Z');
@@ -107,6 +108,33 @@ async function pasteThree(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('NewProject, the offer', () => {
+  it('offers a website or your own words, and writes the line from the website', async () => {
+    const user = userEvent.setup();
+    show();
+    expect(screen.getByRole('radio', { name: 'Describe it' })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('radio', { name: 'Use my website' }));
+    expect(screen.getByText('Read your site first, or describe it in your own words.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try the Payroll example' })).not.toBeInTheDocument();
+
+    mocks.readSite.mockResolvedValueOnce({ domain: 'tethers.com', offer: null });
+    await user.type(screen.getByLabelText('Your website'), 'tethers.com{Enter}');
+    expect(await screen.findByText("Callum couldn't tell what you do from tethers.com. Check the address, or describe it in your own words.")).toBeInTheDocument();
+
+    mocks.readSite.mockResolvedValueOnce({ domain: 'tethers.com', offer: 'You help YC founders keep their first customers.' });
+    await user.click(screen.getByRole('button', { name: 'Read my site' }));
+    expect(await screen.findByDisplayValue('You help YC founders keep their first customers.')).toBeInTheDocument();
+    expect(mocks.readSite).toHaveBeenLastCalledWith('tethers.com');
+    expect(screen.getByText('Callum read tethers.com and wrote this. Change any word.')).toBeInTheDocument();
+    expect(screen.getByText('Tethers', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toHaveAttribute('aria-disabled', 'false');
+    expect(screen.getByRole('radio', { name: 'Use my website' })).toHaveAttribute('aria-checked', 'true');
+
+    // The words stay the person's to change; the note goes once they do.
+    await user.type(screen.getByLabelText('What you offer, in one line'), ' Fast.');
+    expect(screen.queryByText(/Callum read tethers.com/)).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue('You help YC founders keep their first customers. Fast.')).toBeInTheDocument();
+  });
+
   it('asks what you offer and holds Next until there is a line', async () => {
     const user = userEvent.setup();
     show();

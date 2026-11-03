@@ -111,6 +111,8 @@ export const api = {
 
   settings: (patch: SettingsPatch) => post<Settings>('/settings', patch),
   suggestOffer: () => get<{ offer: string | null }>('/offer/suggest'),
+  /** What a website says its company does, as an offer line. `offer` is null when it couldn't be read. */
+  readSite: (site: string) => post<{ domain: string | null; offer: string | null }>('/offer/site', { site }),
   sample: (tone: Tone, projectId?: number) => get<HelloSample>('/sample', { tone, projectId }),
   plan: (projectId?: number) => get<PlanPreview>('/plan', { projectId }),
 
