@@ -8,6 +8,7 @@ import { resumeChannel } from '../runner/incidents.js';
 import { assertCanResume } from './channels.js';
 import { CHANNEL_NAME, cancelPendingRefunding, joinList, plural, requireProject, userTz, whenText } from './common.js';
 import { UserError } from './errors.js';
+import { updateProject } from './projects.js';
 
 const NEEDS_CLAUDE = 'Finding people needs Claude. Sign in to Claude Code on this computer, or add a Claude key in Your Callum.';
 const UNKNOWN = "Callum can find people, pause a channel, change the tone, or tell you who's warming up.";
@@ -109,7 +110,7 @@ export async function ask(ctx: Ctx, projectId: number, text: string): Promise<As
       const tone = intent.tone;
       if (ctx.repo.getProject(projectId)?.tone === tone) return answer(`Callum already writes in a ${tone} tone.`);
       return answer(
-        `Callum can write in a ${tone} tone from now on. Hellos already waiting keep their words.`, [],
+        `Callum can write in a ${tone} tone from now on. Hellos waiting for your OK are written again in it.`, [],
         { kind: 'set_tone', label: `Use a ${tone} tone`, args: { tone } },
       );
     }
@@ -247,8 +248,8 @@ export async function act(ctx: Ctx, projectId: number, action: AskAction): Promi
     }
     case 'set_tone': {
       if (!TONES.includes(action.args.tone)) throw new UserError('Pick warm, direct or playful.');
-      ctx.repo.updateProject(projectId, { tone: action.args.tone });
-      ctx.bus.emit('projects');
+      // Through the project service, so first hellos waiting for an OK are written again in the new tone.
+      updateProject(ctx, projectId, { tone: action.args.tone });
       return answer(`Callum writes in a ${action.args.tone} tone now.`);
     }
     case 'switch_channel': {

@@ -28,12 +28,17 @@ export interface ResearchOptions {
   timeoutMs?: number;
 }
 
+export interface AskOptions {
+  /** How much Claude thinks first. Low by default; a first note to someone is worth more. */
+  effort?: 'low' | 'medium';
+}
+
 export interface Model {
   readonly engine: Engine;
   /** The last reason a call failed, for Your Callum and the logs. Never contains a key. */
   lastError: string | null;
   /** One structured answer, with no tools. Null when Claude could not answer; the caller falls back. */
-  ask<S extends z.ZodType>(schema: S, system: string, user: string): Promise<z.infer<S> | null>;
+  ask<S extends z.ZodType>(schema: S, system: string, user: string, opts?: AskOptions): Promise<z.infer<S> | null>;
   /** Searches the web and reads pages, then answers in the schema. Throws a ModelError. */
   research<S extends z.ZodType>(schema: S, system: string, user: string, opts?: ResearchOptions): Promise<z.infer<S>>;
   /** Told that the user has signed in since a call failed for want of it, so Callum stops waiting and the old error goes. */
@@ -69,12 +74,12 @@ export class ApiModel implements Model {
     return this.apiKey ? reason.split(this.apiKey).join('[key]') : reason;
   }
 
-  async ask<S extends z.ZodType>(schema: S, system: string, user: string): Promise<z.infer<S> | null> {
+  async ask<S extends z.ZodType>(schema: S, system: string, user: string, opts: AskOptions = {}): Promise<z.infer<S> | null> {
     try {
       const res = await this.client.messages.parse({
         model: this.model,
-        max_tokens: MAX_TOKENS,
-        output_config: { effort: 'low', format: zodOutputFormat(schema) },
+        max_tokens: opts.effort === 'medium' ? MAX_TOKENS * 2 : MAX_TOKENS,
+        output_config: { effort: opts.effort ?? 'low', format: zodOutputFormat(schema) },
         system,
         messages: [{ role: 'user', content: user }],
       });
@@ -286,10 +291,10 @@ export class ClaudeCodeModel implements Model {
     if (this.lastError === NOT_SIGNED_IN) this.lastError = null;
   }
 
-  async ask<S extends z.ZodType>(schema: S, system: string, user: string): Promise<z.infer<S> | null> {
+  async ask<S extends z.ZodType>(schema: S, system: string, user: string, opts: AskOptions = {}): Promise<z.infer<S> | null> {
     if (this.now() < this.signedOutUntil) return null;
     try {
-      return await this.call(schema, system, user, { tools: '', timeoutMs: 120_000, effort: 'low', maxTurns: 5 });
+      return await this.call(schema, system, user, { tools: '', timeoutMs: 120_000, effort: opts.effort ?? 'low', maxTurns: 5 });
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err);
       return null;
@@ -312,7 +317,7 @@ export class ClaudeCodeModel implements Model {
   }
 
   private async call<S extends z.ZodType>(
-    schema: S, system: string, user: string, how: { tools: string; timeoutMs: number; effort?: 'low'; model?: string; maxTurns: number },
+    schema: S, system: string, user: string, how: { tools: string; timeoutMs: number; effort?: 'low' | 'medium'; model?: string; maxTurns: number },
   ): Promise<z.infer<S>> {
     try {
       mkdirSync(this.opts.cwd, { recursive: true });
@@ -336,7 +341,7 @@ export class ClaudeCodeModel implements Model {
   }
 
   private async runOnce<S extends z.ZodType>(
-    schema: S, user: string, how: { tools: string; timeoutMs: number; effort?: 'low'; model?: string; maxTurns: number }, env: NodeJS.ProcessEnv, promptFile: string,
+    schema: S, user: string, how: { tools: string; timeoutMs: number; effort?: 'low' | 'medium'; model?: string; maxTurns: number }, env: NodeJS.ProcessEnv, promptFile: string,
   ): Promise<z.infer<S>> {
     const args = (safe: boolean): string[] => [
       '-p',

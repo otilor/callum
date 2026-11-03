@@ -4,6 +4,7 @@ import { DuplicateProjectName } from '../db/repo.js';
 import { canMoveProject, moveProject } from '../engine/lifecycle.js';
 import { cancelPendingRefunding, parseWhen, plural, requirePerson, requireProject } from './common.js';
 import { UserError } from './errors.js';
+import { offerSaysEnough, offerSettled, offerWithSite } from '../runner/offer.js';
 
 const TONES: readonly Tone[] = ['warm', 'direct', 'playful'];
 const MAX_NAME = 60;
@@ -57,7 +58,8 @@ export async function createProject(
   ctx: Ctx,
   input: { offer: string; name?: string; audience?: string; tone?: Tone },
 ): Promise<Project> {
-  const offer = textOrNull(input.offer);
+  // A website is read, so "tethers.com" is enough to say what the user does.
+  const offer = await offerWithSite(ctx, textOrNull(input.offer));
   const tone = input.tone === undefined ? 'warm' : cleanTone(input.tone);
   let name: string;
   if (input.name !== undefined && input.name.trim() !== '') {
@@ -104,7 +106,7 @@ export function renameProject(ctx: Ctx, id: number, rawName: string): Project {
 export type ProjectPatch = Partial<Pick<Project, 'offer' | 'audience' | 'tone' | 'sample' | 'calendarUrl'>>;
 
 export function updateProject(ctx: Ctx, id: number, patch: ProjectPatch): Project {
-  requireProject(ctx, id);
+  const before = requireProject(ctx, id);
   const next: Partial<Project> = {};
   if (patch.offer !== undefined) next.offer = textOrNull(patch.offer);
   if (patch.audience !== undefined) next.audience = textOrNull(patch.audience);
@@ -113,7 +115,23 @@ export function updateProject(ctx: Ctx, id: number, patch: ProjectPatch): Projec
   if (patch.calendarUrl !== undefined) next.calendarUrl = cleanCalendar(patch.calendarUrl);
   const project = ctx.repo.updateProject(id, next);
   ctx.bus.emit('projects');
+  if (patch.offer !== undefined && offerSaysEnough(project.offer)) offerSettled(ctx, id);
+  // First hellos still waiting for an OK were written with the old words: they are written again with the new ones.
+  if (project.offer !== before.offer || project.tone !== before.tone) rewriteWaitingHellos(ctx, id);
   return project;
+}
+
+/** Takes back the project's first hellos that wait for the user's OK, so the next pass writes them again. Returns how many. */
+export function rewriteWaitingHellos(ctx: Ctx, projectId: number): number {
+  const ofProject = new Set(ctx.repo.listPeople({ projectId }).map((p) => p.id));
+  let n = 0;
+  for (const item of ctx.repo.listOutbox({ state: ['awaiting_ok'] })) {
+    if (item.origin !== 'auto' || !ofProject.has(item.personId)) continue;
+    ctx.repo.updateOutbox(item.id, { state: 'cancelled' });
+    n++;
+  }
+  if (n > 0) ctx.bus.emit('outbox');
+  return n;
 }
 
 /** Its automatic sends stay put until the date (or until Resume). Replies the user sends still go. */
@@ -163,6 +181,7 @@ export function wrapProject(ctx: Ctx, id: number): { cancelledFollowUps: number;
       ctx.repo.updateSettings({ currentProjectId: next?.id ?? null });
     }
   });
+  offerSettled(ctx, id);
   ctx.bus.emit('outbox');
   ctx.bus.emit('projects');
   ctx.bus.emit('settings');

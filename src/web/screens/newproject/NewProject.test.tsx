@@ -17,11 +17,12 @@ const mocks = vi.hoisted(() => ({
   describe: vi.fn(),
   sample: vi.fn(),
   discardProject: vi.fn(),
+  readSite: vi.fn(),
 }));
 vi.mock('../../api.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../api.js')>();
-  const { createProject, updateProject, start, setCurrentProject, ...people } = mocks;
-  return { ...real, api: { ...real.api, createProject, updateProject, start, setCurrentProject }, peopleApi: people };
+  const { createProject, updateProject, start, setCurrentProject, readSite, ...people } = mocks;
+  return { ...real, api: { ...real.api, createProject, updateProject, start, setCurrentProject, readSite }, peopleApi: people };
 });
 
 const MONDAY = new Date('2026-11-02T10:00:00Z');
@@ -97,16 +98,78 @@ async function toPeople(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Next' }));
 }
 
-async function pasteThree(user: ReturnType<typeof userEvent.setup>) {
+async function pasteThree(user: ReturnType<typeof userEvent.setup>, project = 'Payroll') {
   mocks.preview.mockResolvedValue(THREE);
   await user.click(screen.getByRole('tab', { name: 'Paste names' }));
   await user.click(screen.getByLabelText(/One person per line/));
   await user.paste('Yaw Mensah, yaw@kumasifoods.com\nEfua Boateng, efua@osuhealth.com\nKwame Asante, kwame@temacables.com');
   await user.click(screen.getByRole('button', { name: 'Read the names' }));
-  await screen.findByText('3 people join Payroll');
+  await screen.findByText(`3 people join ${project}`);
 }
 
 describe('NewProject, the offer', () => {
+  it('offers a website or your own words, and writes the line from the website', async () => {
+    const user = userEvent.setup();
+    show();
+    expect(screen.getByRole('radio', { name: 'Describe it' })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('radio', { name: 'Use my website' }));
+    expect(screen.getByText('Read your site first, or describe it in your own words.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try the Payroll example' })).not.toBeInTheDocument();
+
+    mocks.readSite.mockResolvedValueOnce({ domain: 'tethers.com', offer: null });
+    await user.type(screen.getByLabelText('Your website'), 'tethers.com{Enter}');
+    expect(await screen.findByText("Callum couldn't tell what you do from tethers.com. Check the address, or describe it in your own words.")).toBeInTheDocument();
+
+    mocks.readSite.mockResolvedValueOnce({ domain: 'tethers.com', offer: 'You help YC founders keep their first customers.' });
+    await user.click(screen.getByRole('button', { name: 'Read my site' }));
+    expect(await screen.findByDisplayValue('You help YC founders keep their first customers.')).toBeInTheDocument();
+    expect(mocks.readSite).toHaveBeenLastCalledWith('tethers.com');
+    expect(screen.getByText('Callum read tethers.com and wrote this. Change any word.')).toBeInTheDocument();
+    expect(screen.getByText('Tethers', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toHaveAttribute('aria-disabled', 'false');
+    expect(screen.getByRole('radio', { name: 'Use my website' })).toHaveAttribute('aria-checked', 'true');
+
+    // The words stay the person's to change; the note goes once they do.
+    await user.type(screen.getByLabelText('What you offer, in one line'), ' Fast.');
+    expect(screen.queryByText(/Callum read tethers.com/)).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue('You help YC founders keep their first customers. Fast.')).toBeInTheDocument();
+
+    // Changing the website takes back the line from the old one until the new one is read.
+    await user.type(screen.getByLabelText('Your website'), 'x');
+    expect(screen.queryByLabelText('What you offer, in one line')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'Describe it' }));
+    expect(screen.getByLabelText('What you offer, in one line')).toHaveValue('');
+    await user.click(screen.getByRole('radio', { name: 'Use my website' }));
+    expect(screen.getByRole('button', { name: 'Next' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText('Read your site first, or describe it in your own words.')).toBeInTheDocument();
+  });
+
+  it('saves a project from a website with the site beside the line, and the next project starts clean', async () => {
+    const user = userEvent.setup();
+    show();
+    await user.click(screen.getByRole('radio', { name: 'Use my website' }));
+    mocks.readSite.mockResolvedValueOnce({ domain: 'tethers.com', offer: 'You help YC founders keep their first customers.' });
+    await user.type(screen.getByLabelText('Your website'), 'tethers.com{Enter}');
+    await screen.findByDisplayValue('You help YC founders keep their first customers.');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    mocks.createProject.mockResolvedValue(project({ id: 2, name: 'Tethers', startedAt: null }));
+    mocks.commit.mockResolvedValue({ added: [person(21, 'Yaw Mensah')], line: '', groups: [] });
+    mocks.start.mockResolvedValue({ firstSendAt: '2026-11-03T08:00:00.000Z' });
+    await pasteThree(user, 'Tethers');
+    await user.click(screen.getByRole('button', { name: 'These 3 look right' }));
+    await screen.findByRole('heading', { name: 'How should you sound?' });
+    expect(mocks.sample).toHaveBeenCalledWith(expect.objectContaining({ offer: 'You help YC founders keep their first customers. (tethers.com)' }));
+    await user.click(screen.getByRole('button', { name: 'Start Tethers' }));
+    await screen.findByRole('heading', { name: 'Tethers is ready' });
+    expect(mocks.createProject).toHaveBeenCalledWith({ offer: 'You help YC founders keep their first customers. (tethers.com)', name: 'Tethers', tone: 'warm' });
+
+    await user.click(screen.getByRole('button', { name: /another project/i }));
+    expect(await screen.findByRole('heading', { name: 'What do you offer?' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Describe it' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText('What you offer, in one line')).toHaveValue('');
+    expect(screen.queryByText(/Tethers/)).not.toBeInTheDocument();
+  });
+
   it('asks what you offer and holds Next until there is a line', async () => {
     const user = userEvent.setup();
     show();

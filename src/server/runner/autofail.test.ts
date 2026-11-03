@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { NewPerson, Person } from '../../shared/types.js';
 import { editBlocked, retry } from '../services/actions.js';
 import { personDetail } from '../services/person.js';
 import { resumeChannel } from './incidents.js';
@@ -14,15 +15,24 @@ function runnerFor(h: Harness, ctx = h.ctx) {
   const errors: unknown[] = [];
   return { runner: new Runner(ctx, { onError: (e) => errors.push(e), spacing: false }), errors };
 }
+/**
+ * Someone whose next message already has a blank in it when its time comes. Callum no longer writes such a message, but
+ * one from before is stopped at its send time and waits for the user's edit.
+ */
+function stuck(h: Harness, overrides: Partial<NewPerson>): Person {
+  const p = h.person(overrides);
+  const linkedin = p.channel === 'linkedin';
+  h.ctx.outbox.queueAuto(p.id, linkedin ? 'thanks' : 'follow_up', BLANK.body, linkedin ? null : BLANK.subject, h.clock.now(), false);
+  return p;
+}
 const open = (h: Harness) => h.ctx.repo.listIncidents({ open: true });
 const detailOf = (i: { detail: string | null }) => JSON.parse(i.detail ?? 'null') as { auto: boolean; day: string; outboxId: number; outboxIds: number[]; personIds: number[] };
 
 describe('a message with a blank in it', () => {
   it('is one notice for the channel and day however many people it holds, with the people on it', async () => {
     const h = harness();
-    const ctx = ctxWith(h, { write: async () => BLANK });
-    const people = Array.from({ length: 20 }, () => h.person({ ...FOLLOW_UP }));
-    const { runner, errors } = runnerFor(h, ctx);
+    const people = Array.from({ length: 20 }, () => stuck(h, { ...FOLLOW_UP }));
+    const { runner, errors } = runnerFor(h);
     await runner.tick();
     expect(errors).toEqual([]);
     expect(h.ctx.repo.listOutbox({ state: ['blocked'] })).toHaveLength(20);
@@ -41,26 +51,24 @@ describe('a message with a blank in it', () => {
 
   it('says "a follow-up" for one and names the channel as the user does', async () => {
     const h = harness();
-    const ctx = ctxWith(h, { write: async () => BLANK });
-    h.person({ ...FOLLOW_UP });
-    await runnerFor(h, ctx).runner.tick();
+    stuck(h, { ...FOLLOW_UP });
+    await runnerFor(h).runner.tick();
     expect(open(h)[0]?.message).toBe("Callum couldn't send a follow-up by email today");
     expect(open(h)[0]?.message).not.toContain('!');
   });
 
   it('keeps channels apart, and a new day gets a new notice that says which day the old one was for', async () => {
     const h = harness({ connected: ['email', 'linkedin'] });
-    const ctx = ctxWith(h, { write: async () => BLANK });
-    h.person({ ...FOLLOW_UP });
-    h.person({ ...FOLLOW_UP, email: null, channel: 'linkedin', linkedinState: 'connected', linkedinUrl: 'https://www.linkedin.com/in/ada-l', invitedAt: '2026-10-20T09:00:00.000Z' });
-    const { runner } = runnerFor(h, ctx);
+    stuck(h, { ...FOLLOW_UP });
+    stuck(h, { ...FOLLOW_UP, email: null, channel: 'linkedin', linkedinState: 'connected', linkedinUrl: 'https://www.linkedin.com/in/ada-l', invitedAt: '2026-10-20T09:00:00.000Z' });
+    const { runner } = runnerFor(h);
     await runner.tick();
     expect(open(h).map((i) => `${i.channel}: ${i.message}`).sort()).toEqual([
       "email: Callum couldn't send a follow-up by email today",
       "linkedin: Callum couldn't send a thank-you by LinkedIn today",
     ]);
     h.clock.advance(86_400_000);
-    h.person({ ...FOLLOW_UP, nextTouchAt: h.clock.now().toISOString() });
+    stuck(h, { ...FOLLOW_UP, nextTouchAt: h.clock.now().toISOString() });
     await runner.tick();
     const emails = open(h).filter((i) => i.channel === 'email');
     expect(emails.map((i) => i.message).sort()).toEqual(["Callum couldn't send a follow-up by email on Tuesday", "Callum couldn't send a follow-up by email today"].sort());
@@ -68,9 +76,8 @@ describe('a message with a blank in it', () => {
 
   it('names an older day by its date, so a week-old Tuesday is not mistaken for yesterday', async () => {
     const h = harness();
-    const ctx = ctxWith(h, { write: async () => BLANK });
-    h.person({ ...FOLLOW_UP });
-    const { runner } = runnerFor(h, ctx);
+    stuck(h, { ...FOLLOW_UP });
+    const { runner } = runnerFor(h);
     await runner.tick();
     h.clock.advance(14 * 86_400_000);
     await runner.tick();
@@ -79,10 +86,9 @@ describe('a message with a blank in it', () => {
 
   it('is fixed with editBlocked: the notice follows the people who are still stuck, and goes when none are', async () => {
     const h = harness();
-    const ctx = ctxWith(h, { write: async () => BLANK });
-    const a = h.person({ ...FOLLOW_UP });
-    const b = h.person({ ...FOLLOW_UP });
-    const { runner } = runnerFor(h, ctx);
+    const a = stuck(h, { ...FOLLOW_UP });
+    const b = stuck(h, { ...FOLLOW_UP });
+    const { runner } = runnerFor(h);
     await runner.tick();
     const [first, second] = h.ctx.repo.listOutbox({ state: ['blocked'] });
     expect(open(h)[0]?.message).toBe("Callum couldn't send 2 follow-ups by email today");
@@ -102,9 +108,8 @@ describe('a message with a blank in it', () => {
 
   it('refuses a fix that still has a blank, in words, and keeps the notice', async () => {
     const h = harness();
-    const ctx = ctxWith(h, { write: async () => BLANK });
-    h.person({ ...FOLLOW_UP });
-    await runnerFor(h, ctx).runner.tick();
+    stuck(h, { ...FOLLOW_UP });
+    await runnerFor(h).runner.tick();
     const item = h.ctx.repo.listOutbox({ state: ['blocked'] })[0]!;
     expect(() => editBlocked(h.ctx, item.id, 'Still [YOUR PRICE] here')).toThrow(/Add your price first/);
     expect(open(h)).toHaveLength(1);
@@ -112,9 +117,8 @@ describe('a message with a blank in it', () => {
 
   it('drops a person from the notice when they ask to stop, and settles it when nobody is left', async () => {
     const h = harness();
-    const ctx = ctxWith(h, { write: async () => BLANK });
-    const p = h.person({ ...FOLLOW_UP });
-    const { runner } = runnerFor(h, ctx);
+    const p = stuck(h, { ...FOLLOW_UP });
+    const { runner } = runnerFor(h);
     await runner.tick();
     h.ctx.repo.updatePerson(p.id, { status: 'stopped' });
     await runner.tick();
@@ -123,9 +127,8 @@ describe('a message with a blank in it', () => {
 
   it('is told on the person page, truthfully, instead of promising a send', async () => {
     const h = harness();
-    const ctx = ctxWith(h, { write: async () => BLANK });
-    const p = h.person({ ...FOLLOW_UP });
-    await runnerFor(h, ctx).runner.tick();
+    const p = stuck(h, { ...FOLLOW_UP });
+    await runnerFor(h).runner.tick();
     expect(personDetail(h.ctx, p.id).next).toBe('A follow-up is waiting for your edit');
     const item = h.ctx.repo.listOutbox({ state: ['blocked'] })[0]!;
     editBlocked(h.ctx, item.id, 'Hi, a plain follow-up. Worth a look?');

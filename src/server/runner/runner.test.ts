@@ -284,13 +284,15 @@ describe('Runner.tick: planning', () => {
     expect(h.ctx.repo.listOutbox({ personId: blocked.id })).toHaveLength(1);
   });
 
-  it('writes with a placeholder, then blocks it instead of sending', async () => {
+  it('never puts a message with a blank in it in the outbox, and asks the user instead', async () => {
     const h = harness();
     const p = h.person({ ...FOLLOW_UP });
     const ctx = ctxWith(h, { write: async () => ({ subject: 'Hello', body: 'Our price is [YOUR PRICE].' }) });
     await new Runner(ctx).tick();
+    await new Runner(ctx).tick();
     expect(h.adapters.email.sent).toEqual([]);
-    expect(h.ctx.repo.listOutbox({ personId: p.id })).toMatchObject([{ state: 'blocked', error: expect.stringContaining('[YOUR PRICE]') }]);
+    expect(h.ctx.repo.listOutbox({ personId: p.id })).toEqual([]);
+    expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([{ kind: 'needs_offer' }]);
   });
 
   it('keeps going when the writer fails for one person', async () => {

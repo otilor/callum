@@ -14,8 +14,13 @@ export type AskIntent =
   | { intent: 'pause' | 'resume'; channel: Channel }
   | { intent: 'tone'; tone: Tone }
   | { intent: 'switch'; personIds: number[]; channel: Channel };
+/**
+ * A message as written. `missing` is set instead when it could not be written well without something only the sender
+ * knows (what they offer, said plainly): a short question for them, and the body is not to be sent.
+ */
+export interface Written { subject: string | null; body: string; missing?: string }
 export interface Writer {
-  write(kind: OutKind, ctx: WriteContext): Promise<{ subject: string | null; body: string }>;
+  write(kind: OutKind, ctx: WriteContext): Promise<Written>;
   classify(text: string, ctx: WriteContext): Promise<Classification>;
   offerLine(siteText: string, domain: string): Promise<string>;
   parseAsk(text: string, people: { id: number; name: string }[]): Promise<AskIntent>;
@@ -32,3 +37,6 @@ export function createWriter(env: { ANTHROPIC_API_KEY?: string; CALLUM_MODEL?: s
   const model = env.CALLUM_MODEL?.trim() || DEFAULT_MODEL;
   return new ClaudeWriter(key, model, templates, undefined, systemClock);
 }
+
+/** The messages that say what the sender offers, and so are not written until Callum knows it. */
+export const SAYS_OFFER: ReadonlySet<OutKind> = new Set<OutKind>(['hello', 'invite', 'thanks']);

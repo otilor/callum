@@ -330,3 +330,38 @@
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
+
+/* Callum needs one line about what the user offers. */
+.inc-ask-what {
+  margin: 0;
+  font-size: 15px;
+  color: var(--slate);
+}
+.inc-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.inc-ask-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink, #1D2140);
+}
+.inc-ask-input {
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1.5px solid var(--line, #DCDFEA);
+  border-radius: 14px;
+  font: inherit;
+  font-size: 16px;
+  background: #FFFFFF;
+}
+.inc-ask-input:focus {
+  outline: none;
+  border-color: var(--ink, #1D2140);
+}
+.inc-ask-was {
+  margin: 0;
+  font-size: 13px;
+  color: var(--slate);
+}

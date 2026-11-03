@@ -31,16 +31,20 @@ const requestOf = (parse: ReturnType<typeof fakeClient>['parse']) => parse.mock.
 };
 
 describe('ClaudeWriter request shape', () => {
-  it('sends model, low effort, a JSON schema, a system prompt and the user message', async () => {
+  it('sends model, medium effort for a first note, a JSON schema, a system prompt and the user message', async () => {
     const { writer, parse } = writerWith({ parsed_output: { body: 'Hi Kemi, a short and honest note.' } });
     await writer.write('hello', testCtx({ project: testProject({ tone: 'direct', sample: 'Hey Tola, saw your post on payouts.' }) }));
     expect(parse).toHaveBeenCalledOnce();
     const req = requestOf(parse);
     expect(req.model).toBe('claude-opus-5-5');
     expect(req.max_tokens).toBeGreaterThanOrEqual(2000);
-    expect(req.output_config.effort).toBe('low');
+    expect(req.output_config.effort).toBe('medium');
     expect(req.output_config.format.type).toBe('json_schema');
-    expect(Object.keys(req.output_config.format.schema.properties)).toEqual(['body']);
+    // Claude says what is in it for them before it writes the note, and that reason is never sent.
+    expect(Object.keys(req.output_config.format.schema.properties)).toEqual(['why', 'body', 'missing']);
+    expect(req.system).toContain('what it would get them');
+    expect(req.system).toContain('"what do they do, and why me"');
+    expect(req.system).toContain('I came across');
     expect(req.thinking).toBeUndefined();
     expect(req.temperature).toBeUndefined();
     expect(req.messages).toHaveLength(1);
@@ -56,10 +60,42 @@ describe('ClaudeWriter request shape', () => {
     expect(req.messages[0]!.content).toContain('Kemi Eze');
     expect(req.messages[0]!.content).toContain('Oko Pay');
   });
-  it('mentions the 280-character limit for an invite and carries the calendar link for a booking', async () => {
+  it('takes any bracketed words in what Claude wrote for a blank, even lower case', async () => {
+    for (const body of ['Hi Kemi, I help with [your offer].', 'Hi Kemi, see [link] for more.']) {
+      const { writer } = writerWith({ parsed_output: { why: 'x', body, missing: null } });
+      const out = await writer.write('follow_up', testCtx());
+      expect(out.body, body).not.toContain('[');
+    }
+  });
+
+  it('thinks harder and works out the value for every first note: hello, invite, thanks and follow-up', async () => {
+    for (const kind of ['hello', 'invite', 'thanks', 'follow_up'] as const) {
+      const { writer, parse } = writerWith({ parsed_output: { why: 'x', body: 'Hi Kemi, I take reconciliation off ops teams.', missing: null } });
+      await writer.write(kind, testCtx());
+      const req = requestOf(parse);
+      expect(req.output_config.effort, kind).toBe('medium');
+      expect(req.system, kind).toContain('"what do they do, and why me"');
+    }
+  });
+
+  it('keeps low effort and no value brief for a reply, a booking or a close, and never sends the why', async () => {
+    for (const kind of ['reply', 'booking', 'close'] as const) {
+      const { writer, parse } = writerWith({ parsed_output: { why: 'n/a', body: 'Hi Kemi, Thursday at 9:00 works.', missing: null } });
+      const out = await writer.write(kind, testCtx());
+      const req = requestOf(parse);
+      expect(req.output_config.effort, kind).toBe('low');
+      expect(req.system, kind).not.toContain('"what do they do, and why me"');
+      expect(out.body).toBe('Hi Kemi, Thursday at 9:00 works.');
+    }
+    const { writer } = writerWith({ parsed_output: { why: 'Their ops team reconciles by hand.', body: 'Hi Kemi, I take reconciliation off ops teams.', missing: null } });
+    const out = await writer.write('hello', testCtx());
+    expect(out).toEqual({ subject: expect.any(String), body: 'Hi Kemi, I take reconciliation off ops teams.' });
+  });
+
+  it('mentions the 200-character limit for an invite and carries the calendar link for a booking', async () => {
     const a = writerWith({ parsed_output: { body: 'Hi Kemi, glad to connect.' } });
     await a.writer.write('invite', testCtx({ channel: 'linkedin' }));
-    expect(requestOf(a.parse).system).toContain('280 characters');
+    expect(requestOf(a.parse).system).toContain('200 characters');
     const b = writerWith({ parsed_output: { body: 'Great. Pick a time: https://cal.example.com/ada' } });
     await b.writer.write('booking', testCtx());
     expect(requestOf(b.parse).system).toContain('https://cal.example.com/ada');
@@ -82,11 +118,27 @@ describe('ClaudeWriter results', () => {
     const out = await writer.write('hello', testCtx());
     expect(out).toEqual({ subject: 'Quick question, Kemi', body: 'Hi Kemi. Quick one about reconciliation at Oko Pay.' });
   });
-  it('write keeps an ALL-CAPS placeholder for the guard to catch, but not a merge field', async () => {
-    const ok = await writerWith({ parsed_output: { body: 'Thanks, Kemi. It costs [YOUR PRICE] a month.' } }).writer.write('reply', testCtx());
-    expect(ok.body).toContain('[YOUR PRICE]');
-    const merged = await writerWith({ parsed_output: { body: 'Hi {first_name}, hello.' } }).writer.write('hello', testCtx());
-    expect(merged).toEqual(await template.write('hello', testCtx()));
+  it('write never gives back a blank to fill in: the templates take over', async () => {
+    for (const body of ['Thanks, Kemi. It costs [YOUR PRICE] a month.', 'Hi {first_name}, hello.', 'Hi Abhilash, I help YC founders [WHAT TETHERS DOES] at tethers.com.']) {
+      const out = await writerWith({ parsed_output: { body, missing: null } }).writer.write('hello', testCtx());
+      expect(out).toEqual(await template.write('hello', testCtx()));
+      expect(out.body).not.toMatch(/\[[A-Z]/);
+    }
+  });
+  it('tells Claude never to write a blank, and to ask the sender when it cannot say what they do', async () => {
+    const { writer, parse } = writerWith({ parsed_output: { body: 'Hi Kemi.', missing: null } });
+    await writer.write('hello', testCtx());
+    const req = requestOf(parse);
+    expect(req.system).toContain('Never write a placeholder');
+    expect(req.system).not.toContain('ALL-CAPS bracket placeholder');
+    expect(req.system).toContain('set "missing" to one short question');
+  });
+  it('passes on the question when Claude cannot say what the sender does, for a hello but not a reply', async () => {
+    const asked = { body: '', missing: '  What does Tethers do,\n and for whom? ' };
+    const hello = await writerWith({ parsed_output: asked }).writer.write('hello', testCtx());
+    expect(hello).toEqual({ subject: (await template.write('hello', testCtx())).subject, body: '', missing: 'What does Tethers do, and for whom?' });
+    const reply = await writerWith({ parsed_output: asked }).writer.write('reply', testCtx());
+    expect(reply.missing).toBeUndefined();
   });
   it('write clamps an invite to 280 characters', async () => {
     const long = `Hi Kemi, ${'I help finance teams close faster and with fewer late nights. '.repeat(8)}`;
@@ -301,7 +353,7 @@ describe('ClaudeWriter with the real SDK against a local server', () => {
         res.setHeader('content-type', 'application/json');
         res.end(JSON.stringify({
           id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: 'end_turn', stop_sequence: null,
-          content: [{ type: 'text', text: JSON.stringify({ body: 'Hi Kemi, a short note about reconciliation.' }) }],
+          content: [{ type: 'text', text: JSON.stringify({ why: 'Oko Pay reconciles by hand; the sender takes that off ops.', body: 'Hi Kemi, a short note about reconciliation.', missing: null }) }],
           usage: { input_tokens: 10, output_tokens: 10 },
         }));
       });
@@ -314,7 +366,7 @@ describe('ClaudeWriter with the real SDK against a local server', () => {
       expect(out.body).toBe('Hi Kemi, a short note about reconciliation.');
       expect(seen.url).toBe('/v1/messages');
       expect(seen.headers?.authorization).toBe(`Bearer ${KEY}`);
-      expect(seen.body).toMatchObject({ model: 'claude-opus-5-5', output_config: { effort: 'low', format: { type: 'json_schema' } } });
+      expect(seen.body).toMatchObject({ model: 'claude-opus-5-5', output_config: { effort: 'medium', format: { type: 'json_schema' } } });
       expect(seen.body).not.toHaveProperty('thinking');
       expect(seen.body).not.toHaveProperty('temperature');
     } finally {

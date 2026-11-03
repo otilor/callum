@@ -23,6 +23,9 @@ import {
 import { importLeads, MAX_FIND, searchLeads } from './leads.js';
 import { eventStream } from './sse.js';
 import { staticHandler } from './static.js';
+import { afterSaved } from '../services/common.js';
+import { planProjectNow } from '../runner/runner.js';
+import { offerFromSite, offerWithSite, siteDomain } from '../runner/offer.js';
 
 export interface AppOptions {
   password: string | null;
@@ -101,10 +104,12 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
   app.use('/api/login', bodyLimit({ maxSize: LOGIN_BODY_LIMIT, onError: (c) => c.json({ error: TOO_LARGE }, 413) }));
   app.use('/api/*', bodyLimit({ maxSize: BODY_LIMIT, onError: (c) => c.json({ error: TOO_LARGE }, 413) }));
   app.use('/api/*', auth.gate);
-  // Every change wakes the runner, so a send that is due now does not wait for the next 5 seconds.
+  // Every change wakes the runner, so a send that is due now does not wait for the next 5 seconds. Posts that change
+  // nothing (signing in or out, reading a website for the offer) do not.
+  const NOT_A_CHANGE = new Set(['/api/login', '/api/logout', '/api/offer/site']);
   app.use('/api/*', async (c, next) => {
     await next();
-    if (c.req.method === 'POST' && c.res.status < 400 && c.req.path !== '/api/login' && c.req.path !== '/api/logout') {
+    if (c.req.method === 'POST' && c.res.status < 400 && !NOT_A_CHANGE.has(c.req.path)) {
       opts.runner?.tick().catch(report);
     }
   });
@@ -172,6 +177,13 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
     return c.json(next);
   });
   api.get('/offer/suggest', async (c) => c.json({ offer: await onboarding.suggestOffer(ctx) }));
+  // A website the user typed: what its company does, in a line Callum can write from.
+  api.post('/offer/site', async (c) => {
+    const b = await readBody(c);
+    const site = typeof b.site === 'string' ? b.site : '';
+    if (!siteDomain(site)) throw new UserError('Type a website, like yourcompany.com.');
+    return c.json(await offerFromSite(ctx, site));
+  });
   api.get('/sample', async (c) => {
     const tone = toneOf(c.req.query('tone'));
     return c.json(await onboarding.sample(ctx, projectIdOf(ctx, c.req.query('projectId')), tone));
@@ -215,11 +227,15 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
     const name = optText(b, 'name');
     let project = ctx.repo.getProject(id);
     if (!project) throw new UserError("Callum can't find that project.", 404);
+    // A website is read, so "tethers.com" is enough to say what the user does.
+    if (typeof patch.offer === 'string' && patch.offer.trim() !== (project.offer ?? '').trim()) patch.offer = (await offerWithSite(ctx, patch.offer)) ?? patch.offer;
     // All or nothing: a name that is taken must not leave the other changes half made.
     ctx.repo.transaction(() => {
       project = projects.updateProject(ctx, id, patch);
       if (name !== undefined) project = projects.renameProject(ctx, id, name);
     });
+    // New words: the hellos waiting for an OK (taken back) or for the offer are written now, not at the next tick.
+    if (patch.offer !== undefined || patch.tone !== undefined) await afterSaved(ctx, () => planProjectNow(ctx, id, { early: true }));
     return c.json(project);
   });
   api.post('/projects/:id/pause', async (c) => {

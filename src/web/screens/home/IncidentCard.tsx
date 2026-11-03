@@ -1,3 +1,4 @@
+import { findPlaceholders, offerSaysEnough } from '../../../shared/placeholders.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AppState, Channel, Incident, OutboxItem, Person } from '../../../shared/types.js';
 import { api, ApiError } from '../../api.js';
@@ -109,6 +110,7 @@ function titleOf(incident: Incident, state: AppState): string {
       return n > 0 ? `${n} ${n === 1 ? 'email' : 'emails'} bounced` : 'Some emails bounced';
     }
     case 'channel_paused': return `${CHANNEL_NAME[incident.channel].replace(/^./, (c) => c.toUpperCase())} is paused`;
+    case 'needs_offer': return 'Callum needs one line from you';
     case 'send_failed': {
       // Callum's own messages: the sentence that says how many is the title.
       if (autoItems(incident.detail) !== null) return incident.message;
@@ -209,6 +211,76 @@ function Shell({ incident, state, now, titleId, paused, children }: { incident: 
         </div>
       </div>
       {children}
+    </section>
+  );
+}
+
+/** The project and question of an ask for what the user offers. */
+function offerAskOf(incident: Incident): { projectId: number; question: string } | null {
+  try {
+    const d = JSON.parse(incident.detail ?? 'null') as { projectId?: unknown; question?: unknown } | null;
+    return typeof d?.projectId === 'number' && typeof d.question === 'string' ? { projectId: d.projectId, question: d.question } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Callum stopped before writing to anyone in a project: one line from the user about what they offer, and it carries on. */
+function OfferAsk({ incident, state, refresh, titleId }: { incident: Incident; state: AppState; refresh(): Promise<void>; titleId: string }) {
+  const toast = useToast();
+  const ask = offerAskOf(incident);
+  const project = ask ? state.projects.find((p) => p.id === ask.projectId) : undefined;
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!ask || !project) return null;
+  const inputId = `inc-offer-${incident.id}`;
+  const save = async () => {
+    const offer = text.trim();
+    if (!offer || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const saved = await api.updateProject(project.id, { offer });
+      await refresh();
+      // A bare link Callum could not read, a name, or a blank: still not enough to write from.
+      if (!offerSaysEnough(saved.offer)) {
+        setError(`Callum still can't say what ${project.name} does from that. Say it in a few words, like the example.`);
+        return;
+      }
+      toast(`Thanks. Callum writes to people in ${project.name} now.`);
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="inc-card card-in" aria-labelledby={titleId} data-kind={incident.kind}>
+      <div className="inc-head">
+        <div className="inc-head-text">
+          <h2 id={titleId} className="inc-title" tabIndex={-1}>{titleOf(incident, state)}</h2>
+        </div>
+      </div>
+      <p className="inc-ask-what">{incident.message}</p>
+      <form className="inc-ask" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+        <label htmlFor={inputId} className="inc-ask-label">{ask.question}</label>
+        <input
+          id={inputId}
+          className="inc-ask-input"
+          type="text"
+          value={text}
+          maxLength={300}
+          autoComplete="off"
+          placeholder="I help founders hire engineers, or paste https://yoursite.com"
+          onChange={(e) => setText(e.target.value)}
+        />
+        {project.offer && findPlaceholders(project.offer).length === 0 ? <p className="inc-ask-was">You said: {project.offer}</p> : null}
+        {error ? <ErrorNote>{error}</ErrorNote> : null}
+        <div className="inc-actions">
+          <button type="submit" className="inc-primary" aria-busy={busy} disabled={!text.trim() || busy}>Save</button>
+        </div>
+      </form>
     </section>
   );
 }
@@ -376,6 +448,9 @@ export function IncidentCard({ incident, state, refresh, onReconnect, onDismiss,
       setBusy(false);
     }
   }
+
+  // ---- Callum needs to know what the user offers ---------------------------------------------------------------------
+  if (incident.kind === 'needs_offer') return <OfferAsk incident={incident} state={state} refresh={refresh} titleId={titleId} />;
 
   // ---- LinkedIn wants to check it's you ------------------------------------------------------------------------------
   if (incident.kind === 'linkedin_check') {
@@ -657,7 +732,9 @@ export function IncidentCards({ state, refresh, onReconnect, onOpenPerson, inclu
     };
   }, []);
 
-  const open = state.incidents.filter((i) => i.state === 'open' && !dismissed.has(i.id) && (include ? include(i) : true));
+  // An ask about a project that is gone has nothing to draw, so it does not leave an empty stack behind.
+  const drawable = (i: Incident) => i.kind !== 'needs_offer' || state.projects.some((p) => p.id === offerAskOf(i)?.projectId);
+  const open = state.incidents.filter((i) => i.state === 'open' && !dismissed.has(i.id) && drawable(i) && (include ? include(i) : true));
   const lingering = kept.filter((k) => !open.some((o) => o.id === k.id));
   const shown = [...open, ...lingering].sort((a, b) => a.id - b.id);
   if (shown.length === 0) return null;

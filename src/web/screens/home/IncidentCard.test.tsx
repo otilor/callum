@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INCIDENT_COPY } from '../../../server/runner/incidents.js';
 import type { AppState, Incident, OutboxItem } from '../../../shared/types.js';
 import { ApiError } from '../../api.js';
-import { appState, channel, incident, outboxItem, person } from '../../test/phoneLeaveFixtures.js';
+import { appState, channel, incident, outboxItem, person, project } from '../../test/phoneLeaveFixtures.js';
 import { ToastProvider } from '../../ui/Toast.js';
 import { IncidentCards, stillChannels } from './IncidentCard.js';
 
-const mocks = vi.hoisted(() => ({ resumeChannel: vi.fn(), retry: vi.fn(), editBlocked: vi.fn(), dismissIncident: vi.fn() }));
+const mocks = vi.hoisted(() => ({ resumeChannel: vi.fn(), retry: vi.fn(), editBlocked: vi.fn(), dismissIncident: vi.fn(), updateProject: vi.fn() }));
 vi.mock('../../api.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../api.js')>()), api: mocks }));
 
 const refresh = vi.fn(() => Promise.resolve());
@@ -20,6 +20,7 @@ beforeEach(() => {
   mocks.retry.mockReset();
   mocks.editBlocked.mockReset();
   mocks.dismissIncident.mockReset();
+  mocks.updateProject.mockReset();
   mocks.dismissIncident.mockResolvedValue({});
   refresh.mockClear();
   onReconnect.mockClear();
@@ -429,5 +430,60 @@ describe('IncidentCards: a channel paused because sends could not be confirmed',
     expect(screen.getByText('2 people wait for LinkedIn. Nothing is lost.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: "I've checked, resume LinkedIn" }));
     expect(mocks.resumeChannel).toHaveBeenCalledWith('linkedin', 'full', true);
+  });
+});
+
+describe('IncidentCards: Callum needs to know what the user offers', () => {
+  const ask = (over: Partial<Incident> = {}) => incident(40, 'needs_offer', "Callum won't write to anyone in Tethers until it can say what you do. Nothing has been sent.", {
+    detail: JSON.stringify({ projectId: 1, question: 'What does Tethers do, and for whom, in one line?' }), ...over,
+  });
+  const state = () => appState({ projects: [project({ name: 'Tethers', offer: 'tethers.com' })], incidents: [ask()] });
+
+  it('asks the one question, shows what the user said before, and never shows a blank', () => {
+    setup(state());
+    expect(screen.getByRole('heading', { name: 'Callum needs one line from you' })).toBeInTheDocument();
+    expect(screen.getByText("Callum won't write to anyone in Tethers until it can say what you do. Nothing has been sent.")).toBeInTheDocument();
+    expect(screen.getByLabelText('What does Tethers do, and for whom, in one line?')).toBeInTheDocument();
+    expect(screen.getByText('You said: tethers.com')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(document.body.textContent).not.toMatch(/\[[A-Z]/);
+  });
+
+  it('saves the line as the offer and refreshes', async () => {
+    mocks.updateProject.mockResolvedValue(project({ name: 'Tethers', offer: 'I help YC founders find their first enterprise customers' }));
+    const { user } = setup(state());
+    await user.type(screen.getByLabelText('What does Tethers do, and for whom, in one line?'), 'I help YC founders find their first enterprise customers');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(mocks.updateProject).toHaveBeenCalledWith(1, { offer: 'I help YC founders find their first enterprise customers' });
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('says it is still not enough when the answer was a link Callum could not read, and keeps the card', async () => {
+    mocks.updateProject.mockResolvedValue(project({ name: 'Tethers', offer: 'tethers.com' }));
+    const { user } = setup(state());
+    await user.type(screen.getByLabelText('What does Tethers do, and for whom, in one line?'), 'tethers.com{Enter}');
+    expect(await screen.findByText("Callum still can't say what Tethers does from that. Say it in a few words, like the example.")).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('never shows an old blank as what the user said', () => {
+    setup(appState({ projects: [project({ name: 'Tethers', offer: '[WHAT TETHERS DOES]' })], incidents: [ask()] }));
+    expect(screen.queryByText(/You said/)).toBeNull();
+    expect(document.body.textContent).not.toContain('[WHAT TETHERS DOES]');
+  });
+
+  it('says so in words when saving fails, and keeps what was typed', async () => {
+    mocks.updateProject.mockRejectedValue(new ApiError(500, 'Callum could not save that.'));
+    const { user } = setup(state());
+    const field = screen.getByLabelText('What does Tethers do, and for whom, in one line?');
+    await user.type(field, 'I help YC founders hire{Enter}');
+    expect(await screen.findByText('Callum could not save that.')).toBeInTheDocument();
+    expect(field).toHaveValue('I help YC founders hire');
+  });
+
+  it('draws nothing for a project that is gone', () => {
+    setup(appState({ projects: [], incidents: [ask()] }));
+    expect(screen.queryByRole('heading', { name: 'Callum needs one line from you' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Needs your attention' })).not.toBeInTheDocument();
   });
 });

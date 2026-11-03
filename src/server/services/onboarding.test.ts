@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { importPeople } from '../leads/import.js';
 import { planProjectNow } from '../runner/runner.js';
-import { createProject } from './projects.js';
+import { createProject, updateProject } from './projects.js';
 import { planPreview, sample, start, suggestOffer } from './onboarding.js';
 import { harness } from './testing.test-helpers.js';
 
@@ -249,12 +249,46 @@ describe('start', () => {
     await expect(start(h.ctx, h.project.id)).rejects.toThrow('Reconciliation is wrapped up.');
   });
 
-  it('queues a hello even when the offer is blank (the runner refuses to send a blank at send time)', async () => {
-    const h = harness({ offer: null });
-    h.person();
-    await start(h.ctx, h.project.id);
-    const [item] = h.ctx.repo.listOutbox();
-    expect(item?.state).toBe('awaiting_ok');
+  it('writes no hello until it knows what the user offers, asks for it once, and writes once told', async () => {
+    for (const offer of [null, 'tethers.com', 'https://tethers.com', '[WHAT YOU OFFER]']) {
+      const h = harness({ offer });
+      h.person();
+      await start(h.ctx, h.project.id);
+      await planProjectNow(h.ctx, h.project.id, { early: true });
+      expect(h.ctx.repo.listOutbox()).toEqual([]);
+      const asks = h.ctx.repo.listIncidents({ open: true });
+      expect(asks).toMatchObject([{ kind: 'needs_offer' }]);
+      expect(asks[0]?.message).toBe(`Callum won't write to anyone in ${h.project.name} until it can say what you do. Nothing has been sent.`);
+      expect(JSON.parse(asks[0]?.detail ?? '{}')).toEqual({ projectId: h.project.id, question: `What does ${h.project.name} do, and for whom, in one line?` });
+
+      updateProject(h.ctx, h.project.id, { offer: 'I help YC founders find their first enterprise customers' });
+      expect(h.ctx.repo.listIncidents({ open: true })).toEqual([]);
+      await planProjectNow(h.ctx, h.project.id, { early: true });
+      const [item] = h.ctx.repo.listOutbox();
+      expect(item?.state).toBe('awaiting_ok');
+      expect(item?.body).toContain('enterprise customers');
+    }
+  });
+
+  it('takes back a first hello written with a blank before, and writes it again or asks for what it lacked', async () => {
+    for (const offer of ["You help fintech teams take reconciliation off their ops team's plate", 'tethers.com']) {
+      const h = harness({ offer });
+      const p = h.person();
+      await start(h.ctx, h.project.id);
+      for (const i of h.ctx.repo.listOutbox()) h.ctx.repo.updateOutbox(i.id, { state: 'cancelled' });
+      const old = h.ctx.outbox.queueAuto(p.id, 'hello', 'Hi, I help YC founders [WHAT TETHERS DOES] at tethers.com.', 'Hello', h.clock.now(), true);
+      await planProjectNow(h.ctx, h.project.id, { early: true });
+      expect(h.ctx.repo.getOutbox(old.id)?.state).toBe('cancelled');
+      const waiting = h.ctx.repo.listOutbox({ state: ['awaiting_ok'] });
+      if (offer === 'tethers.com') {
+        expect(waiting).toEqual([]);
+        expect(h.ctx.repo.listIncidents({ open: true })).toMatchObject([{ kind: 'needs_offer' }]);
+      } else {
+        expect(waiting).toHaveLength(1);
+        expect(waiting[0]?.body).not.toContain('[');
+        expect(h.ctx.repo.listIncidents({ open: true })).toEqual([]);
+      }
+    }
   });
 
   it('does not start anything after Callum was wrapped up', async () => {

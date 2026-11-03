@@ -10,6 +10,7 @@ import { River } from '../add/River.js';
 import { messageOf, useWhoFinder } from '../add/useWhoFinder.js';
 import { AlertLine, WhoPanel } from '../add/WhoPanel.js';
 import { firstOf, seedOf } from '../add/words.js';
+import { OfferWays, SiteField, siteName, withSite, type OfferWay } from '../offer/OfferSource.js';
 import './NewProject.css';
 
 export const EXAMPLE_OFFER = 'You help growing teams in Lagos and Accra run payroll without spreadsheets.';
@@ -47,6 +48,9 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
   // Each question (and the two screens after them) announces itself: the cursor goes to its heading.
   const headingRef = useHeadingFocus(`${phase}-${step}`);
   const [offer, setOffer] = useState('');
+  const [way, setWay] = useState<OfferWay>('words');
+  // The website Callum read and the line it wrote from it, while the person keeps that site.
+  const [site, setSite] = useState<{ domain: string; line: string } | null>(null);
   const [nameOverride, setNameOverride] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -66,17 +70,20 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
   const others = state.projects;
   const connected = state.channels.filter((c) => c.status === 'connected').map((c) => CHANNEL_WORDS[c.channel] ?? c.channel);
   const hasOffer = offer.trim() !== '';
-  const name = nameOverride ?? suggestProjectName(offer);
+  const offerText = withSite(offer, site?.domain ?? null);
+  const name = nameOverride ?? (site ? siteName(site.domain) : suggestProjectName(offer));
   const clash = useMemo(() => {
     const wanted = name.trim().toLowerCase();
     return wanted === '' ? null : (others.find((p) => p.name.toLowerCase() === wanted && p.id !== project?.id) ?? null);
   }, [name, others, project]);
   const clashText = clash ? `You already have a project called ${clash.name}. Nothing has started yet. Pick another name.` : '';
-  const nameBlocked = !hasOffer || name === '' || clash !== null;
+  // With "Use my website" chosen, the line has to come from a site Callum read.
+  const needsRead = way === 'site' && !site;
+  const nameBlocked = needsRead || !hasOffer || name === '' || clash !== null;
 
   const kept = finder.kept;
   const first = kept[0] ?? null;
-  const sampleKey = `${tone}|${offer.trim()}|${finder.found?.batchId ?? ''}|${first?.key ?? ''}`;
+  const sampleKey = `${tone}|${offerText}|${finder.found?.batchId ?? ''}|${first?.key ?? ''}`;
   const sample = samples[sampleKey];
   const edited = drafts[tone] !== undefined;
 
@@ -85,7 +92,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
     let current = true;
     setSampleError(null);
     peopleApi
-      .sample({ offer: offer.trim(), tone, ...(finder.found && first ? { batchId: finder.found.batchId, key: first.key } : {}) })
+      .sample({ offer: offerText, tone, ...(finder.found && first ? { batchId: finder.found.batchId, key: first.key } : {}) })
       .then((res) => {
         if (current) setSamples((all) => ({ ...all, [sampleKey]: res }));
       })
@@ -95,7 +102,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
     return () => {
       current = false;
     };
-  }, [step, hasOffer, sample, edited, offer, tone, sampleKey, finder.found, first]);
+  }, [step, hasOffer, sample, edited, offerText, tone, sampleKey, finder.found, first]);
 
   const message = drafts[tone] ?? sample?.body ?? '';
   const writing = !sample && !edited && sampleError?.key !== sampleKey;
@@ -134,7 +141,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
     setPhase('starting');
     try {
       let made = project;
-      const text = offer.trim();
+      const text = offerText;
       const audience = finder.way === 'describe' && finder.descText.trim() ? finder.descText.trim() : undefined;
       if (!made) {
         made = await api.createProject({ offer: text, name, tone, ...(audience ? { audience } : {}) });
@@ -225,6 +232,8 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
     setStep(0);
     setPhase('flow');
     setOffer('');
+    setWay('words');
+    setSite(null);
     setNameOverride(null);
     setEditing(false);
     setNameError('');
@@ -270,59 +279,84 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
           <section className="np-step step-in" aria-labelledby="np-q0">
             <h1 ref={headingRef} tabIndex={-1} id="np-q0" className="np-title">What do you offer?</h1>
             <div className="np-col">
-              <label htmlFor="np-offer" className="sr-only">What you offer, in one line</label>
-              <textarea
-                id="np-offer"
-                className="np-offer"
-                rows={2}
-                value={offer}
-                placeholder="One line, in your words"
-                onChange={(e) => { setOffer(e.target.value); setNameError(''); }}
-              />
-              <div className="np-name">
-                {hasOffer && name ? (
-                  <>
-                    <i className="np-name-dot" aria-hidden="true" />
-                    <span className="np-name-text">Callum will call this</span>
-                    {editing ? (
-                      <>
-                        <label htmlFor="np-pname" className="sr-only">Project name</label>
-                        <input
-                          id="np-pname"
-                          className="np-name-input"
-                          type="text"
-                          autoFocus
-                          value={draftName}
-                          onChange={(e) => { setDraftName(e.target.value); setNameError(''); }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') { e.preventDefault(); saveName(); }
-                            else if (e.key === 'Escape') { e.stopPropagation(); setEditing(false); setNameError(''); }
-                          }}
-                        />
-                        <button type="button" className="np-btn np-btn-ink np-btn-sm" onClick={saveName}>Save</button>
-                        <button type="button" className="np-btn np-btn-ghost np-btn-sm" onClick={() => { setEditing(false); setNameError(''); }}>Cancel</button>
-                      </>
-                    ) : (
-                      <>
-                        <strong className="np-name-value">{name}</strong>
-                        <button type="button" className="np-pencil" aria-label="Rename this project" onClick={() => { setDraftName(name); setNameError(''); setEditing(true); }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D2140" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20l4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10z" /></svg>
-                        </button>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <span className="np-name-text">Callum suggests a short name as you type.</span>
-                    <button type="button" className="np-btn np-btn-quiet np-btn-xs" onClick={() => { setOffer(EXAMPLE_OFFER); setNameOverride(null); }}>Try the Payroll example</button>
-                  </>
-                )}
-              </div>
+              <OfferWays way={way} onWay={(w) => { setWay(w); setNameError(''); }} />
+              {way === 'site' ? (
+                <SiteField
+                  initial={site?.domain ?? ''}
+                  onRead={(line, domain) => {
+                    setOffer(line);
+                    setSite({ domain, line });
+                    setNameError('');
+                  }}
+                  onEdit={() => { setSite(null); setOffer(''); }}
+                />
+              ) : null}
+              {way === 'words' || site ? (
+                <>
+                  {site && offer === site.line ? (
+                    <span className="np-read-note">{`Callum read ${site.domain} and wrote this. Change any word.`}</span>
+                  ) : null}
+                  <label htmlFor="np-offer" className="sr-only">What you offer, in one line</label>
+                  <textarea
+                    id="np-offer"
+                    className="np-offer"
+                    rows={2}
+                    value={offer}
+                    placeholder="One line, in your words"
+                    onChange={(e) => {
+                      setOffer(e.target.value);
+                      setNameError('');
+                      if (e.target.value.trim() === '') setSite(null);
+                    }}
+                  />
+                </>
+              ) : null}
+              {way === 'words' || hasOffer ? (
+                <div className="np-name">
+                  {hasOffer && name ? (
+                    <>
+                      <i className="np-name-dot" aria-hidden="true" />
+                      <span className="np-name-text">Callum will call this</span>
+                      {editing ? (
+                        <>
+                          <label htmlFor="np-pname" className="sr-only">Project name</label>
+                          <input
+                            id="np-pname"
+                            className="np-name-input"
+                            type="text"
+                            autoFocus
+                            value={draftName}
+                            onChange={(e) => { setDraftName(e.target.value); setNameError(''); }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') { e.preventDefault(); saveName(); }
+                              else if (e.key === 'Escape') { e.stopPropagation(); setEditing(false); setNameError(''); }
+                            }}
+                          />
+                          <button type="button" className="np-btn np-btn-ink np-btn-sm" onClick={saveName}>Save</button>
+                          <button type="button" className="np-btn np-btn-ghost np-btn-sm" onClick={() => { setEditing(false); setNameError(''); }}>Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <strong className="np-name-value">{name}</strong>
+                          <button type="button" className="np-pencil" aria-label="Rename this project" onClick={() => { setDraftName(name); setNameError(''); setEditing(true); }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D2140" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20l4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10z" /></svg>
+                          </button>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span className="np-name-text">Callum suggests a short name as you type.</span>
+                      <button type="button" className="np-btn np-btn-quiet np-btn-xs" onClick={() => { setOffer(EXAMPLE_OFFER); setSite(null); setWay('words'); setNameOverride(null); }}>Try the Payroll example</button>
+                    </>
+                  )}
+                </div>
+              ) : null}
               {hasOffer && name && (nameError || clashText) ? <AlertLine>{nameError || clashText}</AlertLine> : null}
             </div>
             <div className="np-actions">
               <button type="button" className="np-btn np-btn-ink" aria-disabled={nameBlocked} onClick={() => { if (!nameBlocked) go(1); }}>Next</button>
-              {nameBlocked ? <span className="np-why">{!hasOffer ? 'Write one line about what you offer first.' : clash ? 'Pick another name to continue.' : 'Callum needs a name to continue.'}</span> : null}
+              {nameBlocked ? <span className="np-why">{needsRead ? 'Read your site first, or describe it in your own words.' : !hasOffer ? 'Write one line about what you offer first.' : clash ? 'Pick another name to continue.' : 'Callum needs a name to continue.'}</span> : null}
             </div>
           </section>
         ) : null}

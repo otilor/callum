@@ -8,6 +8,7 @@ import { ConnectSheet } from '../connect/ConnectSheet.js';
 import { Channels } from './Channels.js';
 import './FirstRun.css';
 import { Offer } from './Offer.js';
+import { siteName, withSite, type OfferWay } from '../offer/OfferSource.js';
 import { Plan } from './Plan.js';
 import { RiverStrip } from './RiverStrip.js';
 import { Tone, useToneStore } from './Tone.js';
@@ -46,6 +47,9 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
   const [project, setProject] = useState<Project | null>(existing);
   const [offer, setOffer] = useState(existing?.offer ?? '');
   const [offerTouched, setOfferTouched] = useState(false);
+  const [offerWay, setOfferWay] = useState<OfferWay>('words');
+  // The website the person gave and the line Callum wrote from it.
+  const [site, setSite] = useState<{ domain: string; line: string } | null>(null);
   const [suggested, setSuggested] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [nameOverride, setNameOverride] = useState<string | null>(null);
@@ -124,11 +128,12 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
       .finally(() => setReading(false));
   }, [step, project, offerTouched, offer]);
 
-  const name = nameOverride ?? (project && offer.trim() === (project.offer ?? '') ? project.name : suggestProjectName(offer));
-  const readFrom = suggested && offer === suggested && mailDomain ? mailDomain : null;
+  const name = nameOverride ?? (project && offer.trim() === (project.offer ?? '') ? project.name : site ? siteName(site.domain) : suggestProjectName(offer));
+  const readFrom = site && offer === site.line ? site.domain : suggested && offer === suggested && mailDomain ? mailDomain : null;
 
   const submitOffer = async () => {
-    const text = offer.trim();
+    const text = withSite(offer, site?.domain ?? null);
+    if (offerWay === 'site' && !site) return setOfferError('Read your site first, or describe it in your own words.');
     if (!text) return setOfferError('Say what you offer in one line.');
     setOfferError('');
     setNameProblem('');
@@ -235,6 +240,23 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
             offer={offer}
             onOffer={(text) => {
               setOffer(text);
+              setOfferTouched(true);
+              setOfferError('');
+              if (text.trim() === '') setSite(null);
+            }}
+            way={offerWay}
+            onWay={(w) => {
+              setOfferWay(w);
+              setOfferError('');
+            }}
+            site={site?.domain ?? ''}
+            onSiteEdit={() => {
+              setSite(null);
+              setOffer('');
+            }}
+            onReadSite={(line, domain) => {
+              setOffer(line);
+              setSite({ domain, line });
               setOfferTouched(true);
               setOfferError('');
             }}

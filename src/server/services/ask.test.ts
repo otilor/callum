@@ -171,6 +171,11 @@ describe('act', () => {
     const h = harness();
     await act(h.ctx, h.project.id, { kind: 'set_tone', label: 'Use a playful tone', args: { tone: 'playful' } });
     expect(h.ctx.repo.getProject(h.project.id)?.tone).toBe('playful');
+    // A first hello waiting for an OK was written in the old tone: it is taken back to be written again.
+    const p = h.ctx.repo.insertPerson({ projectId: h.project.id, name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', channel: 'email' });
+    const waiting = h.ctx.outbox.queueAuto(p.id, 'hello', 'Hi Kemi, a warm note.', 'Hello', h.ctx.clock.now(), true);
+    await act(h.ctx, h.project.id, { kind: 'set_tone', label: 'Use a direct tone', args: { tone: 'direct' } });
+    expect(h.ctx.repo.getOutbox(waiting.id)?.state).toBe('cancelled');
     await expect(act(h.ctx, h.project.id, { kind: 'set_tone', label: '', args: { tone: 'rude' as never } })).rejects.toThrow('Pick warm, direct or playful.');
   });
 
