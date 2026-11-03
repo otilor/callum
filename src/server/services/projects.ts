@@ -105,7 +105,7 @@ export function renameProject(ctx: Ctx, id: number, rawName: string): Project {
 export type ProjectPatch = Partial<Pick<Project, 'offer' | 'audience' | 'tone' | 'sample' | 'calendarUrl'>>;
 
 export function updateProject(ctx: Ctx, id: number, patch: ProjectPatch): Project {
-  requireProject(ctx, id);
+  const before = requireProject(ctx, id);
   const next: Partial<Project> = {};
   if (patch.offer !== undefined) next.offer = textOrNull(patch.offer);
   if (patch.audience !== undefined) next.audience = textOrNull(patch.audience);
@@ -115,7 +115,22 @@ export function updateProject(ctx: Ctx, id: number, patch: ProjectPatch): Projec
   const project = ctx.repo.updateProject(id, next);
   ctx.bus.emit('projects');
   if (offerSaysEnough(project.offer)) offerSettled(ctx, id);
+  // First hellos still waiting for an OK were written with the old words: they are written again with the new ones.
+  if (project.offer !== before.offer || project.tone !== before.tone) rewriteWaitingHellos(ctx, id);
   return project;
+}
+
+/** Takes back the project's first hellos that wait for the user's OK, so the next pass writes them again. Returns how many. */
+export function rewriteWaitingHellos(ctx: Ctx, projectId: number): number {
+  const ofProject = new Set(ctx.repo.listPeople({ projectId }).map((p) => p.id));
+  let n = 0;
+  for (const item of ctx.repo.listOutbox({ state: ['awaiting_ok'] })) {
+    if (item.origin !== 'auto' || !ofProject.has(item.personId)) continue;
+    ctx.repo.updateOutbox(item.id, { state: 'cancelled' });
+    n++;
+  }
+  if (n > 0) ctx.bus.emit('outbox');
+  return n;
 }
 
 /** Its automatic sends stay put until the date (or until Resume). Replies the user sends still go. */

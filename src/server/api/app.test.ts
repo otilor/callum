@@ -237,6 +237,27 @@ describe('projects', () => {
     expect((await h.post(`/api/projects/${p.id}`, { tone: 'shouty' })).status).toBe(422);
   });
 
+  it('writes the hellos waiting for an OK again, in the new words, when the offer changes', async () => {
+    const h = setup();
+    const project = await ready(h, 2);
+    expect((await h.post('/api/start', { projectId: project.id })).status).toBe(200);
+    const before = h.ctx.repo.listOutbox({ state: ['awaiting_ok'] });
+    expect(before).toHaveLength(2);
+    expect(before[0]?.body).toContain('close the books faster');
+
+    expect((await h.post(`/api/projects/${project.id}`, { offer: 'I help YC founders find their first enterprise customers' })).status).toBe(200);
+    for (const old of before) expect(h.ctx.repo.getOutbox(old.id)?.state).toBe('cancelled');
+    const after = h.ctx.repo.listOutbox({ state: ['awaiting_ok'] });
+    expect(after).toHaveLength(2);
+    for (const item of after) {
+      expect(item.body).toContain('enterprise customers');
+      expect(item.body).not.toContain('close the books');
+    }
+    // Saving the same words again leaves them alone.
+    expect((await h.post(`/api/projects/${project.id}`, { offer: 'I help YC founders find their first enterprise customers' })).status).toBe(200);
+    expect(h.ctx.repo.listOutbox({ state: ['awaiting_ok'] }).map((i) => i.id)).toEqual(after.map((i) => i.id));
+  });
+
   it('needs an offer to start one', async () => {
     const h = setup();
     expect((await h.post('/api/projects', { name: 'Empty' })).status).toBe(422);

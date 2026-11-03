@@ -23,6 +23,8 @@ import {
 import { importLeads, MAX_FIND, searchLeads } from './leads.js';
 import { eventStream } from './sse.js';
 import { staticHandler } from './static.js';
+import { afterSaved } from '../services/common.js';
+import { planProjectNow } from '../runner/runner.js';
 
 export interface AppOptions {
   password: string | null;
@@ -220,6 +222,8 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
       project = projects.updateProject(ctx, id, patch);
       if (name !== undefined) project = projects.renameProject(ctx, id, name);
     });
+    // New words: the hellos waiting for an OK (taken back) or for the offer are written now, not at the next tick.
+    if (patch.offer !== undefined || patch.tone !== undefined) await afterSaved(ctx, () => planProjectNow(ctx, id, { early: true }));
     return c.json(project);
   });
   api.post('/projects/:id/pause', async (c) => {
