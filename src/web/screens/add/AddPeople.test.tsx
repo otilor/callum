@@ -312,6 +312,30 @@ describe('AddPeople, describing who', () => {
     }
   });
 
+  it('stops asking for more when Add people is closed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      mocks.describe.mockResolvedValueOnce(found({ total: 1, people: rows(1), line: 'Callum found 1', searching: true }));
+      mocks.describeStatus.mockResolvedValue(found({ total: 1, people: rows(1), line: 'Callum found 1', searching: true }));
+      const { unmount } = render(
+        <ToastProvider>
+          <AddPeople project={project} people={[]} timezone="Africa/Lagos" onClose={vi.fn()} now={() => NOW} />
+        </ToastProvider>,
+      );
+      await user.click(screen.getByRole('tab', { name: 'Describe who' }));
+      await user.type(screen.getByLabelText('Describe who you want to meet'), 'cfo{Enter}');
+      expect(await screen.findByText('Callum found 1 so far')).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      const asked = mocks.describeStatus.mock.calls.length;
+      unmount();
+      await vi.advanceTimersByTimeAsync(POLL_MS * 4);
+      expect(mocks.describeStatus.mock.calls.length).toBeLessThanOrEqual(asked + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('says so when a live search finds nobody in the end', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {

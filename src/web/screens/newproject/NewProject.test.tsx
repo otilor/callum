@@ -481,6 +481,25 @@ describe('NewProject, the voice and Start', () => {
     expect(mocks.createProject).toHaveBeenCalledTimes(1);
   });
 
+  it('asks to choose again, rather than search again, when Callum forgot people it found on the web', async () => {
+    const user = userEvent.setup();
+    show();
+    mocks.createProject.mockResolvedValue(project({ id: 2, name: 'Payroll', startedAt: null }));
+    mocks.commit.mockRejectedValue(new ApiError(410, 'That list is no longer here. Bring it again.'));
+    mocks.describe.mockResolvedValue({
+      batchId: 'web-batch', total: 2, narrow: null, line: 'Callum found 2', searching: false,
+      people: [previewPerson('0', 'Yaw Mensah', { firstName: 'Yaw', source: 'web' }), previewPerson('1', 'Efua Boateng', { firstName: 'Efua', source: 'web' })],
+    });
+    await toPeople(user);
+    await user.type(screen.getByLabelText('Describe who you want to meet'), 'heads of people in Accra{Enter}');
+    await screen.findByText('2 people join Payroll');
+    await user.click(screen.getByRole('button', { name: 'These 2 look right' }));
+    await user.click(screen.getByRole('button', { name: 'Start Payroll' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Callum lost that list while you were setting up. Choose who to meet again.');
+    expect(mocks.describe).toHaveBeenCalledTimes(1);
+    expect(mocks.commit).toHaveBeenCalledTimes(1);
+  });
+
   it('goes back to choosing who to meet, in plain words, when the list cannot be read again', async () => {
     const user = userEvent.setup();
     show();

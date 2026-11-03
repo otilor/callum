@@ -157,6 +157,8 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
           added = await peopleApi.commit({ batchId: found.batchId, projectId: made.id, drop, ...(found.web ? { only: found.people.map((p) => p.key) } : {}) });
         } catch (e) {
           if (!(e instanceof ApiError && e.status === 410)) throw e;
+          // People Claude found cannot be found again as they were: a new search brings others, so the user chooses again.
+          if (found.web) return lostList();
           // Callum forgot the list while the person was setting up. Reading it again costs nothing, so try once more.
           const again = await finder.rerun();
           if (!again) return lostList();

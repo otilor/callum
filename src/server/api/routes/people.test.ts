@@ -66,6 +66,23 @@ describe('people routes', () => {
     const d = found.json as unknown as Described;
     expect(d.narrow).toBeNull();
     expect(d.people).toHaveLength(3);
+
+    // The keys the screen got back are what Add sends: the server's own row places, end to end.
+    const seen = d.people.slice(0, 2).map((p) => p.key);
+    const status = (await post('/people/describe/status', { batchId: d.batchId })).json as unknown as Described;
+    expect(status.people.map((p) => p.key)).toEqual(d.people.map((p) => p.key));
+    const added = (await post('/people/commit', { batchId: d.batchId, only: seen })).json as unknown as AddCommit;
+    expect(added.added).toHaveLength(2);
+  });
+
+  it('adds nobody when the list of who was shown is not a list, rather than everyone', async () => {
+    s.ctx.finder = fakeFinder().finder;
+    const d = (await post('/people/describe', { query: 'cfo' })).json as unknown as Described;
+    for (const only of [null, 'all', { a: 1 }]) {
+      const res = (await post('/people/commit', { batchId: d.batchId, only })).json as unknown as AddCommit;
+      expect(res.added, JSON.stringify(only)).toEqual([]);
+    }
+    expect(s.ctx.repo.listPeople()).toEqual([]);
   });
 
   it('discards a project that never started and got nobody', async () => {
