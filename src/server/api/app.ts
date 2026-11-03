@@ -25,6 +25,7 @@ import { eventStream } from './sse.js';
 import { staticHandler } from './static.js';
 import { afterSaved } from '../services/common.js';
 import { planProjectNow } from '../runner/runner.js';
+import { offerWithSite } from '../runner/offer.js';
 
 export interface AppOptions {
   password: string | null;
@@ -217,6 +218,8 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
     const name = optText(b, 'name');
     let project = ctx.repo.getProject(id);
     if (!project) throw new UserError("Callum can't find that project.", 404);
+    // A website is read, so "tethers.com" is enough to say what the user does.
+    if (typeof patch.offer === 'string' && patch.offer.trim() !== (project.offer ?? '').trim()) patch.offer = (await offerWithSite(ctx, patch.offer)) ?? patch.offer;
     // All or nothing: a name that is taken must not leave the other changes half made.
     ctx.repo.transaction(() => {
       project = projects.updateProject(ctx, id, patch);

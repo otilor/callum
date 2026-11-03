@@ -1,6 +1,8 @@
 import type { Incident, OutKind, Project } from '../../shared/types.js';
 import type { Ctx } from '../context.js';
 import { findPlaceholders } from '../engine/guard.js';
+import { publicFetch } from '../leads/finder.js';
+import { fetchSiteText } from '../leads/site.js';
 
 /** The messages that say what the sender offers, and so are not written until Callum knows it. */
 export const SAYS_OFFER = new Set<OutKind>(['hello', 'invite', 'thanks']);
@@ -73,4 +75,32 @@ export function takeBackBlankDrafts(ctx: Ctx): number {
   }
   if (n > 0) ctx.bus.emit('outbox');
   return n;
+}
+
+const SITE = /\b(?:https?:\/\/)?(?:www\.)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?:\/[^\s)]*)?/i;
+
+/** Reads a company's site: the text its home page gives about itself, or '' when it can't be read. */
+export type SiteReader = (domain: string) => Promise<string>;
+const readSite: SiteReader = (domain) => fetchSiteText(domain, publicFetch, { timeoutMs: 8000 });
+
+/**
+ * What the user typed as their offer, with a website in it read for them: "tethers.com" becomes "You help ... (tethers.com)".
+ * Left as typed when it already says enough in words, has no website, is the demo, or the site can't be read or says too little.
+ */
+export async function offerWithSite(ctx: Ctx, typed: string | null, read: SiteReader = readSite): Promise<string | null> {
+  const text = typed?.replace(/\s+/g, ' ').trim() ?? '';
+  const site = SITE.exec(text);
+  if (!text || !site?.[1] || ctx.demo || /@/.test(site.input.slice(Math.max(0, site.index - 1), site.index))) return typed;
+  const words = text.replace(site[0], ' ').split(/\s+/).filter((w) => /\p{L}/u.test(w));
+  if (words.length >= 8) return typed;
+  const domain = site[1].toLowerCase();
+  try {
+    const page = await read(domain);
+    if (!page.trim()) return typed;
+    const line = (await ctx.writer.offerLine(page, domain)).replace(/\s+/g, ' ').trim();
+    if (!line || findPlaceholders(line).length > 0 || !offerSaysEnough(line)) return typed;
+    return `${line.replace(/\.?$/, '.')} (${text})`;
+  } catch {
+    return typed;
+  }
 }

@@ -4,7 +4,7 @@ import { DuplicateProjectName } from '../db/repo.js';
 import { canMoveProject, moveProject } from '../engine/lifecycle.js';
 import { cancelPendingRefunding, parseWhen, plural, requirePerson, requireProject } from './common.js';
 import { UserError } from './errors.js';
-import { offerSaysEnough, offerSettled } from '../runner/offer.js';
+import { offerSaysEnough, offerSettled, offerWithSite } from '../runner/offer.js';
 
 const TONES: readonly Tone[] = ['warm', 'direct', 'playful'];
 const MAX_NAME = 60;
@@ -58,7 +58,8 @@ export async function createProject(
   ctx: Ctx,
   input: { offer: string; name?: string; audience?: string; tone?: Tone },
 ): Promise<Project> {
-  const offer = textOrNull(input.offer);
+  // A website is read, so "tethers.com" is enough to say what the user does.
+  const offer = await offerWithSite(ctx, textOrNull(input.offer));
   const tone = input.tone === undefined ? 'warm' : cleanTone(input.tone);
   let name: string;
   if (input.name !== undefined && input.name.trim() !== '') {

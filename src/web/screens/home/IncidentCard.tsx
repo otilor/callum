@@ -266,7 +266,7 @@ function OfferAsk({ incident, state, refresh, titleId }: { incident: Incident; s
           value={text}
           maxLength={300}
           autoComplete="off"
-          placeholder="I help seed-stage founders hire their first engineers"
+          placeholder="I help founders hire engineers, or just your website"
           onChange={(e) => setText(e.target.value)}
         />
         {project.offer ? <p className="inc-ask-was">You said: {project.offer}</p> : null}
