@@ -321,6 +321,7 @@ describe('ApiModel', () => {
       },
     } as unknown as Anthropic;
     await expect(new ApiModel('k', 'm', client).research(schema, 's', 'u', { timeoutMs: 100 })).rejects.toMatchObject({ code: 'failed', message: expect.stringContaining('too long') });
+    expect(timeouts.length).toBeGreaterThan(1);
     expect(timeouts.length).toBeLessThanOrEqual(3);
     expect(timeouts[0]).toBeLessThanOrEqual(100);
     for (let i = 1; i < timeouts.length; i++) expect(timeouts[i]!).toBeLessThan(timeouts[i - 1]!);

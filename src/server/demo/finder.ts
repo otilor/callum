@@ -32,7 +32,7 @@ export class DemoFinder implements PeopleFinder {
       };
       if (n % 3 === 2) person.xHandle = `${slug(first)}${slug(last)}`.slice(0, 15);
       else person.linkedinUrl = `https://www.linkedin.com/in/${slug(first)}-${slug(last)}-demo`;
-      if (n % 2 === 0) person.email = `${slug(first)}@${slug(company)}.example`;
+      if (n % 2 === 0) person.email = `${slug(first)}.${slug(last)}@${slug(company)}.example`;
       people.push(person);
     }
     return people;

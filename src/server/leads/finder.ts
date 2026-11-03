@@ -135,7 +135,7 @@ export const publicFetch = ((input: string | URL | Request, init?: RequestInit) 
     const status = res.statusCode ?? 502;
     const out = new Headers();
     for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) out.set(k, Array.isArray(v) ? v.join(', ') : v);
-    const empty = status < 200 || status === 204 || status === 304 || (status >= 300 && status < 400);
+    const empty = status < 200 || status === 204 || status === 205 || status === 304 || (status >= 300 && status < 400);
     if (empty) res.resume();
     try {
       resolve(new Response(empty ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>), { status: status < 200 || status > 599 ? 502 : status, headers: out }));
@@ -286,8 +286,9 @@ export class ModelFinder implements PeopleFinder {
       if (err instanceof ModelError) throw new FindError(err.message);
       throw err;
     }
-    // Emails are checked against their pages all at once, not one page after another.
-    const leads = await Promise.all(out.people.map((raw) => this.toLead(raw)));
+    // Emails are checked against their pages all at once, not one page after another. An answer
+    // longer than asked for is cut first, so it can't send Callum to an unbounded number of pages.
+    const leads = await Promise.all(out.people.slice(0, count * 2).map((raw) => this.toLead(raw)));
     return leads.filter((l): l is PersonLead => l !== null);
   }
 

@@ -294,6 +294,8 @@ export async function commit(ctx: Ctx, batchId: string, opts: { projectId?: numb
     const leads = batch.leads.filter((_, i) => !drop.has(String(i)));
     // Someone emailed since the batch was made (a search takes minutes) is not said hello to again.
     const known = new Set([...batch.known, ...(await emailedBefore(ctx))]);
+    // The project may have been wrapped up while the mailbox was read.
+    if (ctx.repo.getProject(project.id)?.state === 'wrapped') throw new UserError(`${project.name} is wrapped up.`);
     const result = importPeople(ctx.repo, project.id, leads, { known });
     const now = ctx.clock.now();
     const settings = ctx.repo.getSettings();

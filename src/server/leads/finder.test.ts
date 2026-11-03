@@ -113,6 +113,16 @@ describe('ModelFinder', () => {
     expect(people).toEqual([{ name: 'Ngozi Okafor', xHandle: 'ngozi_o', source: 'web', note: 'Leads finance at a payments company in Lagos. Found on techcabal.com.' }]);
   });
 
+  it('reads at most twice as many pages as people asked for, however long the answer', async () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({ name: `Person Number${String.fromCharCode(65 + (i % 26))}${i}`, email: `p${i}@okopay.com`, emailSourceUrl: `https://okopay.com/p${i}` }));
+    const site = pages({});
+    const { model } = fakeModel(many, many);
+    await new ModelFinder(model, site.fetch, today, dns()).find({ description: 'finance leads', count: 1 });
+    // Two searches of two people each, so at most four people's pages from each.
+    expect(site.read.length).toBeGreaterThan(0);
+    expect(site.read.length).toBeLessThanOrEqual(8);
+  });
+
   it('runs two searches at once from different ends, and does not bring anyone back twice', async () => {
     const { model, asked } = fakeModel(
       [{ name: 'Kemi Eze', company: 'Oko Pay', linkedinUrl: 'https://www.linkedin.com/in/kemi' }, { name: 'Femi Ade', company: 'Pay Co', linkedinUrl: 'https://www.linkedin.com/in/femi' }],
@@ -299,6 +309,8 @@ describe('DemoFinder', () => {
   it('never repeats a person within a big search, and leaves out people already known', async () => {
     const people = await new DemoFinder().find({ description: 'Founders', count: 50 });
     expect(new Set(people.map((p) => p.name)).size).toBe(50);
+    const emails = people.map((p) => p.email).filter(Boolean);
+    expect(new Set(emails).size).toBe(emails.length);
     const first = people[0]?.name ?? '';
     const again = await new DemoFinder().find({ description: 'Founders', count: 5, known: [`${first} (Ledgerline)`] });
     expect(again.map((p) => p.name)).not.toContain(first);

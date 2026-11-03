@@ -201,6 +201,16 @@ describe('commit and undo', () => {
     await expect(commit(s.ctx, p.batchId)).rejects.toThrow('Payroll is wrapped up.');
   });
 
+  it('adds nobody when the project is wrapped up while the mailbox is read', async () => {
+    const p = await preview(s.ctx, { paste: 'Kemi Eze, kemi@okopay.com' });
+    s.ctx.adapters.get('email')!.knownAddresses = async () => {
+      s.ctx.repo.updateProject(s.projectId, { state: 'wrapped' });
+      return [];
+    };
+    await expect(commit(s.ctx, p.batchId)).rejects.toThrow('Payroll is wrapped up.');
+    expect(s.ctx.repo.listPeople()).toHaveLength(0);
+  });
+
   it('forgets a preview after ten minutes', async () => {
     const p = await preview(s.ctx, { paste: 'Kemi Eze, kemi@okopay.com' });
     s.clock.advance(BATCH_MS + 1);
