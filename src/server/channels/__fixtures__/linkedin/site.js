@@ -29,7 +29,11 @@
     if (slug !== body.dataset.slug) return;
     // When Connect lived under More, LinkedIn shows Pending in that menu rather than in the top card.
     const menu = document.getElementById('more-menu');
-    if (body.dataset.variant === 'more' && menu) {
+    if ((body.dataset.variant === 'more' || body.dataset.variant === 'open') && menu) {
+      if (body.dataset.markup === 'new') {
+        menu.innerHTML = '<a role="menuitem" href="#">Pending</a>';
+        return;
+      }
       menu.innerHTML = '<div role="button" aria-label="Pending, click to withdraw invitation sent to ' + name + '"><span>Pending</span></div>';
       return;
     }
@@ -54,8 +58,10 @@
   }
 
   function showInvite(slug, name) {
+    // LinkedIn's newer invitation dialog is an aria-modal element without role="dialog".
+    const role = body.dataset.markup === 'new' ? 'aria-modal="true" class="send-invite"' : 'role="dialog" class="artdeco-modal send-invite"';
     dialogRoot.innerHTML =
-      '<div role="dialog" class="artdeco-modal send-invite" aria-labelledby="invite-title">' +
+      '<div ' + role + ' aria-labelledby="invite-title">' +
       '<button aria-label="Dismiss" data-dialog="close">x</button>' +
       '<h2 id="invite-title">Add a note to your invitation?</h2>' +
       '<p>Personalize your invitation to ' + name + ' by adding a note.</p>' +
@@ -161,6 +167,7 @@
     const target = e.target.closest('[data-action]');
     if (!target) return;
     const action = target.dataset.action;
+    if (target.tagName === 'A') e.preventDefault();
     const slug = target.dataset.slug || body.dataset.slug;
     const name = target.dataset.name || body.dataset.name;
     if (action === 'more') {

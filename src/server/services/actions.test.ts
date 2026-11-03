@@ -63,13 +63,13 @@ describe('approve, skip and undo', () => {
     expect(() => approve(h.ctx, item!.id)).toThrow(/^This message is not waiting for an OK\.$/);
   });
 
-  it('refuses an invite note over 280 characters', async () => {
+  it('refuses an invite note over 200 characters, the LinkedIn limit', async () => {
     const h = harness({ connected: ['linkedin'] });
     h.person({ email: null, linkedinUrl: 'https://www.linkedin.com/in/tunde' });
     await start(h.ctx, h.project.id);
     const [item] = awaiting(h);
-    expect(() => approve(h.ctx, item!.id, 'x'.repeat(281))).toThrow('An invite note can be 280 characters at most.');
-    expect(approve(h.ctx, item!.id, 'x'.repeat(280)).state).toBe('scheduled');
+    expect(() => approve(h.ctx, item!.id, 'x'.repeat(201))).toThrow('An invite note can be 200 characters at most.');
+    expect(approve(h.ctx, item!.id, 'x'.repeat(200)).state).toBe('scheduled');
   });
 
   it('skip stops the person, keeps the OK, and queues the next stranger', async () => {

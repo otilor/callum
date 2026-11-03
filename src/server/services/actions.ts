@@ -1,5 +1,6 @@
 import type { Correction, Incident, Message, OutboxItem, PathStep, Person, Project } from '../../shared/types.js';
 import type { Ctx } from '../context.js';
+import { NOTE_MAX } from '../channels/linkedin-detect.js';
 import { findPlaceholders } from '../engine/guard.js';
 import * as life from '../engine/lifecycle.js';
 import { personTz } from '../engine/lifecycle.js';
@@ -11,8 +12,6 @@ import { planProjectNow } from '../runner/runner.js';
 import { afterSaved, canWriteBy, cancelPendingRefunding, parseWhen, requirePerson, requireProject, userTz } from './common.js';
 import { asUserError, UserError, userFacing } from './errors.js';
 
-/** A LinkedIn invitation note can be this long at most. */
-const INVITE_NOTE_MAX = 280;
 type HandKind = 'reply' | 'booking' | 'close';
 
 function requireItem(ctx: Ctx, id: number): OutboxItem {
@@ -29,7 +28,7 @@ function cleanBody(body: string): string {
 }
 
 function checkInvite(kind: OutboxItem['kind'], body: string): void {
-  if (kind === 'invite' && body.length > INVITE_NOTE_MAX) throw new UserError(`An invite note can be ${INVITE_NOTE_MAX} characters at most.`);
+  if (kind === 'invite' && body.length > NOTE_MAX) throw new UserError(`An invite note can be ${NOTE_MAX} characters at most.`);
 }
 
 function checkNoBlanks(body: string, subject: string | null): void {

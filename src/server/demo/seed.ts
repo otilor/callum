@@ -3,7 +3,7 @@ import { inlineOffer, offerSentence } from '../ai/templates.js';
 import { clampNote } from '../channels/linkedin-detect.js';
 import type { Ctx } from '../context.js';
 import { afterSent, afterUserSent, onAccepted, onInbound } from '../engine/lifecycle.js';
-import { localParts, weekdayOf, zonedTime } from '../engine/time.js';
+import { addLocalDays, localParts, weekdayOf, zonedTime } from '../engine/time.js';
 import { withOptOut } from '../engine/guard.js';
 import { DEMO_PEOPLE, PAYROLL_PEOPLE, type DemoPerson } from './people.js';
 
@@ -196,6 +196,20 @@ class Scribe {
     this.apply(afterSent(this.person, kind, at, this.demo.timezone));
   }
 
+  /**
+   * The scene opens with no follow-up already due: a hello sent on the Friday before a weekend would otherwise come
+   * due on Tuesday afternoon, so the follow-up moves on a day at a time until it is at least an hour away.
+   */
+  notDueBy(now: Date): void {
+    const next = this.person.nextTouchAt;
+    if (!next) return;
+    let at = new Date(next);
+    const soonest = now.getTime() + HOUR;
+    if (at.getTime() > soonest) return;
+    while (at.getTime() <= soonest) at = addLocalDays(at, 1, this.demo.timezone);
+    this.apply({ nextTouchAt: at.toISOString() });
+  }
+
   /** They wrote back and the engine put them on the dock (or out of it, for someone the user already answered). */
   heard(reply: Pick<Reply, 'kind' | 'suggested' | 'text'>, at: Date): void {
     const channel = this.person.channel ?? this.demo.channel;
@@ -239,6 +253,7 @@ function seedMorning(ctx: Ctx): void {
     note(first);
     const kind = d.channel === 'linkedin' ? 'invite' : 'hello';
     scribe.touch(kind, first);
+    scribe.notDueBy(now);
 
     const dock = DOCK[i];
     if (dock) {
@@ -270,6 +285,7 @@ function seedMorning(ctx: Ctx): void {
     const first = workSlot(now, d.timezone, 2, i + 5);
     note(first);
     scribe.touch('hello', first);
+    scribe.notDueBy(now);
     sent += 1;
     if (i === 0) {
       scribe.heard(YAW_REPLY, new Date(now.getTime() - YAW_REPLY.ago));

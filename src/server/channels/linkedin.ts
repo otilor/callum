@@ -5,7 +5,7 @@ import type { PersonLead } from '../../shared/types.js';
 import { findBrowser as findInstalledBrowser, installedChannel, type BrowserChoice } from './browser.js';
 import { systemClock, type Clock } from '../engine/clock.js';
 import {
-  SELECTORS, clampNote, cleanName, hasWeeklyLimitText, headerNameCandidates, humanDelayMs, isBlockedStatus, isCheckpointUrl,
+  SELECTORS, clampNote, cleanName, degreeOf, hasWeeklyLimitText, headerNameCandidates, humanDelayMs, isBlockedStatus, isCheckpointUrl,
   hasSendFailureText, isOwnSnippet, lastSender, isSignInUrl, isUnavailableProfileText, memberIdFromHref, normalizeText, parseListTimestamp, profileUrlFromHref, replyProfile,
   sameParticipant, snippetMatches, splitHeadline,
 } from './linkedin-detect.js';
@@ -150,6 +150,8 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
   let session: Record<string, string> | null = secret;
   // Who the signed-in user is, to tell their messages from the other person's. Read at connect, or at the first poll.
   let self: { name: string | null; url: string | null } | null = null;
+  // The name is looked for once per run when sign-in could not read it, not on every poll.
+  let selfChecked = false;
   let context: BrowserContext | null = null;
   let contextHeadless = headless;
   // The user agent to force, per mode, once a probe has shown the browser announces itself as headless.
@@ -238,7 +240,21 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
   }
 
   async function open(page: Page, path: string): Promise<number> {
-    const res = await page.goto(url(path), { waitUntil: 'domcontentloaded' });
+    const looped = (err: unknown) => String((err as Error)?.message ?? err).includes('ERR_TOO_MANY_REDIRECTS');
+    const res = await page.goto(url(path), { waitUntil: 'domcontentloaded' }).catch(async (err: unknown) => {
+      if (!looped(err)) throw err;
+      // A session LinkedIn has ended sends every page back to itself until the browser gives up. One page doing it is
+      // not enough to say so: the feed has to loop too.
+      // Asked without navigating: a second navigation on a page that just failed one can leave it unable to close.
+      const feedLoops =
+        path === '/feed/' ||
+        (await page
+          .context()
+          .request.get(url('/feed/'), { maxRedirects: 10, timeout: 15_000 })
+          .then(() => false, (e: unknown) => /redirect/i.test(String((e as Error)?.message ?? e))));
+      if (feedLoops) throw new Stop(fail('auth', SIGNED_OUT_MESSAGE));
+      throw new Stop(fail('temporary', "LinkedIn kept sending that page back to itself. Callum will try again later."));
+    });
     await pause();
     return res?.status() ?? 0;
   }
@@ -298,6 +314,17 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
     if (!name) {
       const card = await locate(page, SELECTORS.feedName, 1500);
       name = card ? cleanName((await card.innerText().catch(() => '')) || '') : null;
+    }
+    if (!name) {
+      // LinkedIn's header changes often; the user's own profile (/in/me/ goes there) always shows their name.
+      const status = await open(page, '/in/me/').catch(() => 0);
+      if (status > 0 && status < 400) {
+        const top = await locate(page, SELECTORS.topCard, 5000);
+        const heading = top ? await locate(top, SELECTORS.profileName) : null;
+        name = heading ? cleanName((await heading.innerText().catch(() => '')) || '') : null;
+        const landed = profileUrlFromHref(page.url());
+        if (!profile && landed && !landed.endsWith('/in/me')) profile = landed;
+      }
     }
     return { name, url: profile };
   }
@@ -379,7 +406,11 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
       }
       if (!connect) {
         // Only say something about the person when the page shows why; otherwise the page is not what Callum expects.
-        if (await locate(top, SELECTORS.messageButton)) throw new Stop(fail('already_connected', `You're already connected to ${msg.to.name} on LinkedIn.`));
+        // Open profiles show Message to people who are not connected, so Message alone does not mean connected.
+        const degree = degreeOf(await top.innerText().catch(() => ''));
+        if (degree !== 2 && degree !== 3 && (await locate(top, SELECTORS.messageButton))) {
+          throw new Stop(fail('already_connected', `You're already connected to ${msg.to.name} on LinkedIn.`));
+        }
         if (await locate(top, SELECTORS.followButton)) throw new Stop(fail('invalid_recipient', `LinkedIn doesn't offer Connect for ${msg.to.name}.`));
         throw unexpectedPage('find Connect');
       }
@@ -406,6 +437,8 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
           box = await locate(page, SELECTORS.noteTextarea);
           return box !== null || (await locate(page, SELECTORS.premiumUpsell)) !== null;
         });
+        // A dialog can mention Premium before its text box shows; give the box a moment before deciding there is none.
+        box ??= await locate(page, SELECTORS.noteTextarea, Math.min(1500, settleMs));
         if (box) {
           await (box as Locator).fill(note);
           await pause();
@@ -890,17 +923,20 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
             const status = await open(page, '/mynetwork/invite-connect/connections/');
             if (await blocker(page, status)) return [{ type: 'checkpoint' as const, at }];
             const events = await collectAccepted(page, at);
-            if (!self) {
+            if (!self?.name && !selfChecked) {
               // Needed to tell the user's own messages from the other person's; the header is on the feed.
               await open(page, '/feed/');
               if (await blocker(page)) return [...events, { type: 'checkpoint' as const, at }];
               self = await readSelf(page);
+              // Looked for once the page could be read; a check or a failed load leaves it for the next poll.
+              selfChecked = true;
             }
             const messaging = await open(page, '/messaging/');
             if (await blocker(page, messaging)) return [...events, { type: 'checkpoint' as const, at }];
             return [...events, ...(await collectReplies(page, from, now))];
           });
         } catch (err) {
+          if (err instanceof Stop) throw new ConnectError(err.result.error.message, err.result.error.code);
           throw err instanceof ConnectError ? err : new ConnectError("Couldn't check LinkedIn for replies. Callum will try again.", 'temporary');
         }
       });
@@ -963,6 +999,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
         });
       }).catch((err: unknown) => {
         // Whatever went wrong while loading pages reaches the person as plain words, never as browser text.
+        if (err instanceof Stop) throw new ConnectError(err.result.error.message, err.result.error.code);
         throw err instanceof ConnectError ? err : new ConnectError("Couldn't search LinkedIn right now. Callum will try again.", 'temporary');
       });
     },

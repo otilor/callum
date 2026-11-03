@@ -14,10 +14,12 @@ test('open someone from the river, nudge, switch channel, never contact', async 
   await seed(app, 'morning');
   let s = await app.state();
   const bisi = byName(s, 'Bisi Alade');
-  const musa = byName(s, 'Musa Ajayi');
+  // Ike is far down the line of strangers: in sending hours the first ones get their hello within seconds of the seed,
+  // and email goes one message at a time with a gap of 45 seconds or more, so Ike is still a stranger for this whole test.
+  const ike = byName(s, 'Ike Nnaji');
   expect(bisi.status).toBe('active');
   expect(new Date(bisi.nextTouchAt!).getTime()).toBeGreaterThan(Date.now() + 60_000);
-  expect([musa.channel, musa.stage, musa.touches]).toEqual(['email', 'stranger', 0]);
+  expect([ike.channel, ike.stage, ike.touches]).toEqual(['email', 'stranger', 0]);
 
   await openCallum(page, app, 'home');
 
@@ -45,38 +47,38 @@ test('open someone from the river, nudge, switch channel, never contact', async 
 
   // Back to the river, to someone who has not heard anything yet: switch the channel to LinkedIn and back to email.
   await page.getByRole('button', { name: 'Back to the river' }).click();
-  await page.getByRole('button', { name: 'Musa Ajayi, Strangers' }).click();
+  await page.getByRole('button', { name: 'Ike Nnaji, Strangers' }).click();
   await page.getByRole('button', { name: 'See everything' }).click();
-  await expect(page.getByText(/^First hello goes out .+ at 9:00 by email$/)).toBeVisible();
+  await expect(page.getByText(/^First hello goes out .+ at \d{1,2}:\d{2} by email$/)).toBeVisible();
   await page.getByRole('button', { name: 'Move to LinkedIn' }).click();
-  await expect(page.getByText(/^The invite goes out .+ at 9:00 on LinkedIn$/)).toBeVisible();
+  await expect(page.getByText(/^The invite goes out .+ at \d{1,2}:\d{2} on LinkedIn$/)).toBeVisible();
   s = await app.state();
-  expect(byName(s, 'Musa Ajayi').channel).toBe('linkedin');
-  const invite = s.outbox.find((o) => o.personId === musa.id && o.state !== 'cancelled');
+  expect(byName(s, 'Ike Nnaji').channel).toBe('linkedin');
+  const invite = s.outbox.find((o) => o.personId === ike.id && o.state !== 'cancelled');
   if (invite) expect(invite.channel).toBe('linkedin');
   await page.getByRole('button', { name: 'Move to email' }).click();
-  await expect(page.getByText(/^First hello goes out .+ at 9:00 by email$/)).toBeVisible();
-  expect(byName(await app.state(), 'Musa Ajayi').channel).toBe('email');
+  await expect(page.getByText(/^First hello goes out .+ at \d{1,2}:\d{2} by email$/)).toBeVisible();
+  expect(byName(await app.state(), 'Ike Nnaji').channel).toBe('email');
 
   // Never contact asks first. Keep changes nothing.
-  await page.getByRole('button', { name: 'Never contact Musa' }).click();
+  await page.getByRole('button', { name: 'Never contact Ike' }).click();
   const confirm = page.getByRole('alertdialog');
   await expect(confirm).toContainText("Callum cancels everything still waiting and won't reach out again");
   await confirm.getByRole('button', { name: 'Keep' }).click();
   await expect(confirm).toHaveCount(0);
-  expect(byName(await app.state(), 'Musa Ajayi').status).toBe('active');
+  expect(byName(await app.state(), 'Ike Nnaji').status).toBe('active');
 
   // Confirming stops them for good: stopped on the server, nothing queued, and no action reaches them any more.
-  await page.getByRole('button', { name: 'Never contact Musa' }).click();
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Never contact Musa' }).click();
-  await expect.poll(async () => byName(await app.state(), 'Musa Ajayi').status).toBe('stopped');
+  await page.getByRole('button', { name: 'Never contact Ike' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Never contact Ike' }).click();
+  await expect.poll(async () => byName(await app.state(), 'Ike Nnaji').status).toBe('stopped');
   s = await app.state();
-  expect(byName(s, 'Musa Ajayi').nextTouchAt).toBeNull();
-  expect(s.outbox.filter((o) => o.personId === musa.id && ['awaiting_ok', 'scheduled'].includes(o.state))).toHaveLength(0);
-  expect(app.sql("select * from outbox where person_id = ? and state in ('awaiting_ok','scheduled','sending')", musa.id)).toHaveLength(0);
+  expect(byName(s, 'Ike Nnaji').nextTouchAt).toBeNull();
+  expect(s.outbox.filter((o) => o.personId === ike.id && ['awaiting_ok', 'scheduled'].includes(o.state))).toHaveLength(0);
+  expect(app.sql("select * from outbox where person_id = ? and state in ('awaiting_ok','scheduled','sending')", ike.id)).toHaveLength(0);
   for (const action of ['nudge', 'resume', 'reply']) {
-    const res = await app.raw(`/api/people/${musa.id}/${action}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body: 'Hello again' }) });
+    const res = await app.raw(`/api/people/${ike.id}/${action}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body: 'Hello again' }) });
     expect(res.status, action).toBeGreaterThanOrEqual(400);
   }
-  expect(byName(await app.state(), 'Musa Ajayi').status).toBe('stopped');
+  expect(byName(await app.state(), 'Ike Nnaji').status).toBe('stopped');
 });
