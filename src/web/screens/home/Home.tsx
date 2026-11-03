@@ -33,7 +33,7 @@ import { FacePopover } from './FacePopover.js';
 import { ListView } from './ListView.js';
 import { ProjectSwitcher } from './ProjectSwitcher.js';
 import { useUndoToasts } from './UndoToast.js';
-import { channelName, dockPeople, greeting, pendingSendIds, riverPeople } from './dock.js';
+import { channelName, dockPeople, greeting, pendingSendIds, riverPeople } from './people.js';
 import './Home.css';
 
 export interface HomeProps {

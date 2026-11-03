@@ -3,7 +3,7 @@ import type { Person, Project, Stage } from '../../../shared/types.js';
 import { STAGE_LABEL } from '../../river/layout.js';
 import { marbleBackground } from '../../ui/Marble.js';
 import { formatWhen } from '../../ui/when.js';
-import { channelName } from './dock.js';
+import { channelName } from './people.js';
 import { FacePopover } from './FacePopover.js';
 import './ListView.css';
 

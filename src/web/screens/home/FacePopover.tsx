@@ -4,7 +4,7 @@ import { api } from '../../api.js';
 import { marbleBackground } from '../../ui/Marble.js';
 import { nudgeSlot } from '../../ui/format.js';
 import { dayLabel, formatWhen } from '../../ui/when.js';
-import { channelPhrase } from './dock.js';
+import { channelPhrase } from './people.js';
 import './FacePopover.css';
 
 const STAGE_WORD: Record<Stage, string> = { stranger: 'not contacted yet', hello: 'said hello', following: 'following up', talking: 'talking' };

@@ -2,7 +2,7 @@ import { useRef, type CSSProperties, type ReactNode } from 'react';
 import type { Person, Project } from '../../../shared/types.js';
 import { marbleBackground } from '../../ui/Marble.js';
 import { formatWhen } from '../../ui/when.js';
-import { channelPhrase } from './dock.js';
+import { channelPhrase } from './people.js';
 
 /** Where a waiting face floats above the river, as a percentage across and px down. Same spots as the boards. */
 const SLOTS = [{ x: 72, y: 92 }, { x: 81, y: 128 }, { x: 90, y: 100 }, { x: 63, y: 122 }, { x: 56, y: 86 }];
