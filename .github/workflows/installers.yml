@@ -1,0 +1,59 @@
+# Builds the installers for one release and attaches them to it. Called by desktop.yml when a v* tag is pushed, and
+# by release.yml when someone presses Run on the Release workflow. The release itself must already exist.
+name: Installers
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The release's tag, for example v0.2.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  installers:
+    name: Installer for ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon)
+            os: macos-latest
+            files: release/*.dmg
+          - name: macOS (Intel)
+            os: macos-15-intel
+            files: release/*.dmg
+          - name: Windows
+            os: windows-latest
+            files: release/*.exe
+          - name: Linux
+            os: ubuntu-latest
+            files: release/*.AppImage release/*.deb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The app and its file names carry the release's version, whatever package.json says in the repository.
+      - name: Use the release's version
+        shell: bash
+        run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+        env:
+          TAG: ${{ inputs.tag }}
+      - name: Build the installer
+        run: npm run desktop:dist
+      - name: Add it to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" ${{ matrix.files }} --repo "$GITHUB_REPOSITORY" --clobber
