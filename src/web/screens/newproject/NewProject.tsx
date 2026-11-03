@@ -141,8 +141,10 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
       if (!made) {
         made = await api.createProject({ offer: text, name, tone, ...(audience ? { audience } : {}) });
       } else {
-        const patch: { offer?: string; name?: string; tone?: Tone } = {};
+        const patch: { offer?: string; name?: string; tone?: Tone; audience?: string } = {};
         if (text !== (made.offer ?? '')) patch.offer = text;
+        // Chosen again after a lost list: the project describes who it is for now.
+        if (audience !== undefined && audience !== (made.audience ?? '')) patch.audience = audience;
         if (name !== made.name) patch.name = name;
         if (tone !== made.tone) patch.tone = tone;
         if (Object.keys(patch).length > 0) made = await api.updateProject(made.id, patch);

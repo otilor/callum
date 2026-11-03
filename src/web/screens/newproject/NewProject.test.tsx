@@ -498,6 +498,18 @@ describe('NewProject, the voice and Start', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Callum lost that list while you were setting up. Choose who to meet again.');
     expect(mocks.describe).toHaveBeenCalledTimes(1);
     expect(mocks.commit).toHaveBeenCalledTimes(1);
+
+    // Described again: the project made the first time now says who it is for.
+    mocks.commit.mockReset();
+    mocks.commit.mockResolvedValue({ added: [person(21, 'Yaw Mensah')], line: '', groups: [] });
+    mocks.updateProject.mockImplementation(async (_id: number, patch: Partial<Project>) => project({ id: 2, name: 'Payroll', startedAt: null, ...patch }));
+    mocks.start.mockResolvedValue({ firstSendAt: '2026-11-03T08:00:00.000Z' });
+    await user.type(screen.getByLabelText('Describe who you want to meet'), 'founders in Lagos{Enter}');
+    await user.click(await screen.findByRole('button', { name: 'These 2 look right' }));
+    await user.click(screen.getByRole('button', { name: 'Start Payroll' }));
+    await screen.findByRole('heading', { name: 'Payroll is ready' });
+    expect(mocks.createProject).toHaveBeenCalledTimes(1);
+    expect(mocks.updateProject).toHaveBeenCalledWith(2, expect.objectContaining({ audience: 'founders in Lagos' }));
   });
 
   it('goes back to choosing who to meet, in plain words, when the list cannot be read again', async () => {

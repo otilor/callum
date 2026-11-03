@@ -77,8 +77,9 @@ describe('people routes', () => {
 
   it('adds nobody when the list of who was shown is not a list, rather than everyone', async () => {
     s.ctx.finder = fakeFinder().finder;
-    const d = (await post('/people/describe', { query: 'cfo' })).json as unknown as Described;
     for (const only of [null, 'all', { a: 1 }]) {
+      // A fresh list each time: a list already added answers with what it added before.
+      const d = (await post('/people/describe', { query: 'cfo' })).json as unknown as Described;
       const res = (await post('/people/commit', { batchId: d.batchId, only })).json as unknown as AddCommit;
       expect(res.added, JSON.stringify(only)).toEqual([]);
     }
