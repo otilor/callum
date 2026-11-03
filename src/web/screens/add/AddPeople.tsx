@@ -39,8 +39,6 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
   const [error, setError] = useState('');
   const [done, setDone] = useState<AddCommit | null>(null);
   const [joined, setJoined] = useState<Person[]>([]);
-  // Everyone this batch has brought so far, including what an "Add the rest" brought, for Undo.
-  const [fromBatch, setFromBatch] = useState<Person[]>([]);
 
   const undo = async (batchId: string, brought: Person[]) => {
     try {
@@ -51,7 +49,6 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
     }
     const gone = new Set(brought.map((p) => p.id));
     setJoined((all) => all.filter((p) => !gone.has(p.id)));
-    setFromBatch([]);
     setDone(null);
     toast('Undone. Nobody was added.');
     // People Claude found are shown again as they were; searching again would take minutes and find others.
@@ -65,10 +62,9 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
     setError('');
     try {
       const result = await peopleApi.commit({ batchId: found.batchId, projectId: project.id, drop: finder.dropped });
-      const brought = [...fromBatch, ...result.added];
+      const brought = result.added;
       setDone(result);
       setJoined((all) => [...all, ...result.added]);
-      setFromBatch(brought);
       if (result.added.length > 0) {
         toast(result.line, { ms: UNDO_MS, action: { label: 'Undo', onAction: () => void undo(found.batchId, brought) } });
       }
@@ -82,7 +78,6 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
   const again = () => {
     setDone(null);
     setError('');
-    setFromBatch([]);
     finder.reset();
   };
 

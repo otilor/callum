@@ -558,7 +558,7 @@ describe('Claude', () => {
 
   it('shows Connected without the key, and removes it', async () => {
     mocks.removeClaude.mockResolvedValue({ claudeConnected: false });
-    mocks.claudeInfo.mockResolvedValue(info({ engine: 'api', keySource: 'saved' }));
+    mocks.claudeInfo.mockResolvedValue(info({ engine: 'api', keySource: 'saved', claudeCode: { found: true, signedIn: true, account: 'claude.ai' } }));
     const user = setup(appState({ claudeConnected: true, claudeEngine: 'api' }));
     expect(screen.getByRole('button', { name: /^Claude Your Claude key/ })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^Claude / }));
@@ -584,6 +584,21 @@ describe('Claude', () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: /^Claude / }));
     expect(await screen.findByText("Claude Code is on this computer but isn't signed in. Open a terminal, run claude, and sign in with your Claude account.")).toBeInTheDocument();
+  });
+
+  it('says so in the row itself when Claude Code is chosen but not signed in', async () => {
+    mocks.claudeInfo.mockResolvedValue(info({ engine: 'claude_code', claudeCode: { found: true, signedIn: false, account: null } }));
+    const user = setup(appState({ canFind: true, claudeEngine: 'claude_code' }));
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    expect(await screen.findByRole('button', { name: /^Claude Claude Code, not signed in/ })).toBeInTheDocument();
+  });
+
+  it('names the variable to unset for a key in the environment, with no Remove that would do nothing', async () => {
+    mocks.claudeInfo.mockResolvedValue(info({ engine: 'api', keySource: 'env' }));
+    const user = setup(appState({ claudeConnected: true, canFind: true, claudeEngine: 'api' }));
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    expect(await screen.findByText('Callum uses the Claude key in ANTHROPIC_API_KEY. Unset it to use your Claude plan through Claude Code instead.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
   });
 
   it('does not ask to sign in when Claude Code was found but would not run', async () => {

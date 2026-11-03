@@ -159,7 +159,7 @@ export interface PersonFull {
 // Task 18: adding people
 /** People skipped for one reason, already worded: `2 already in Callum`. */
 export interface SkipGroup { reason: SkipReason; line: string; names: string[]; projectName?: string }
-/** A person on a preview. `key` names them in `drop` when the user says Not a fit. Apollo rows carry the id Apollo knows them by. */
+/** A person on a preview. `key` names them in `drop` when the user says Not a fit. */
 export type PreviewPerson = NewPerson & { key: string };
 export interface AddPreview { batchId: string; added: PreviewPerson[]; groups: SkipGroup[] }
 export interface AddCommit { added: Person[]; line: string; groups: SkipGroup[] }

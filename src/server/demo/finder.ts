@@ -17,10 +17,14 @@ export class DemoFinder implements PeopleFinder {
   async find(q: FindQuery): Promise<PersonLead[]> {
     const role = q.description.trim().replace(/\s+(in|at|near|around)\s+.*$/i, '').replace(/s$/i, '') || 'Founder';
     const people: PersonLead[] = [];
-    for (let i = 0; i < Math.max(1, Math.min(50, q.count)); i++) {
-      const n = this.next++;
+    const known = new Set((q.known ?? []).map((k) => k.replace(/\s*\(.*\)$/, '').toLowerCase()));
+    const want = Math.max(1, Math.min(50, q.count));
+    // 16 first names by 16 last names: 256 different people before any name comes round again.
+    for (let tries = 0; people.length < want && tries < 256; tries++) {
+      const n = this.next++ % 256;
       const first = FIRST[n % FIRST.length] as string;
-      const last = LAST[(n * 7 + 3) % LAST.length] as string;
+      const last = LAST[(n + Math.floor(n / FIRST.length)) % LAST.length] as string;
+      if (known.has(`${first} ${last}`.toLowerCase())) continue;
       const company = COMPANIES[n % COMPANIES.length] as string;
       const person: PersonLead = {
         name: `${first} ${last}`, firstName: first, role: role.charAt(0).toUpperCase() + role.slice(1), company,

@@ -83,7 +83,7 @@ You need at least one. [docs/SETUP.md](docs/SETUP.md) has every step.
 | LinkedIn | A sign-in on this computer, or your `li_at` cookie on a server | [LinkedIn](docs/SETUP.md#linkedin) |
 | X | An OAuth 2.0 user token with `dm.read dm.write tweet.read users.read offline.access` | [X](docs/SETUP.md#x) |
 
-Callum's writing and its people search run on Claude. On your own computer it uses the Claude Code you already have, signed in with your Claude plan, so there is no key to buy or paste. A Claude API key is the other option, and the one a server uses. Without either, Callum writes from plain templates and takes the people you bring as a list. See [Claude](docs/SETUP.md#claude).
+Callum's writing and its people search run on Claude. On your own computer it uses the Claude Code you already have, signed in with your Claude plan, so there is no key to buy or paste. A Claude API key is the other option: it wins wherever it is set, and it is the usual choice on a server or in Docker, where Claude Code isn't signed in. Without either, Callum writes from plain templates and takes the people you bring as a list. See [Claude](docs/SETUP.md#claude).
 
 ## Settings
 
@@ -96,7 +96,7 @@ Server mode reads these environment variables. The desktop app does not need any
 | `CALLUM_PASSWORD` | none | Asks for this password at sign-in and makes Callum listen on every interface. Required on a server. |
 | `CALLUM_TRUST_PROXY` | off | Set to `1` behind one HTTPS reverse proxy that sets `X-Forwarded-For`, so the sign-in lockout counts each visitor's own address. |
 | `ANTHROPIC_API_KEY` | none | Runs Claude on the API with this key instead of Claude Code. |
-| `CALLUM_MODEL` | `claude-opus-5-5` with a key; your Claude Code model without one | The Claude model to use. |
+| `CALLUM_MODEL` | `claude-opus-5-5` with a key; without one, Sonnet for finding people and your Claude Code model for writing | The Claude model to use. |
 | `CALLUM_CLAUDE_PATH` | found on its own | Where the `claude` program is, when Callum can't find it. |
 | `CALLUM_CLAUDE_CODE` | on | Set to `off` so Callum never runs Claude Code. |
 | `CALLUM_MICROSOFT_CLIENT_ID` | none | The client ID of your Microsoft app registration. |

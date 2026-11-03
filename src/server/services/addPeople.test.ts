@@ -346,6 +346,15 @@ describe('adding people found by description', () => {
     expect(d.people.map((p) => p.name)).toEqual(['Femi Ade', 'Tunde Bello']);
   });
 
+  it('leaves out someone emailed while the search ran, when the people are added', async () => {
+    s.ctx.finder = fakeFinder({ people: [foundPerson(0, { email: 'kemi@okopay.com' }), foundPerson(1)] }).finder;
+    const d = await describePeople(s.ctx, { query: 'heads of finance', filters: [] });
+    expect(d.people.map((p) => p.name)).toEqual(['Kemi Eze', 'Femi Ade']);
+    s.sentTo.push('kemi@okopay.com');
+    const done = await commit(s.ctx, d.batchId as string);
+    expect(done.added.map((p) => p.name)).toEqual(['Femi Ade']);
+  });
+
   it('can be undone', async () => {
     s.ctx.finder = fakeFinder().finder;
     const d = await describePeople(s.ctx, { query: 'heads of finance', filters: [] });

@@ -56,10 +56,13 @@ export function keysRoutes(ctx: Ctx, opts: KeysRoutesOptions = {}): Hono {
   app.get('/settings/claude', async (c) => {
     // Claude Code may have been installed or signed in since Callum started.
     if (!ctx.demo) ctx.findClaudeCodeAgain();
+    const claudeCode = ctx.demo ? { found: false, signedIn: false, account: null } : await status(ctx.claudeCodePath);
+    // Signed in since a call failed for want of it: Callum stops waiting, and the old error is not shown beside it.
+    if (claudeCode.signedIn && ctx.model?.engine === 'claude_code') ctx.model.signedIn?.();
     const info: ClaudeInfo = {
       engine: ctx.model?.engine ?? null,
       keySource: ctx.claudeKey,
-      claudeCode: ctx.demo ? { found: false, signedIn: false, account: null } : await status(ctx.claudeCodePath),
+      claudeCode,
       lastError: ctx.model?.lastError ?? null,
     };
     return c.json(info);

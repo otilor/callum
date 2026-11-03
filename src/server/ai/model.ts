@@ -36,6 +36,8 @@ export interface Model {
   ask<S extends z.ZodType>(schema: S, system: string, user: string): Promise<z.infer<S> | null>;
   /** Searches the web and reads pages, then answers in the schema. Throws a ModelError. */
   research<S extends z.ZodType>(schema: S, system: string, user: string, opts?: ResearchOptions): Promise<z.infer<S>>;
+  /** Told that the user has signed in since a call failed for want of it, so Callum stops waiting and the old error goes. */
+  signedIn?(): void;
 }
 
 const MAX_TOKENS = 4000;
@@ -107,11 +109,15 @@ export class ApiModel implements Model {
     ];
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: user }];
     let nudged = false;
+    // The whole search has one time limit, however many times a paused turn is resumed.
+    const deadline = Date.now() + (opts.timeoutMs ?? 300_000);
     try {
       for (let round = 0; round < 12; round++) {
+        const left = deadline - Date.now();
+        if (left <= 0) throw new ModelError('failed', 'Claude took too long to answer. Try again in a minute.');
         const res = await this.client.messages.create(
           { model: this.model, max_tokens: RESEARCH_MAX_TOKENS, output_config: { effort: 'medium' }, system, tools, messages },
-          { timeout: opts.timeoutMs ?? 300_000 },
+          { timeout: left },
         );
         const report = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'report');
         if (report) {
@@ -273,6 +279,12 @@ export class ClaudeCodeModel implements Model {
     this.now = opts.now ?? Date.now;
   }
 
+  signedIn(): void {
+    if (this.signedOutUntil === 0 && this.lastError !== NOT_SIGNED_IN) return;
+    this.signedOutUntil = 0;
+    if (this.lastError === NOT_SIGNED_IN) this.lastError = null;
+  }
+
   async ask<S extends z.ZodType>(schema: S, system: string, user: string): Promise<z.infer<S> | null> {
     if (this.now() < this.signedOutUntil) return null;
     try {
@@ -351,7 +363,9 @@ export class ClaudeCodeModel implements Model {
     let out: Record<string, unknown> | null = null;
     try {
       const text = res.stdout.trim();
-      out = text ? (JSON.parse(text.slice(text.indexOf('{'))) as Record<string, unknown>) : null;
+      const start = text.indexOf('{');
+      const parsed: unknown = start === -1 ? null : JSON.parse(text.slice(start));
+      out = parsed !== null && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
     } catch {
       out = null;
     }

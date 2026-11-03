@@ -83,7 +83,9 @@ export async function claudeCodeStatus(path: string | null, cwd: string, run: Ru
   const res = await run(path, ['auth', 'status'], { input: '', cwd, timeoutMs: 20_000, env: claudeCodeEnv(path) });
   if (res.code === null && !res.stdout) return { found: true, runs: false, signedIn: false, account: null };
   try {
-    const out = JSON.parse(res.stdout.slice(res.stdout.indexOf('{'))) as { loggedIn?: unknown; authMethod?: unknown };
+    const start = res.stdout.indexOf('{');
+    if (start === -1) throw new Error('not JSON');
+    const out = JSON.parse(res.stdout.slice(start)) as { loggedIn?: unknown; authMethod?: unknown };
     const signedIn = out.loggedIn === true;
     return { found: true, runs: true, signedIn, account: signedIn && typeof out.authMethod === 'string' ? out.authMethod : null };
   } catch {

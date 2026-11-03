@@ -189,7 +189,7 @@ export class ModelFinder implements PeopleFinder {
 
   /**
    * Two searches start at once from different ends (pages about people, and profiles in search results), and one more
-   * looks elsewhere when they found too few. Each knows who the others found, so nobody comes back twice.
+   * looks elsewhere when they found too few, told who the first two found. Anyone found twice is kept once.
    */
   async find(q: FindQuery): Promise<PersonLead[]> {
     const description = q.description.trim();
@@ -244,12 +244,9 @@ export class ModelFinder implements PeopleFinder {
       if (err instanceof ModelError) throw new FindError(err.message);
       throw err;
     }
-    const leads: PersonLead[] = [];
-    for (const raw of out.people) {
-      const lead = await this.toLead(raw);
-      if (lead) leads.push(lead);
-    }
-    return leads;
+    // Emails are checked against their pages all at once, not one page after another.
+    const leads = await Promise.all(out.people.map((raw) => this.toLead(raw)));
+    return leads.filter((l): l is PersonLead => l !== null);
   }
 
   /** Keeps what can be trusted: links in the right shape, and an email only when its page really shows it. */

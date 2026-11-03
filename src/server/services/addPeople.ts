@@ -292,7 +292,9 @@ export async function commit(ctx: Ctx, batchId: string, opts: { projectId?: numb
   batch.committing = true;
   try {
     const leads = batch.leads.filter((_, i) => !drop.has(String(i)));
-    const result = importPeople(ctx.repo, project.id, leads, { known: batch.known });
+    // Someone emailed since the batch was made (a search takes minutes) is not said hello to again.
+    const known = new Set([...batch.known, ...(await emailedBefore(ctx))]);
+    const result = importPeople(ctx.repo, project.id, leads, { known });
     const now = ctx.clock.now();
     const settings = ctx.repo.getSettings();
     const added = project.startedAt === null ? result.added : result.added.map((p) => scheduleFirst(ctx, p, settings.timezone, now));

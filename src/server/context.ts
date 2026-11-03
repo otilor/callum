@@ -94,7 +94,7 @@ export function createCtx(opts: CtxOptions): Ctx {
     const model = pickModel(key);
     return {
       model,
-      writer: makeWriter({ ...env, ANTHROPIC_API_KEY: key ?? '' }, model),
+      writer: opts.writer ?? makeWriter({ ...env, ANTHROPIC_API_KEY: key ?? '' }, model),
       finder: makeFinder(model),
     };
   };

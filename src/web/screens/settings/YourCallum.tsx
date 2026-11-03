@@ -108,7 +108,11 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
 
   const desktop = typeof window !== 'undefined' ? window.callumDesktop : undefined;
   const engine = claudeInfo?.engine !== undefined ? claudeInfo.engine : state.claudeEngine;
-  const claudeSummary = state.demo ? 'Its own templates' : engine === 'claude_code' ? 'Your Claude plan' : engine === 'api' ? 'Your Claude key' : 'Not set up';
+  const claudeSummary = state.demo
+    ? 'Its own templates'
+    : engine === 'claude_code'
+      ? claudeInfo && !claudeInfo.claudeCode.signedIn ? 'Claude Code, not signed in' : 'Your Claude plan'
+      : engine === 'api' ? 'Your Claude key' : 'Not set up';
   const toggleRow = (key: string) => setOpen((o) => ({ ...o, [key]: !o[key] }));
 
   useEffect(() => setTaps({ notifications: settings.notifications === true, morningBrief: settings.morningBrief }), [settings.notifications, settings.morningBrief]);
@@ -223,13 +227,14 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
     }
   };
 
-  const loadClaudeInfo = useCallback(() => {
-    claudeKeyApi.info().then(setClaudeInfo, () => setClaudeInfo(null));
-  }, []);
   const claudeOpen = Boolean(open.claude);
   useEffect(() => {
-    if (claudeOpen && !state.demo) loadClaudeInfo();
-  }, [claudeOpen, state.demo, state.claudeConnected, loadClaudeInfo]);
+    if (!claudeOpen || state.demo) return;
+    // A slow answer to an earlier look never replaces a newer one.
+    let live = true;
+    claudeKeyApi.info().then((i) => { if (live) setClaudeInfo(i); }, () => { if (live) setClaudeInfo(null); });
+    return () => { live = false; };
+  }, [claudeOpen, state.demo, state.claudeConnected]);
 
   const saveClaudeKey = async () => {
     setClaudeMsg('');
@@ -470,7 +475,13 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
                     {claudeInfo ? (
                       <>
                         {claudeInfo.engine === 'api' ? (
-                          <p className="yc-aside">Callum uses your Claude key. Remove it to use your Claude plan through Claude Code instead.</p>
+                          <p className="yc-aside">
+                            {claudeInfo.keySource === 'env'
+                              ? 'Callum uses the Claude key in ANTHROPIC_API_KEY. Unset it to use your Claude plan through Claude Code instead.'
+                              : claudeInfo.claudeCode.signedIn
+                                ? 'Callum uses your Claude key. Remove it to use your Claude plan through Claude Code instead.'
+                                : 'Callum uses your Claude key.'}
+                          </p>
                         ) : claudeInfo.engine === 'claude_code' && claudeInfo.claudeCode.signedIn ? (
                           <p className="yc-aside">Callum writes and finds people with Claude Code on this computer, signed in with your Claude plan. Nothing else to pay for.</p>
                         ) : claudeInfo.claudeCode.found && claudeInfo.claudeCode.runs === false ? (
@@ -486,7 +497,7 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
                         {claudeInfo.lastError ? <p className="yc-aside">{claudeInfo.lastError}</p> : null}
                       </>
                     ) : null}
-                    {state.claudeConnected ? (
+                    {state.claudeConnected && claudeInfo?.keySource === 'env' ? null : state.claudeConnected ? (
                       <div className="yc-inline">
                         <span className="yc-hint" role="status">Connected</span>
                         <button type="button" className="yc-pill" disabled={claudeBusy} aria-busy={claudeBusy} onClick={() => void removeClaudeKey()}>Remove</button>

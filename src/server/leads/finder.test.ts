@@ -130,6 +130,23 @@ describe('ModelFinder', () => {
     }
   });
 
+  it('really runs the first two searches at the same time', async () => {
+    let live = 0;
+    let most = 0;
+    const model: Model = {
+      engine: 'claude_code', lastError: null, ask: async () => null,
+      research: async <S extends z.ZodType>() => {
+        live++;
+        most = Math.max(most, live);
+        await new Promise((r) => setTimeout(r, 20));
+        live--;
+        return { people: [] } as z.infer<S>;
+      },
+    };
+    await new ModelFinder(model, pages({}).fetch, today, dns()).find({ description: 'CFOs', count: 4 });
+    expect(most).toBe(2);
+  });
+
   it('looks once more elsewhere when the first two found too few, leaving out who they found', async () => {
     const { model, asked } = fakeModel(
       [{ name: 'Kemi Eze', company: 'Oko Pay', linkedinUrl: 'https://www.linkedin.com/in/kemi' }],
@@ -172,6 +189,12 @@ describe('ModelFinder', () => {
     await finder.find({ description: 'CFOs', count: 500 });
     expect(asked[0]?.user).toContain('How many to find: 26');
     expect(asked[0]?.opts?.maxSearches).toBe(25);
+    for (const count of [0, -3, Number.NaN]) {
+      asked.length = 0;
+      await finder.find({ description: 'CFOs', count });
+      // One person wanted: each of the two searches looks for two, to have one to spare.
+      expect(asked.map((a) => a.user.match(/How many to find: (\d+)/)?.[1])).toEqual(['2', '2']);
+    }
   });
 });
 
@@ -251,5 +274,14 @@ describe('DemoFinder', () => {
     // A second search brings different people.
     const more = await finder.find({ description: 'Founders', count: 3 });
     expect(more.map((p) => p.name)).not.toContain(people[0]?.name);
+  });
+
+  it('never repeats a person within a big search, and leaves out people already known', async () => {
+    const people = await new DemoFinder().find({ description: 'Founders', count: 50 });
+    expect(new Set(people.map((p) => p.name)).size).toBe(50);
+    const first = people[0]?.name ?? '';
+    const again = await new DemoFinder().find({ description: 'Founders', count: 5, known: [`${first} (Ledgerline)`] });
+    expect(again.map((p) => p.name)).not.toContain(first);
+    expect(again).toHaveLength(5);
   });
 });

@@ -179,7 +179,7 @@ async function findMore(ctx: Ctx, projectId: number, args: { likePersonId: numbe
   if (found.length === 0) return answer('Callum found nobody it could reach for that. Try different words.');
 
   const result = importPeople(ctx.repo, projectId, found, { known: await knownEmails(ctx) });
-  if (result.added.length > 0) ctx.bus.emit('people');
+  if (result.added.length > 0 || result.updated.length > 0) ctx.bus.emit('people');
   const n = result.added.length;
   const already = result.skipped.filter((s) => s.reason !== 'no_channel').length;
   let text = n === 0 ? 'Nobody new was added.' : `Added ${n} ${n === 1 ? 'person' : 'people'}. They start as strangers.`;

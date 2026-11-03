@@ -157,7 +157,7 @@ On your own computer Callum runs the Claude Code you already have, signed in wit
 
 Callum looks for the `claude` program on your PATH and in the places its installers use. If it is somewhere else, set `CALLUM_CLAUDE_PATH` to it. To stop Callum using Claude Code at all, set `CALLUM_CLAUDE_CODE=off`.
 
-What Callum asks of Claude counts toward your plan's usage, like anything else you do with Claude Code. Finding people takes a few minutes and a few dozen web searches for ten people. When your plan's limit is reached, Callum says so, writes from its templates for a while, and tries again later.
+What Callum asks of Claude counts toward your plan's usage, like anything else you do with Claude Code. Finding people takes a few minutes and a few dozen web searches for ten people. When your plan's limit is reached, Callum says so, writes that message from its templates, and tries Claude again for the next one.
 
 ### With a Claude API key (the option)
 
@@ -171,7 +171,7 @@ API use is billed to that key by Anthropic.
 
 ### Finding people
 
-Callum only adds people Claude saw named on a real page, with a way to reach them: a LinkedIn profile, an X handle, or an email address printed on a public page. Callum checks each email against the page it came from and drops any it can't see there, so it never guesses one. Most people come back with a LinkedIn profile. You can always bring your own list, a CSV, or a LinkedIn search link instead.
+Callum asks Claude for people it saw named on real pages, each with a way to reach them: a LinkedIn profile, an X handle, or an email address printed on a public page. Callum checks each email against the page it came from and drops any it can't see there, so it never guesses one. LinkedIn profiles and X handles come from what Claude saw in search results; Callum checks their shape but can't open LinkedIn to confirm them, so look over the list before you add it. Most people come back with a LinkedIn profile. You can always bring your own list, a CSV, or a LinkedIn search link instead.
 
 ### Without Claude
 

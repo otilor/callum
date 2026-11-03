@@ -86,6 +86,6 @@ export async function searchLeads(ctx: Ctx, projectId: number, query: string, co
     throw e;
   }
   const result = importPeople(ctx.repo, projectId, found, { known: await alreadyWrittenTo(ctx) });
-  if (result.added.length > 0) ctx.bus.emit('people');
+  if (result.added.length > 0 || result.updated.length > 0) ctx.bus.emit('people');
   return { total: found.length, added: result.added, skipped: result.skipped };
 }

@@ -234,6 +234,17 @@ describe('what Your Callum shows about Claude', () => {
     expect(JSON.stringify(withKey)).not.toContain(SECRET);
   });
 
+  it('clears an old "not signed in" once Claude Code says it is signed in', async () => {
+    const ctx = createCtx({ db: openDb(':memory:'), env: {}, dataDir: '/tmp/callum-test', claudeCodePath: '/usr/local/bin/claude' });
+    const model = ctx.model as NonNullable<typeof ctx.model>;
+    model.lastError = "Claude Code isn't signed in on this computer. Open a terminal, run claude, and sign in with your Claude account.";
+    let signedIn = false;
+    const app = createApp(ctx, { password: null, webDir: null, extraRoutes: [keysRoutes(ctx, { status: async () => ({ found: true, runs: true, signedIn, account: signedIn ? 'claude.ai' : null }) })], onError: () => undefined });
+    expect(await (await app.request('/api/settings/claude')).json()).toMatchObject({ lastError: expect.stringContaining("isn't signed in") });
+    signedIn = true;
+    expect(await (await app.request('/api/settings/claude')).json()).toMatchObject({ claudeCode: { signedIn: true }, lastError: null });
+  });
+
   it('finds Claude Code installed after Callum started', async () => {
     let installed: string | null = null;
     const ctx = createCtx({ db: openDb(':memory:'), env: {}, dataDir: '/tmp/callum-test', claudeCodePath: null, findClaudeCode: () => installed });

@@ -203,6 +203,7 @@ describe('AddPeople, describing who', () => {
   const rows = (n: number): PreviewPerson[] =>
     ['Kemi', 'Femi', 'Tunde'].slice(0, n).map((first, i) => ({
       key: `web-${i}`, name: `${first} ${['Eze', 'Ade', 'Bello'][i]}`, firstName: first, source: 'web' as const, projectId: 1,
+      linkedinUrl: `https://www.linkedin.com/in/${first.toLowerCase()}-${i}`,
       role: 'Head of Finance', company: ['Oko Pay', 'Ledgerly', 'Sent Co'][i] ?? 'Co', note: 'Head of finance. Found on techcabal.com.',
     }));
   const found = (over: Partial<Described> = {}): Described => ({ batchId: 'web-batch', total: 3, people: rows(3), narrow: null, line: 'Callum found 3', ...over });
@@ -295,7 +296,7 @@ describe('AddPeople, describing who', () => {
 
 describe('AddPeople, after a search on the web', () => {
   const rows = ['Kemi', 'Femi', 'Tunde'].map((first, i) => ({
-    key: `web-${i}`, name: `${first} Ez`, firstName: first, source: 'web' as const, projectId: 1,
+    key: `web-${i}`, name: `${first} Ez`, firstName: first, source: 'web' as const, projectId: 1, linkedinUrl: `https://www.linkedin.com/in/${first.toLowerCase()}-ez`,
     role: 'Head of Finance', company: 'Co', note: null,
   }));
   const found: Described = { batchId: 'web-batch', total: 3, people: rows, narrow: null, line: 'Callum found 3' };

@@ -16,7 +16,9 @@ function fakeClaude(...answers: Partial<RunResult>[]): { run: Runner; calls: Cal
   const run: Runner = async (file, args, opts) => {
     const promptFile = args[args.indexOf('--system-prompt-file') + 1];
     calls.push({ file, args, ...opts, system: promptFile && existsSync(promptFile) ? readFileSync(promptFile, 'utf8') : null });
-    const a = answers[Math.min(calls.length - 1, answers.length - 1)] ?? {};
+    // Each run has its own scripted answer: a retry or a second launch nobody expected fails the test.
+    if (calls.length > answers.length) throw new Error(`Claude Code ran ${calls.length} times; the test expected ${answers.length}.`);
+    const a = answers[calls.length - 1] ?? {};
     return { code: 0, stdout: '', stderr: '', timedOut: false, ...a };
   };
   return { run, calls };
@@ -96,7 +98,7 @@ describe('ClaudeCodeModel', () => {
   });
 
   it('runs again without --safe-mode on a Claude Code that does not know it, and remembers', async () => {
-    const { run, calls } = fakeClaude({ code: 1, stderr: "error: unknown option '--safe-mode'" }, success({ answer: 'ok' }));
+    const { run, calls } = fakeClaude({ code: 1, stderr: "error: unknown option '--safe-mode'" }, success({ answer: 'ok' }), success({ answer: 'ok' }));
     const m = new ClaudeCodeModel('claude', { cwd: '/tmp/callum-test/cc', run });
     expect(await m.ask(schema, 's', 'u')).toEqual({ answer: 'ok' });
     expect(await m.ask(schema, 's', 'u')).toEqual({ answer: 'ok' });
@@ -131,7 +133,7 @@ describe('ClaudeCodeModel', () => {
     const missing = new ClaudeCodeModel('/nowhere/claude', { cwd: '/tmp/callum-test/cc', run: fakeClaude({ code: null, stderr: 'spawn ENOENT' }).run });
     await expect(missing.research(schema, 's', 'u')).rejects.toMatchObject({ code: 'failed', message: expect.stringContaining("couldn't start Claude Code") });
 
-    const wrong = new ClaudeCodeModel('claude', { cwd: '/tmp/callum-test/cc', run: fakeClaude(success({ nope: 1 })).run });
+    const wrong = new ClaudeCodeModel('claude', { cwd: '/tmp/callum-test/cc', run: fakeClaude(success({ nope: 1 }), success({ nope: 1 })).run });
     await expect(wrong.research(schema, 's', 'u')).rejects.toMatchObject({ code: 'failed' });
     expect(await wrong.ask(schema, 's', 'u')).toBeNull();
 
@@ -140,6 +142,22 @@ describe('ClaudeCodeModel', () => {
 
     const old = new ClaudeCodeModel('claude', { cwd: '/tmp/callum-test/cc', run: fakeClaude({ code: 1, stderr: "error: unknown option '--json-schema'" }).run });
     await expect(old.research(schema, 's', 'u')).rejects.toMatchObject({ code: 'failed', message: expect.stringContaining('claude update') });
+  });
+
+  it('stops waiting as soon as Claude Code is signed in again', async () => {
+    const { run, calls } = fakeClaude(failure('Not logged in · Please run /login'), success({ answer: 'back' }));
+    const m = new ClaudeCodeModel('claude', { cwd: '/tmp/callum-test/cc', run, now: () => 1_000_000 });
+    await expect(m.research(schema, 's', 'u')).rejects.toMatchObject({ code: 'not_signed_in' });
+    expect(await m.ask(schema, 's', 'u')).toBeNull();
+    m.signedIn();
+    expect(m.lastError).toBeNull();
+    expect(await m.ask(schema, 's', 'u')).toEqual({ answer: 'back' });
+    expect(calls).toHaveLength(2);
+  });
+
+  it('treats words with no JSON in them as a failed run', async () => {
+    const m = new ClaudeCodeModel('claude', { cwd: '/tmp/callum-test/cc', run: fakeClaude({ code: 0, stdout: 'Done in 2' }).run });
+    await expect(m.research(schema, 's', 'u')).rejects.toMatchObject({ code: 'failed' });
   });
 
   it('reads the answer after any warning printed before it', async () => {
@@ -288,6 +306,24 @@ describe('ApiModel', () => {
     const silent = fakeClient([{ content: [said] }, { content: [said] }]);
     await expect(new ApiModel('k', 'm', silent.client).research(schema, 's', 'u')).rejects.toMatchObject({ code: 'failed' });
     expect(silent.created).toHaveLength(2);
+  });
+
+  it('gives the whole search one time limit, however often a paused turn resumes', async () => {
+    const searching = { type: 'server_tool_use', id: 'st_1', name: 'web_search', input: { query: 'q' } } as unknown as Anthropic.ContentBlock;
+    const timeouts: number[] = [];
+    const client = {
+      messages: {
+        create: async (_body: unknown, opts: { timeout: number }) => {
+          timeouts.push(opts.timeout);
+          await new Promise((r) => setTimeout(r, 40));
+          return { stop_reason: 'pause_turn', content: [searching] };
+        },
+      },
+    } as unknown as Anthropic;
+    await expect(new ApiModel('k', 'm', client).research(schema, 's', 'u', { timeoutMs: 100 })).rejects.toMatchObject({ code: 'failed', message: expect.stringContaining('too long') });
+    expect(timeouts.length).toBeLessThanOrEqual(3);
+    expect(timeouts[0]).toBeLessThanOrEqual(100);
+    for (let i = 1; i < timeouts.length; i++) expect(timeouts[i]!).toBeLessThan(timeouts[i - 1]!);
   });
 
   it('turns a refused key and a rate limit into plain words, without the key', async () => {

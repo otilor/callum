@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { claudeCodeStatus, findClaudeCode } from './claudeCode.js';
 import type { RunResult, Runner } from './model.js';
@@ -33,15 +33,14 @@ describe('findClaudeCode', () => {
     expect(findClaudeCode({ PATH: '/nowhere', HOME: home }, 'linux')).toBe(file);
   });
 
-  it('skips a file that cannot run, and a folder named claude', () => {
+  it.skipIf(process.platform === 'win32')('skips a folder named claude and a file that cannot run, and takes the next one on the PATH', () => {
     const home = mkdtempSync(join(tmpdir(), 'callum-cc-'));
     mkdirSync(join(home, 'a', 'claude'), { recursive: true });
-    writeFileSync(join(home, 'b-claude'), 'x');
     mkdirSync(join(home, 'b'));
     writeFileSync(join(home, 'b', 'claude'), 'not runnable');
     chmodSync(join(home, 'b', 'claude'), 0o644);
-    const found = findClaudeCode({ PATH: [join(home, 'a'), join(home, 'b')].join(':'), HOME: home }, 'linux');
-    expect(found === null || !found.startsWith(home)).toBe(true);
+    const good = program(join(home, 'c'));
+    expect(findClaudeCode({ PATH: [join(home, 'a'), join(home, 'b'), join(home, 'c')].join(delimiter), HOME: home }, 'linux')).toBe(good);
   });
 
   it('runs the cli.js behind an npm link, so a Dock-launched app needs no node on its PATH', () => {
@@ -65,6 +64,12 @@ describe('findClaudeCode', () => {
     writeFileSync(cli, '');
     expect(findClaudeCode({ PATH: '', USERPROFILE: home, APPDATA: join(home, 'AppData', 'Roaming') }, 'win32')).toBe(cli);
     expect(findClaudeCode({ CALLUM_CLAUDE_PATH: join(npm, 'claude.cmd') }, 'win32')).toBe(cli);
+  });
+
+  it('finds claude.exe on the Windows Path, split by semicolons', () => {
+    const home = mkdtempSync(join(tmpdir(), 'callum-cc-'));
+    const exe = program(join(home, 'Programs', 'Claude'), 'claude.exe');
+    expect(findClaudeCode({ Path: [join(home, 'nothing'), join(home, 'Programs', 'Claude')].join(';'), USERPROFILE: home }, 'win32')).toBe(exe);
   });
 
   it('looks for claude.exe on Windows, and nowhere else when it is not there', () => {
@@ -106,6 +111,10 @@ describe('claudeCodeStatus', () => {
     // Found but would not start: not a reason to tell the user to sign in.
     expect(await claudeCodeStatus('/nowhere/claude', cwd, answering({ code: null, stderr: 'ENOENT' }).run)).toEqual({ found: true, runs: false, signedIn: false, account: null });
     expect(await claudeCodeStatus('claude', cwd, answering({ code: 127, stderr: 'env: node: No such file or directory' }).run)).toEqual({ found: true, runs: false, signedIn: false, account: null });
+  });
+
+  it('does not mistake a number at the end of plain text for an answer', async () => {
+    expect(await claudeCodeStatus('claude', cwd, answering({ code: 0, stdout: 'Logged in, version 2' }).run)).toEqual({ found: true, runs: true, signedIn: true, account: null });
   });
 
   it('falls back to the exit code on an older Claude Code that prints text', async () => {
