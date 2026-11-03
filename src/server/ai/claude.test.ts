@@ -92,10 +92,10 @@ describe('ClaudeWriter request shape', () => {
     expect(out).toEqual({ subject: expect.any(String), body: 'Hi Kemi, I take reconciliation off ops teams.' });
   });
 
-  it('mentions the 280-character limit for an invite and carries the calendar link for a booking', async () => {
+  it('mentions the 200-character limit for an invite and carries the calendar link for a booking', async () => {
     const a = writerWith({ parsed_output: { body: 'Hi Kemi, glad to connect.' } });
     await a.writer.write('invite', testCtx({ channel: 'linkedin' }));
-    expect(requestOf(a.parse).system).toContain('280 characters');
+    expect(requestOf(a.parse).system).toContain('200 characters');
     const b = writerWith({ parsed_output: { body: 'Great. Pick a time: https://cal.example.com/ada' } });
     await b.writer.write('booking', testCtx());
     expect(requestOf(b.parse).system).toContain('https://cal.example.com/ada');

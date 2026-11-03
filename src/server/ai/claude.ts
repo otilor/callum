@@ -38,7 +38,7 @@ const TONES: Record<Tone, string> = {
 
 const KIND_BRIEF: Record<OutKind, string> = {
   hello: 'A first hello. Open with them: the one thing about them or their company that makes the sender write. Then say in one plain sentence what the sender does and what it gets them. End with one easy question they can answer in a line.',
-  invite: 'A LinkedIn connection note. At most 280 characters including spaces. Why them, and what the sender could do for them, in a line each.',
+  invite: 'A LinkedIn connection note. At most 200 characters including spaces (the LinkedIn limit on free accounts). Why them, and what the sender could do for them, in a line each.',
   thanks: 'A short thank-you for accepting the LinkedIn connection. Then what the sender does and what it gets them, in one plain sentence, and an easy next step.',
   follow_up: 'A follow-up to an earlier note that got no reply. Do not repeat the first note: bring a new reason it matters to them, or a lighter ask. If this is the last one, say so kindly and leave the door open.',
   reply: 'A reply to what they last wrote. Answer what they asked. If they asked about something you were not given, say you will come back to them on it.',
@@ -140,7 +140,7 @@ export class ClaudeWriter implements Writer {
       COPY_RULES,
       `Write one ${channel === 'email' ? 'email body' : channel === 'linkedin' ? 'LinkedIn message' : 'X direct message'}. Output only the message text in "body": no subject line, no quotes, no notes to the sender.`,
       channel === 'email' ? 'Plain text, no signature block, and do not add an unsubscribe line (it is added for you). End after the last sentence.' : '',
-      kind === 'invite' ? 'Hard limit: 280 characters including spaces.' : '',
+      kind === 'invite' ? 'Hard limit: 200 characters including spaces.' : '',
       `The sender: ${settings.senderName ?? 'the sender'}. Write in the first person as the sender.`,
       project.offer
         ? `What the sender offers (their own words; write it in first person, "I help ..."): ${project.offer}`
