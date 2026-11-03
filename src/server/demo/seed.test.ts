@@ -203,6 +203,17 @@ describe('seedScene morning', () => {
     }
   });
 
+  it('opens with no follow-up already due, even on a Tuesday afternoon after a weekend', () => {
+    // Bisi's hello went on the Friday at 14:18 Lagos time; four days on is Tuesday 13:18 UTC.
+    for (const now of ['2026-11-03T08:30:00Z', '2026-11-03T13:44:00Z', '2026-11-03T22:00:00Z', '2026-11-05T15:00:00Z']) {
+      const ctx = demoCtx(now);
+      seedScene(ctx, 'morning');
+      for (const p of ctx.repo.listPeople()) {
+        if (p.nextTouchAt) expect(new Date(p.nextTouchAt).getTime(), `${now} ${p.name}`).toBeGreaterThan(new Date(now).getTime() + 60_000);
+      }
+    }
+  });
+
   it('has Tunde talking with the user after answering him', () => {
     const ctx = demoCtx();
     seedScene(ctx, 'morning');
