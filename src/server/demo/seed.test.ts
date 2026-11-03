@@ -208,6 +208,7 @@ describe('seedScene morning', () => {
     for (const now of ['2026-11-03T08:30:00Z', '2026-11-03T13:44:00Z', '2026-11-03T22:00:00Z', '2026-11-05T15:00:00Z']) {
       const ctx = demoCtx(now);
       seedScene(ctx, 'morning');
+      expect(person(ctx, 'Bisi').nextTouchAt, `${now} Bisi`).not.toBeNull();
       for (const p of ctx.repo.listPeople()) {
         if (p.nextTouchAt) expect(new Date(p.nextTouchAt).getTime(), `${now} ${p.name}`).toBeGreaterThan(new Date(now).getTime() + 60_000);
       }
