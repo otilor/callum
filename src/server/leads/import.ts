@@ -34,7 +34,7 @@ export function sketchPerson(lead: PersonLead, name: string, projectId: number, 
     timezone: lead.timezone ?? null, channel: lead.channel ?? null, stage: lead.stage ?? 'stranger', status: lead.status ?? 'active',
     touches: lead.touches ?? 0, lastTouchAt: null, nextTouchAt: null, linkedinState: lead.linkedinState ?? 'none', invitedAt: null,
     snoozedUntil: null, restUntil: null, badge: null, replyKind: null, suggested: null, draft: null, lastInbound: null, repliedAt: null,
-    source: lead.source, note: lead.note ?? null, apolloId: lead.apolloId ?? null, createdAt: at, updatedAt: at,
+    source: lead.source, note: lead.note ?? null, createdAt: at, updatedAt: at,
   };
 }
 
@@ -55,8 +55,6 @@ export function importPeople(repo: Repo, projectId: number | null, people: Perso
   }
 
   return repo.transaction(() => {
-    // Every look-up Apollo charged for is remembered, whether or not the person could be written to.
-    if (!dry) repo.markApolloSeen(people.flatMap((l) => (l.apolloId ? [l.apolloId] : [])));
     // Everyone Callum already has, by email, LinkedIn and X, so a match on any handle is found.
     const index = new Map<string, Person[]>();
     const remember = (p: Person) => {
@@ -113,8 +111,6 @@ export function importPeople(repo: Repo, projectId: number | null, people: Perso
       if (matches.length > 0) {
         const ids = new Set(matches.map((m) => m.id));
         const only = ids.size === 1 ? matches[0]! : null;
-        // Already looked up in Apollo: remembering the id keeps the next search from paying for them again.
-        if (only && !only.apolloId && lead.apolloId && !dry) remember(repo.updatePerson(only.id, { apolloId: lead.apolloId }));
         // The person gains the handles this row adds when they are stopped (so the stop holds on every handle) or
         // in this project. Someone in another project is left alone. A row that links two people changes neither.
         if (only && (only.status === 'stopped' || only.projectId === here)) learnHandles(only, lead);

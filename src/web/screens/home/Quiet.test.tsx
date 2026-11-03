@@ -121,7 +121,7 @@ describe('Quiet: group used up', () => {
 
   it('says everyone has heard from you and offers more like the people who replied', async () => {
     mocks.ask.mockResolvedValue({
-      text: 'Callum can look for 20 more like Kemi. That uses about 20 Apollo credits.', personIds: [],
+      text: 'Callum can look for 20 more like Kemi. It takes a few minutes.', personIds: [],
       action: { kind: 'find_more', label: 'Find 20 more like Kemi', args: { likePersonId: 1, query: null, count: 20 } },
     });
     mocks.act.mockResolvedValue({ text: 'Added 20 people. They start as strangers.', personIds: [], action: null });
@@ -131,7 +131,7 @@ describe('Quiet: group used up', () => {
     expect(screen.getByText('4 people replied. The other 26 finish their follow-ups by Friday 13 November, then rest.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Find more like the people who replied' }));
     expect(mocks.ask).toHaveBeenCalledWith('Find more like Kemi', 1);
-    expect(await screen.findByText(/uses about 20 Apollo credits/)).toBeInTheDocument();
+    expect(await screen.findByText(/It takes a few minutes/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Find 20 more like Kemi' }));
     expect(await screen.findByText('Added 20 people. They start as strangers.')).toBeInTheDocument();
     expect(mocks.act).toHaveBeenCalledWith(expect.objectContaining({ kind: 'find_more' }), 1);

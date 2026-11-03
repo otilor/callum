@@ -202,8 +202,16 @@ CREATE TABLE apollo_seen (
 );
 `;
 
+/** Apollo is gone: Claude finds people now. Its ids, its record of who was paid for, and a saved Apollo key go with it. */
+const V6 = `
+DROP INDEX IF EXISTS idx_people_apollo_id;
+ALTER TABLE people DROP COLUMN apollo_id;
+DROP TABLE IF EXISTS apollo_seen;
+DELETE FROM channel_secrets WHERE channel = 'apollo';
+`;
+
 type Step = string | ((db: Db) => void);
-const STEPS: Step[] = [V1, V2, v3, V4, V5];
+const STEPS: Step[] = [V1, V2, v3, V4, V5, V6];
 
 /** Bring the database up to date, or up to version `upTo` (tests build older databases this way). */
 export function migrate(db: Db, upTo: number = STEPS.length): void {

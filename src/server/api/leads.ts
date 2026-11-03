@@ -1,13 +1,13 @@
 import type { Person, PersonLead } from '../../shared/types.js';
 import type { Ctx } from '../context.js';
-import { ApolloError, type ApolloEnrichment } from '../leads/apollo.js';
+import { FindError, MAX_FIND as FINDER_MAX } from '../leads/finder.js';
 import { importPeople } from '../leads/import.js';
 import { parseCsv, parsePaste, type Skipped } from '../leads/parse.js';
 import { UserError } from '../services/errors.js';
 
-export const NEEDS_A_LIST = 'Callum needs a list for that. Bring a CSV or a LinkedIn search link.';
-export const DEFAULT_FIND = 25;
-export const MAX_FIND = 200;
+export const NEEDS_A_LIST = 'Finding people needs Claude. Sign in to Claude Code on this computer, or add a Claude key in Your Callum. You can bring a CSV or a LinkedIn search link instead.';
+export const DEFAULT_FIND = 10;
+export const MAX_FIND = FINDER_MAX;
 const LINKEDIN_RESULTS = 100;
 
 export interface Imported { added: Person[]; skipped: Skipped[] }
@@ -65,33 +65,27 @@ export async function importLeads(
 }
 
 export interface Searched extends Imported {
+  /** How many people Claude found, before anyone already in Callum was left out. */
   total: number;
-  /** Apollo credits the lookup used. */
-  creditsUsed: number;
-  /** Set when Apollo stopped part of the way: the people already looked up were still added. */
-  error?: string;
 }
 
-/** Describes people to Apollo, looks up the ones it finds and adds them to a project. */
+/** People already in Callum, as "Name (Company)", newest first, so a search doesn't bring them back. */
+function knownNames(ctx: Ctx): string[] {
+  return ctx.repo.listPeople().slice().reverse().map((p) => (p.company ? `${p.name} (${p.company})` : p.name));
+}
+
+/** Asks Claude to find people from a description on the web, and adds the ones it can reach to a project. */
 export async function searchLeads(ctx: Ctx, projectId: number, query: string, count: number = DEFAULT_FIND): Promise<Searched> {
-  if (!ctx.apollo) throw new UserError(NEEDS_A_LIST);
+  if (!ctx.finder) throw new UserError(NEEDS_A_LIST, 422, { code: 'no_claude' });
   const want = Math.min(Math.max(Math.floor(count) || DEFAULT_FIND, 1), MAX_FIND);
-  // People already looked up are left out of the search, so a second run asks Apollo for new ones and pays for none twice.
-  const found = await ctx.apollo.search({ query: query.trim(), titles: [], count: want, exclude: (id) => ctx.repo.hasApolloId(id) });
-  if (found.previews.length === 0) return { total: found.total, added: [], skipped: [], creditsUsed: 0 };
-  let enriched: ApolloEnrichment;
-  let error: string | undefined;
+  let found: PersonLead[];
   try {
-    enriched = await ctx.apollo.enrich(found.previews.map((p) => p.apolloId));
+    found = await ctx.finder.find({ description: query.trim(), count: want, known: knownNames(ctx) });
   } catch (e) {
-    if (!(e instanceof ApolloError) || !e.partial) throw e;
-    enriched = e.partial;
-    error = `${e.message} Callum added the ${enriched.people.length} it had already looked up.`;
+    if (e instanceof FindError) throw new UserError(e.message);
+    throw e;
   }
-  const result = importPeople(ctx.repo, projectId, enriched.people, { known: await alreadyWrittenTo(ctx) });
-  ctx.bus.emit('people');
-  return {
-    total: found.total, added: result.added, skipped: result.skipped, creditsUsed: enriched.creditsUsed,
-    ...(error ? { error } : {}),
-  };
+  const result = importPeople(ctx.repo, projectId, found, { known: await alreadyWrittenTo(ctx) });
+  if (result.added.length > 0 || result.updated.length > 0) ctx.bus.emit('people');
+  return { total: found.length, added: result.added, skipped: result.skipped };
 }

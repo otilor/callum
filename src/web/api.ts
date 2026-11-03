@@ -81,8 +81,7 @@ const del = <T>(path: string) => request<T>('DELETE', path);
 
 export interface PlanPreview { firstSendAt: string; total: number; byChannel: Record<Channel, number>; line: string }
 export interface ImportResult { added: Person[]; skipped: Skipped[] }
-/** `creditsUsed` is Apollo's own count when the server has it. */
-export interface SearchResult { total: number; added: Person[]; skipped: Skipped[]; creditsUsed?: number }
+export interface SearchResult { total: number; added: Person[]; skipped: Skipped[] }
 export interface ImportBody { csv?: string; paste?: string; linkedinSearchUrl?: string; projectId?: number }
 export interface PersonDetail { person: Person; messages: Message[]; path: PathStep[] }
 export interface DeviceCodeStart { userCode: string; verificationUri: string; expiresAt: string }
@@ -191,7 +190,6 @@ export const peopleApi = {
   commit: (body: { batchId: string; projectId?: number; drop?: string[] }) => post<AddCommit>('/people/commit', body),
   undo: (batchId: string) => post<{ removed: number }>('/people/undo', { batchId }),
   describe: (body: { query: string; filters?: string[]; projectId?: number | null }) => post<Described>('/people/describe', body),
-  connectApollo: (key: string) => post<{ connected: true }>('/apollo/connect', { key }),
   sample: (body: { offer: string; tone: Tone; batchId?: string; key?: string }) => post<HelloSample>('/people/sample', body),
   discardProject: (projectId: number) => post<{ discarded: boolean }>('/people/discard-project', { projectId }),
 };
@@ -212,8 +210,17 @@ export const noteApi = {
 };
 
 // Integration
+/** How Callum reaches Claude, as Your Callum shows it. */
+export interface ClaudeInfo {
+  engine: 'claude_code' | 'api' | null;
+  keySource: 'env' | 'saved' | null;
+  claudeCode: { found: boolean; runs?: boolean; signedIn: boolean; account: string | null };
+  lastError: string | null;
+}
 /** The key Callum writes hellos with. The server keeps it and never sends it back. */
 export const claudeKeyApi = {
   save: (key: string) => post<{ claudeConnected: boolean }>('/settings/claude-key', { key }),
   remove: () => del<{ claudeConnected: boolean }>('/settings/claude-key'),
+  /** How Callum reaches Claude: Claude Code on this computer, or a key. */
+  info: () => get<ClaudeInfo>('/settings/claude'),
 };

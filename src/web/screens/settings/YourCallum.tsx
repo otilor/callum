@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AppState, Channel, ChannelAccount, Project } from '../../../shared/types.js';
 import { CHANNELS } from '../../../shared/types.js';
-import { api, channelSetup, claudeKeyApi, type ChannelSummary, type MicrosoftSetup } from '../../api.js';
+import { api, channelSetup, claudeKeyApi, type ChannelSummary, type ClaudeInfo, type MicrosoftSetup } from '../../api.js';
 import { joinNames } from '../../ui/format.js';
 import { marbleBackground } from '../../ui/Marble.js';
 import { useHeadingFocus } from '../../ui/useHeadingFocus.js';
@@ -104,8 +104,17 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
   const [claudeKey, setClaudeKey] = useState('');
   const [claudeBusy, setClaudeBusy] = useState(false);
   const [claudeMsg, setClaudeMsg] = useState('');
+  const [claudeInfo, setClaudeInfo] = useState<ClaudeInfo | null>(null);
 
   const desktop = typeof window !== 'undefined' ? window.callumDesktop : undefined;
+  const engine = claudeInfo?.engine !== undefined ? claudeInfo.engine : state.claudeEngine;
+  const claudeSummary = state.demo
+    ? 'Its own templates'
+    : engine === 'claude_code'
+      ? claudeInfo?.claudeCode.runs === false
+        ? 'Claude Code could not start'
+        : claudeInfo && !claudeInfo.claudeCode.signedIn ? 'Claude Code, not signed in' : 'Your Claude plan'
+      : engine === 'api' ? 'Your Claude key' : 'Not set up';
   const toggleRow = (key: string) => setOpen((o) => ({ ...o, [key]: !o[key] }));
 
   useEffect(() => setTaps({ notifications: settings.notifications === true, morningBrief: settings.morningBrief }), [settings.notifications, settings.morningBrief]);
@@ -219,6 +228,16 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
       setClientIdMsg({ text: messageOf(e), bad: true });
     }
   };
+
+  const claudeOpen = Boolean(open.claude);
+  useEffect(() => {
+    // Looked up on arrival, so the summary is right before the row opens, and again each time it opens.
+    if (state.demo) return;
+    // A slow answer to an earlier look never replaces a newer one.
+    let live = true;
+    claudeKeyApi.info().then((i) => { if (live) setClaudeInfo(i); }, () => { if (live) setClaudeInfo(null); });
+    return () => { live = false; };
+  }, [claudeOpen, state.demo, state.claudeConnected]);
 
   const saveClaudeKey = async () => {
     setClaudeMsg('');
@@ -451,18 +470,51 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
                 />
               </Row>
 
-              <Row id="claude" title="Claude key" summary={state.claudeConnected ? 'Connected' : 'Not connected'} open={Boolean(open.claude)} onToggle={() => toggleRow('claude')}>
-                <p className="yc-aside">Callum writes hellos with Claude when a key is here. Without one it uses its own templates.</p>
-                {state.claudeConnected ? (
-                  <div className="yc-inline">
-                    <span className="yc-hint" role="status">Connected</span>
-                    <button type="button" className="yc-pill" disabled={claudeBusy} aria-busy={claudeBusy} onClick={() => void removeClaudeKey()}>Remove</button>
-                  </div>
+              <Row id="claude" title="Claude" summary={claudeSummary} open={claudeOpen} onToggle={() => toggleRow('claude')}>
+                {state.demo ? (
+                  <p className="yc-aside">In the demo Callum writes from its own templates.</p>
                 ) : (
-                  <form className="yc-inline" onSubmit={(e) => { e.preventDefault(); if (claudeKey.trim() && !claudeBusy) void saveClaudeKey(); }}>
-                    <input className="yc-input" type="password" aria-label="Claude API key" value={claudeKey} placeholder="sk-ant-..." spellCheck={false} autoComplete="off" onChange={(e) => setClaudeKey(e.target.value)} />
-                    <button type="submit" className="yc-solid" disabled={!claudeKey.trim() || claudeBusy} aria-busy={claudeBusy}>{claudeBusy ? <Spinner light /> : null}Save</button>
-                  </form>
+                  <>
+                    {claudeInfo ? (
+                      <>
+                        {claudeInfo.engine === 'api' ? (
+                          <p className="yc-aside">
+                            {claudeInfo.keySource === 'env'
+                              ? 'Callum uses the Claude key in ANTHROPIC_API_KEY. Unset it to use your Claude plan through Claude Code instead.'
+                              : claudeInfo.claudeCode.signedIn
+                                ? 'Callum uses your Claude key. Remove it to use your Claude plan through Claude Code instead.'
+                                : 'Callum uses your Claude key.'}
+                          </p>
+                        ) : claudeInfo.engine === 'claude_code' && claudeInfo.claudeCode.signedIn ? (
+                          <p className="yc-aside">Callum writes and finds people with Claude Code on this computer, signed in with your Claude plan. Nothing else to pay for.</p>
+                        ) : claudeInfo.claudeCode.found && claudeInfo.claudeCode.runs === false ? (
+                          <p className="yc-aside">Callum found Claude Code but couldn't run it. Open a terminal and run claude to check it works, then come back here.</p>
+                        ) : claudeInfo.claudeCode.found ? (
+                          <p className="yc-aside">Claude Code is on this computer but isn't signed in. Open a terminal, run claude, and sign in with your Claude account.</p>
+                        ) : (
+                          <p className="yc-aside">
+                            Install Claude Code and sign in with your Claude account, and Callum uses your plan.{' '}
+                            <a href="https://code.claude.com/docs/en/setup" target="_blank" rel="noreferrer">How to install Claude Code</a>
+                          </p>
+                        )}
+                        {claudeInfo.lastError ? <p className="yc-aside">{claudeInfo.lastError}</p> : null}
+                      </>
+                    ) : null}
+                    {state.claudeConnected && claudeInfo?.keySource === 'env' ? null : state.claudeConnected ? (
+                      <div className="yc-inline">
+                        <span className="yc-hint" role="status">Connected</span>
+                        <button type="button" className="yc-pill" disabled={claudeBusy} aria-busy={claudeBusy} onClick={() => void removeClaudeKey()}>Remove</button>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="yc-aside">Or use a Claude API key</p>
+                        <form className="yc-inline" onSubmit={(e) => { e.preventDefault(); if (claudeKey.trim() && !claudeBusy) void saveClaudeKey(); }}>
+                          <input className="yc-input" type="password" aria-label="Claude API key" value={claudeKey} placeholder="sk-ant-..." spellCheck={false} autoComplete="off" onChange={(e) => setClaudeKey(e.target.value)} />
+                          <button type="submit" className="yc-solid" disabled={!claudeKey.trim() || claudeBusy} aria-busy={claudeBusy}>{claudeBusy ? <Spinner light /> : null}Save</button>
+                        </form>
+                      </>
+                    )}
+                  </>
                 )}
                 {claudeMsg ? <p className="yc-alert" role="alert"><span className="yc-alert-dot" aria-hidden="true" />{claudeMsg}</p> : null}
               </Row>

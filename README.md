@@ -83,7 +83,7 @@ You need at least one. [docs/SETUP.md](docs/SETUP.md) has every step.
 | LinkedIn | A sign-in on this computer, or your `li_at` cookie on a server | [LinkedIn](docs/SETUP.md#linkedin) |
 | X | An OAuth 2.0 user token with `dm.read dm.write tweet.read users.read offline.access` | [X](docs/SETUP.md#x) |
 
-Two optional keys make Callum better. A Claude key lets Callum write and read in your voice, in the language people write to you in. Without it Callum uses plain templates. An Apollo key lets you describe the people you want to meet instead of bringing a list. See [Claude](docs/SETUP.md#claude) and [Apollo](docs/SETUP.md#apollo).
+Callum's writing and its people search run on Claude. On your own computer it uses the Claude Code you already have, signed in with your Claude plan, so there is no key to buy or paste. A Claude API key is the other option: it wins wherever it is set, and it is the usual choice on a server or in Docker, where Claude Code isn't signed in. Without either, Callum writes from plain templates and takes the people you bring as a list. See [Claude](docs/SETUP.md#claude).
 
 ## Settings
 
@@ -95,9 +95,10 @@ Server mode reads these environment variables. The desktop app does not need any
 | `CALLUM_DATA_DIR` | `./data` | Where the database and the saved LinkedIn session live. |
 | `CALLUM_PASSWORD` | none | Asks for this password at sign-in and makes Callum listen on every interface. Required on a server. |
 | `CALLUM_TRUST_PROXY` | off | Set to `1` behind one HTTPS reverse proxy that sets `X-Forwarded-For`, so the sign-in lockout counts each visitor's own address. |
-| `ANTHROPIC_API_KEY` | none | Lets Claude write and read messages. |
-| `CALLUM_MODEL` | `claude-opus-5-5` | The Claude model to use. |
-| `APOLLO_API_KEY` | none | Lets you find people from a description. |
+| `ANTHROPIC_API_KEY` | none | Runs Claude on the API with this key instead of Claude Code. |
+| `CALLUM_MODEL` | `claude-opus-5-5` with a key; without one, Sonnet for finding people and your Claude Code model for writing | The Claude model to use. |
+| `CALLUM_CLAUDE_PATH` | found on its own | Where the `claude` program is, when Callum can't find it. |
+| `CALLUM_CLAUDE_CODE` | on | Set to `off` so Callum never runs Claude Code. |
 | `CALLUM_MICROSOFT_CLIENT_ID` | none | The client ID of your Microsoft app registration. |
 | `TZ_DEFAULT` | this computer's zone | The time zone to start with, for example `Africa/Lagos`. |
 | `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | none | A browser for LinkedIn when Chrome and Edge are not installed. |
@@ -159,8 +160,8 @@ How the code is laid out:
 - `src/server/engine` holds the rules: who is next, when, on which channel. It is pure functions with no clock of its own.
 - `src/server/runner` is the loop that acts on those rules every few seconds: it plans, sends through the channels, and reads what comes back.
 - `src/server/channels` has one adapter per channel behind the same interface: email (SMTP and IMAP), LinkedIn (a browser), X (the API) and a demo adapter.
-- `src/server/ai` writes and reads messages, with Claude or with templates.
-- `src/server/leads` brings people in from a list, a LinkedIn search or Apollo.
+- `src/server/ai` writes and reads messages, with Claude (Claude Code or the API) or with templates.
+- `src/server/leads` brings people in from a list or a LinkedIn search, and finds people on the web with Claude.
 - `src/server/db` is SQLite through `node:sqlite`.
 - `src/server/api` is the small HTTP API the web app uses.
 - `src/server/demo` holds the demo scenes.

@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppState, Channel, ChannelAccount, OutboxItem, Person, Project } from '../../../shared/types.js';
-import { ApiError } from '../../api.js';
+import { ApiError, type ClaudeInfo } from '../../api.js';
 import { ToastProvider } from '../../ui/Toast.js';
 import type { CallumDesktop } from '../../../shared/desktop.js';
 import { YourCallum, disconnectText, type YourCallumProps } from './YourCallum.js';
@@ -23,12 +23,13 @@ const mocks = vi.hoisted(() => ({
   saveClientId: vi.fn(),
   saveClaude: vi.fn(),
   removeClaude: vi.fn(),
+  claudeInfo: vi.fn(),
 }));
 vi.mock('../../api.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api.js')>()),
   api: mocks,
   channelSetup: { microsoft: mocks.setup, saveMicrosoftClientId: mocks.saveClientId },
-  claudeKeyApi: { save: mocks.saveClaude, remove: mocks.removeClaude },
+  claudeKeyApi: { save: mocks.saveClaude, remove: mocks.removeClaude, info: mocks.claudeInfo },
 }));
 
 const NOW = new Date('2026-11-02T10:00:00Z');
@@ -80,7 +81,7 @@ function appState(over: Partial<AppState> = {}): AppState {
     outbox: [item(1, 1), item(2, 3)],
     incidents: [],
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: null, line: '' },
-    demo: false, apolloConnected: false, claudeConnected: false, auth: { password: false },
+    demo: false, canFind: false, claudeEngine: null, claudeConnected: false, auth: { password: false },
     ...over,
   };
 }
@@ -102,7 +103,8 @@ const SUMMARY: Record<Channel, { pending: { invites: number; followUps: number; 
 };
 
 beforeEach(() => {
-  for (const fn of [mocks.settings, mocks.updateProject, mocks.sample, mocks.channelSummary, mocks.disconnect, mocks.pauseProject, mocks.resumeProject, mocks.wrapProject, mocks.connect, mocks.setup, mocks.saveClientId, mocks.saveClaude, mocks.removeClaude]) fn.mockReset();
+  for (const fn of [mocks.settings, mocks.updateProject, mocks.sample, mocks.channelSummary, mocks.disconnect, mocks.pauseProject, mocks.resumeProject, mocks.wrapProject, mocks.connect, mocks.setup, mocks.saveClientId, mocks.saveClaude, mocks.removeClaude, mocks.claudeInfo]) fn.mockReset();
+  mocks.claudeInfo.mockResolvedValue(info());
   refresh.mockClear();
   download.mockClear();
   mocks.channelSummary.mockImplementation((ch: Channel) => Promise.resolve(SUMMARY[ch]));
@@ -519,12 +521,16 @@ describe('copy', () => {
   });
 });
 
-describe('Claude key', () => {
-  it('says what the key is for, and keeps it hidden while typing', async () => {
+const info = (over: Partial<ClaudeInfo> = {}): ClaudeInfo => ({
+  engine: null, keySource: null, claudeCode: { found: false, signedIn: false, account: null }, lastError: null, ...over,
+});
+
+describe('Claude', () => {
+  it('offers the key form, hidden while typing', async () => {
     const user = setup();
-    expect(screen.getByRole('button', { name: /^Claude key Not connected/ })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^Claude key / }));
-    expect(screen.getByText('Callum writes hellos with Claude when a key is here. Without one it uses its own templates.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Claude Not set up/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    expect(await screen.findByText('Or use a Claude API key')).toBeInTheDocument();
     expect(screen.getByLabelText('Claude API key')).toHaveAttribute('type', 'password');
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
@@ -532,7 +538,7 @@ describe('Claude key', () => {
   it('saves the key, forgets what was typed, and asks for the state again', async () => {
     mocks.saveClaude.mockResolvedValue({ claudeConnected: true });
     const user = setup();
-    await user.click(screen.getByRole('button', { name: /^Claude key / }));
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
     await user.type(screen.getByLabelText('Claude API key'), ' sk-ant-secret ');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(mocks.saveClaude).toHaveBeenCalledWith('sk-ant-secret');
@@ -543,7 +549,7 @@ describe('Claude key', () => {
   it('shows the reason in words when the key is refused', async () => {
     mocks.saveClaude.mockRejectedValue(new ApiError(422, 'Claude did not accept that key.'));
     const user = setup();
-    await user.click(screen.getByRole('button', { name: /^Claude key / }));
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
     await user.type(screen.getByLabelText('Claude API key'), 'nope');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Claude did not accept that key.');
@@ -552,12 +558,81 @@ describe('Claude key', () => {
 
   it('shows Connected without the key, and removes it', async () => {
     mocks.removeClaude.mockResolvedValue({ claudeConnected: false });
-    const user = setup(appState({ claudeConnected: true }));
-    expect(screen.getByRole('button', { name: /^Claude key Connected/ })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^Claude key / }));
+    mocks.claudeInfo.mockResolvedValue(info({ engine: 'api', keySource: 'saved', claudeCode: { found: true, signedIn: true, account: 'claude.ai' } }));
+    const user = setup(appState({ claudeConnected: true, claudeEngine: 'api' }));
+    expect(screen.getByRole('button', { name: /^Claude Your Claude key/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    expect(await screen.findByText('Callum uses your Claude key. Remove it to use your Claude plan through Claude Code instead.')).toBeInTheDocument();
     expect(screen.queryByLabelText('Claude API key')).not.toBeInTheDocument();
+    expect(screen.queryByText('Or use a Claude API key')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Remove' }));
     expect(mocks.removeClaude).toHaveBeenCalled();
     await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  it('says Claude Code is signed in and nothing else is to pay for', async () => {
+    mocks.claudeInfo.mockResolvedValue(info({ engine: 'claude_code', claudeCode: { found: true, signedIn: true, account: 'gabriel@yourcompany.com' } }));
+    const user = setup(appState({ canFind: true, claudeEngine: 'claude_code' }));
+    expect(screen.getByRole('button', { name: /^Claude Your Claude plan/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    expect(await screen.findByText('Callum writes and finds people with Claude Code on this computer, signed in with your Claude plan. Nothing else to pay for.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Claude API key')).toBeInTheDocument();
+  });
+
+  it('says how to sign in when Claude Code is here but not signed in', async () => {
+    mocks.claudeInfo.mockResolvedValue(info({ claudeCode: { found: true, signedIn: false, account: null } }));
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    expect(await screen.findByText("Claude Code is on this computer but isn't signed in. Open a terminal, run claude, and sign in with your Claude account.")).toBeInTheDocument();
+  });
+
+  it('says so in the row itself, before it opens, when Claude Code is chosen but not signed in', async () => {
+    mocks.claudeInfo.mockResolvedValue(info({ engine: 'claude_code', claudeCode: { found: true, signedIn: false, account: null } }));
+    setup(appState({ canFind: true, claudeEngine: 'claude_code' }));
+    expect(await screen.findByRole('button', { name: /^Claude Claude Code, not signed in/ })).toBeInTheDocument();
+  });
+
+  it('says in the row that Claude Code could not start, not that it needs signing in', async () => {
+    mocks.claudeInfo.mockResolvedValue(info({ engine: 'claude_code', claudeCode: { found: true, runs: false, signedIn: false, account: null } }));
+    setup(appState({ canFind: true, claudeEngine: 'claude_code' }));
+    expect(await screen.findByRole('button', { name: /^Claude Claude Code could not start/ })).toBeInTheDocument();
+  });
+
+  it('names the variable to unset for a key in the environment, with no Remove that would do nothing', async () => {
+    mocks.claudeInfo.mockResolvedValue(info({ engine: 'api', keySource: 'env' }));
+    const user = setup(appState({ claudeConnected: true, canFind: true, claudeEngine: 'api' }));
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    expect(await screen.findByText('Callum uses the Claude key in ANTHROPIC_API_KEY. Unset it to use your Claude plan through Claude Code instead.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+  });
+
+  it('does not ask to sign in when Claude Code was found but would not run', async () => {
+    mocks.claudeInfo.mockResolvedValue(info({ claudeCode: { found: true, runs: false, signedIn: false, account: null } }));
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    expect(await screen.findByText("Callum found Claude Code but couldn't run it. Open a terminal and run claude to check it works, then come back here.")).toBeInTheDocument();
+    expect(screen.queryByText(/isn't signed in/)).not.toBeInTheDocument();
+  });
+
+  it('links to how to install Claude Code when it is not found', async () => {
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    expect(await screen.findByText(/Install Claude Code and sign in with your Claude account, and Callum uses your plan\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'How to install Claude Code' })).toHaveAttribute('href', 'https://code.claude.com/docs/en/setup');
+  });
+
+  it('shows the last error quietly', async () => {
+    mocks.claudeInfo.mockResolvedValue(info({ lastError: 'Claude was too busy to answer. Callum will try again.' }));
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    expect(await screen.findByText('Claude was too busy to answer. Callum will try again.')).toBeInTheDocument();
+  });
+
+  it('keeps it simple in the demo', async () => {
+    const user = setup(appState({ demo: true }));
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    expect(screen.getByText('In the demo Callum writes from its own templates.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Claude API key')).not.toBeInTheDocument();
+    expect(mocks.claudeInfo).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AddCommit, AddPreview, Described } from '../../../shared/types.js';
-import { fakeApollo, setup, type Setup } from '../../services/addPeople.test-helpers.js';
+import { NO_CLAUDE } from '../../services/addPeople.js';
+import { fakeFinder, setup, type Setup } from '../../services/addPeople.test-helpers.js';
 import { peopleRoutes } from './people.js';
 
 let s: Setup;
@@ -9,7 +10,7 @@ let app: Hono;
 
 beforeEach(() => {
   s = setup();
-  app = new Hono().route('/api', peopleRoutes(s.ctx, { makeApollo: () => fakeApollo({ failSearch: 401 }).source }));
+  app = new Hono().route('/api', peopleRoutes(s.ctx));
 });
 
 async function post(path: string, body: unknown): Promise<{ status: number; json: Record<string, unknown> }> {
@@ -54,18 +55,16 @@ describe('people routes', () => {
     expect(garbage.status).toBe(422);
   });
 
-  it('describes with Apollo, and says what is missing without it', async () => {
+  it('describes with Claude, and says what is missing without it', async () => {
+    s.ctx.finder = null;
     const without = await post('/people/describe', { query: 'heads of finance in Accra', filters: [] });
     expect(without.status).toBe(422);
-    expect(without.json).toEqual({
-      error: 'Describing people needs a people search connected. Bring a list instead, or connect Apollo in Your Callum.',
-      detail: { code: 'no_apollo' },
-    });
-    s.ctx.apollo = fakeApollo({ total: 2300 }).source;
+    expect(without.json).toEqual({ error: NO_CLAUDE, detail: { code: 'no_claude' } });
+    s.ctx.finder = fakeFinder().finder;
     const found = await post('/people/describe', { query: 'heads of finance in Accra', filters: [] });
     expect(found.status).toBe(200);
     const d = found.json as unknown as Described;
-    expect(d.narrow).toEqual(['20 to 200 people']);
+    expect(d.narrow).toBeNull();
     expect(d.people).toHaveLength(3);
   });
 
@@ -83,12 +82,7 @@ describe('people routes', () => {
     expect((await post('/people/sample', { offer: '', tone: 'direct' })).status).toBe(422);
   });
 
-  it('connects Apollo and never sends the key back', async () => {
-    const bad = await post('/apollo/connect', { key: 'a-key-that-fails' });
-    expect(bad.status).toBe(422);
-    expect(bad.json).toEqual({ error: "Apollo didn't accept the API key. Check it in Your Callum." });
-    expect(s.ctx.repo.getChannelSecret('apollo')).toBeNull();
-    expect(JSON.stringify(bad.json)).not.toContain('a-key-that-fails');
-    expect((await post('/apollo/connect', {})).json).toEqual({ error: 'Paste your Apollo API key first.' });
+  it('has no Apollo route any more', async () => {
+    expect((await app.request('/api/apollo/connect', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status).toBe(404);
   });
 });

@@ -62,7 +62,7 @@ function appState(over: Partial<AppState> = {}): AppState {
     outbox: [],
     incidents: [],
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: null, line: '' },
-    demo: false, apolloConnected: false, claudeConnected: false, auth: { password: false },
+    demo: false, canFind: false, claudeEngine: null, claudeConnected: false, auth: { password: false },
     ...over,
   };
 }
@@ -339,7 +339,7 @@ describe('Who', () => {
     await reachWho(user);
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'Founders of startups{Enter}');
     await user.click(await screen.findByRole('button', { name: 'Find them' }));
-    expect(mocks.search).toHaveBeenCalledWith('Founders of startups', 25, 1);
+    expect(mocks.search).toHaveBeenCalledWith('Founders of startups', 10, 1);
     expect(await screen.findByText("That's about 48,000 people.")).toBeInTheDocument();
     expect(screen.getByText('Narrow it down?', { exact: false })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '20 to 200 people' })).toBeInTheDocument();
@@ -347,27 +347,27 @@ describe('Who', () => {
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
   });
 
-  it('adds what Apollo found and tells the cost', async () => {
+  it('adds what Callum found on the web', async () => {
     mocks.search.mockResolvedValue({ total: 300, added: [person(21, 'Ngozi Obi'), person(22, 'Seun Ade')], skipped: [] });
     const user = setup();
     await reachWho(user);
     await user.click(screen.getByRole('button', { name: 'Seed-stage fintech founders in Lagos' }));
-    expect(screen.getByText('Callum can look for 25 people. That uses about 25 Apollo credits.')).toBeInTheDocument();
+    expect(screen.getByText('Callum can look for 10 people on the web. It takes a few minutes.')).toBeInTheDocument();
     expect(mocks.search).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Find them' }));
-    expect(mocks.search).toHaveBeenCalledWith('Seed-stage fintech founders in Lagos', 25, 1);
+    expect(mocks.search).toHaveBeenCalledWith('Seed-stage fintech founders in Lagos', 10, 1);
     await waitFor(() => expect(screen.getByTestId('found-count')).toHaveTextContent('2'));
-    expect(screen.getByText('That used about 2 Apollo credits.')).toBeInTheDocument();
+    expect(screen.queryByText(/credit/i)).toBeNull();
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
   });
 
-  it('explains plainly when there is no people search to describe with', async () => {
-    mocks.search.mockRejectedValueOnce(new ApiError(422, 'Callum needs a list for that. Bring a CSV or a LinkedIn search link.'));
+  it('explains plainly when Claude is not there to find people', async () => {
+    mocks.search.mockRejectedValueOnce(new ApiError(422, 'Finding people needs Claude. Sign in to Claude Code on this computer, or add a Claude key in Your Callum. You can bring a list instead.', { detail: { code: 'no_claude' } }));
     const user = setup();
     await reachWho(user);
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'CFOs{Enter}');
     await user.click(await screen.findByRole('button', { name: 'Find them' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Callum needs a list for that. Bring a CSV or a LinkedIn search link.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Finding people needs Claude. Sign in to Claude Code on this computer, or add a Claude key in Your Callum. You can bring a list instead.');
     expect(screen.getByRole('button', { name: 'Bring a list' })).toBeInTheDocument();
   });
 });

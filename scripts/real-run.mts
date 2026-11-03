@@ -188,9 +188,10 @@ async function boot(dataDir: string, timing: Timing, who: { address: string; nam
   const clock = new OffsetClock();
   clock.offsetMs = timing.startOffset;
   const env: NodeJS.ProcessEnv = { ...process.env };
-  // Normal mode: no demo adapters, and no Claude key, so Callum writes with its own templates.
+  // Normal mode: no demo adapters, and no Claude (no key, no Claude Code), so Callum writes with its own templates.
   delete env.CALLUM_DEMO;
   delete env.ANTHROPIC_API_KEY;
+  env.CALLUM_CLAUDE_CODE = 'off';
   const server = await startServer({
     dataDir, host: '127.0.0.1', port: 0, password: null, webDir: null, env, clock,
     // The run does the passes itself, and looks in the mailbox on every one. Send spacing (one automatic send per channel

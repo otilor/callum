@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { Described, PreviewPerson, SkipGroup } from '../../../shared/types.js';
 import { ApiError, peopleApi } from '../../api.js';
-import { useToast } from '../../ui/Toast.js';
 
 export type Way = 'csv' | 'paste' | 'link' | 'describe';
 export type Phase = 'idle' | 'reading' | 'preview' | 'nosource' | 'narrow' | 'looking' | 'nobody';
@@ -11,8 +10,8 @@ export interface Found {
   batchId: string;
   people: PreviewPerson[];
   groups: SkipGroup[];
-  /** Found by description: Apollo has not been asked to look anyone up yet, and that is what costs credits. */
-  apollo: boolean;
+  /** Found by description: Claude looked on the web. */
+  web: boolean;
   /** What to call them in the title: `new people`, `people from the search`, `close fits`. */
   word: string;
 }
@@ -46,7 +45,7 @@ function rowsIn(buf: ArrayBuffer): number {
   return Math.max(0, lines.length - 1);
 }
 
-const isNoApollo = (detail: unknown): boolean => typeof detail === 'object' && detail !== null && (detail as { code?: unknown }).code === 'no_apollo';
+const isNoClaude = (detail: unknown): boolean => typeof detail === 'object' && detail !== null && (detail as { code?: unknown }).code === 'no_claude';
 
 export interface WhoFinder {
   way: Way;
@@ -85,11 +84,8 @@ export interface WhoFinder {
   toggleNarrow(chip: string): void;
   findClosest(): void;
   nobodyLine: string;
-  /** The key box under "Describing people needs a people search connected". */
-  apollo: { open: boolean; key: string; busy: boolean };
-  openApollo(): void;
-  setApolloKey(key: string): void;
-  connectApollo(): void;
+  /** What the server said when Claude is not available to find people. */
+  noClaudeLine: string;
 }
 
 /**
@@ -97,7 +93,6 @@ export interface WhoFinder {
  * was left out. `projectId` is the project they join, or null while the project is still being set up.
  */
 export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way } = {}): WhoFinder {
-  const toast = useToast();
   const [way, setWayState] = useState<Way>(opts.initialWay ?? 'csv');
   const [phase, setPhase] = useState<Phase>('idle');
   const [found, setFound] = useState<Found | null>(null);
@@ -113,9 +108,7 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
   const [descText, setDescText] = useState('');
   const [narrow, setNarrow] = useState<{ described: Described; selected: string[] } | null>(null);
   const [nobodyLine, setNobodyLine] = useState('');
-  const [apolloOpen, setApolloOpen] = useState(false);
-  const [apolloKey, setApolloKey] = useState('');
-  const [apolloBusy, setApolloBusy] = useState(false);
+  const [noClaudeLine, setNoClaudeLine] = useState('');
 
   // An answer that arrives after the person moved on is ignored.
   const ticket = useRef(0);
@@ -145,7 +138,7 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
     try {
       const res = await request();
       if (mine !== ticket.current) return null;
-      const next: Found = { batchId: res.batchId, people: res.people, groups: res.groups, apollo: false, word };
+      const next: Found = { batchId: res.batchId, people: res.people, groups: res.groups, web: false, word };
       setFound(next);
       setPhase('preview');
       return next;
@@ -231,13 +224,14 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
         setPhase('narrow');
         return null;
       }
-      const next: Found = { batchId: d.batchId, people: d.people, groups: [], apollo: true, word: 'close fits' };
+      const next: Found = { batchId: d.batchId, people: d.people, groups: [], web: true, word: 'close fits' };
       setFound(next);
       setPhase('preview');
       return next;
     } catch (e) {
       if (mine !== ticket.current) return null;
-      if (e instanceof ApiError && isNoApollo(e.detail)) {
+      if (e instanceof ApiError && isNoClaude(e.detail)) {
+        setNoClaudeLine(e.message);
         setPhase('nosource');
         return null;
       }
@@ -267,7 +261,7 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
     const d = narrow.described;
     if (narrow.selected.length === 0 && d.batchId) {
       last.current = () => lookFor(descText.trim(), [], true);
-      setFound({ batchId: d.batchId, people: d.people, groups: [], apollo: true, word: 'close fits' });
+      setFound({ batchId: d.batchId, people: d.people, groups: [], web: true, word: 'close fits' });
       setNarrow(null);
       setPhase('preview');
       return;
@@ -275,25 +269,6 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
     const filters = narrow.selected;
     void fresh((again) => lookFor(descText.trim(), filters, again));
   }, [descText, fresh, lookFor, narrow]);
-
-  const connectApollo = useCallback(() => {
-    if (apolloBusy) return;
-    setApolloBusy(true);
-    setError('');
-    peopleApi.connectApollo(apolloKey).then(
-      () => {
-        setApolloBusy(false);
-        setApolloOpen(false);
-        setApolloKey('');
-        toast('Apollo is connected. Callum can look for people now.');
-        look();
-      },
-      (e: unknown) => {
-        setApolloBusy(false);
-        setError(messageOf(e));
-      },
-    );
-  }, [apolloBusy, apolloKey, look, toast]);
 
   const reset = useCallback(() => {
     clear();
@@ -330,7 +305,6 @@ export function useWhoFinder(projectId: number | null, opts: { initialWay?: Way 
     pasteText, setPasteText, readPaste,
     linkText, setLinkText: (text) => { setLinkText(text); setLinkBad(false); }, linkBad, readLink,
     descText, setDescText, look, narrow, toggleNarrow, findClosest, nobodyLine,
-    apollo: { open: apolloOpen, key: apolloKey, busy: apolloBusy },
-    openApollo: () => setApolloOpen(true), setApolloKey, connectApollo,
+    noClaudeLine,
   };
 }

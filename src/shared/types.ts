@@ -2,7 +2,8 @@ export type Channel = 'email' | 'linkedin' | 'x';
 export const CHANNELS: Channel[] = ['email', 'linkedin', 'x'];
 export type Stage = 'stranger' | 'hello' | 'following' | 'talking';
 export type PersonStatus = 'active' | 'waiting' | 'snoozed' | 'held' | 'resting' | 'stopped' | 'closed' | 'removed';
-export type LeadSource = 'csv' | 'paste' | 'linkedin_search' | 'apollo' | 'referral' | 'demo';
+/** Where a person came from. `web` is Claude's search; `apollo` is only on people added before Callum stopped using Apollo. */
+export type LeadSource = 'csv' | 'paste' | 'linkedin_search' | 'web' | 'apollo' | 'referral' | 'demo';
 export type MessageKind = 'hello' | 'invite' | 'thanks' | 'follow_up' | 'reply' | 'booking' | 'close' | 'inbound';
 export type OutKind = Exclude<MessageKind, 'inbound'>;
 export type OutboxState = 'awaiting_ok' | 'scheduled' | 'sending' | 'sent' | 'cancelled' | 'failed' | 'blocked';
@@ -41,8 +42,6 @@ export interface Person {
   replyKind: ReplyKind | null; suggested: SuggestedAction | null;
   draft: string | null; lastInbound: string | null; repliedAt: string | null;
   source: LeadSource; note: string | null;
-  /** Apollo's id for this person, once looked up there; the same person is never paid for twice. */
-  apolloId?: string | null;
   createdAt: string; updatedAt: string;
 }
 export type NewPerson = Pick<Person, 'name' | 'source' | 'projectId'> & Partial<Omit<Person, 'id' | 'name' | 'source' | 'projectId' | 'createdAt' | 'updatedAt'>>;
@@ -105,10 +104,15 @@ export interface Brief { wantToTalk: number; sentYesterday: number; acceptedRece
 export interface AppState {
   settings: Settings; projects: Project[]; channels: ChannelAccount[]; people: Person[];
   outbox: OutboxItem[]; incidents: Incident[]; brief: Brief; demo: boolean;
-  /** Whether Callum can look people up in Apollo (a key in the environment or saved in Your Callum). Never the key itself. */
-  apolloConnected: boolean;
-  /** Whether Callum writes with Claude (a key in the environment or saved in Your Callum). Never the key itself. */
+  /** Whether Callum can find people from a description: Claude is there, through Claude Code or a key. */
+  canFind: boolean;
+  /** Whether a Claude API key is set (in the environment or saved in Your Callum). Never the key itself. */
   claudeConnected: boolean;
+  /**
+   * Where Callum's Claude runs: `claude_code` is Claude Code on this computer, signed in with the user's own Claude
+   * plan; `api` is the key. Null when there is neither, and Callum writes from its own templates.
+   */
+  claudeEngine: 'claude_code' | 'api' | null;
   /** Whether this Callum asks for a password. A page that is let in uses it to offer Sign out. */
   auth: { password: boolean };
 }
@@ -155,14 +159,10 @@ export interface PersonFull {
 // Task 18: adding people
 /** People skipped for one reason, already worded: `2 already in Callum`. */
 export interface SkipGroup { reason: SkipReason; line: string; names: string[]; projectName?: string }
-/** A person on a preview. `key` names them in `drop` when the user says Not a fit. Apollo rows carry the id Apollo knows them by. */
-export type PreviewPerson = NewPerson & { key: string; apolloId?: string; hasEmail?: boolean };
+/** A person on a preview. `key` names them in `drop` when the user says Not a fit. */
+export type PreviewPerson = NewPerson & { key: string };
 export interface AddPreview { batchId: string; added: PreviewPerson[]; groups: SkipGroup[] }
-export interface AddCommit {
-  added: Person[]; line: string; groups: SkipGroup[]; creditsUsed?: number; warning?: string;
-  /** People Apollo has not looked up yet, after a failure part way. Adding again looks up only these. */
-  remaining?: number;
-}
+export interface AddCommit { added: Person[]; line: string; groups: SkipGroup[] }
 export interface Described { batchId: string | null; total: number; people: PreviewPerson[]; narrow: string[] | null; line: string }
 
 // Task 19: the weekly note and the quiet moments

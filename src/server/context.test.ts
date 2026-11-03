@@ -4,7 +4,10 @@ import type { AdapterHooks, ChannelAdapter } from './channels/types.js';
 import { createCtx } from './context.js';
 import { openDb } from './db/db.js';
 import { fixedClock } from './engine/clock.js';
-import { ApolloSource } from './leads/apollo.js';
+import { ApiModel, ClaudeCodeModel } from './ai/model.js';
+import { ClaudeWriter } from './ai/claude.js';
+import { DemoFinder } from './demo/finder.js';
+import { ModelFinder } from './leads/finder.js';
 
 describe('createCtx', () => {
   it('wires everything to one clock and one bus', () => {
@@ -13,7 +16,8 @@ describe('createCtx', () => {
     expect(ctx.clock).toBe(clock);
     expect(ctx.demo).toBe(false);
     expect(ctx.dataDir).toBe('./data');
-    expect(ctx.apollo).toBeNull();
+    expect(ctx.model).toBeNull();
+    expect(ctx.finder).toBeNull();
     const project = ctx.repo.insertProject({ name: 'One' });
     expect(project.createdAt).toBe('2026-11-03T08:30:00.000Z');
     const seen: string[] = [];
@@ -29,18 +33,56 @@ describe('createCtx', () => {
     expect(createCtx({ db: openDb(':memory:'), env: { CALLUM_DATA_DIR: '  ' } }).dataDir).toBe('./data');
   });
 
-  it('has Apollo only when there is a key', () => {
-    expect(createCtx({ db: openDb(':memory:'), env: { APOLLO_API_KEY: 'k' } }).apollo).toBeInstanceOf(ApolloSource);
-    expect(createCtx({ db: openDb(':memory:'), env: { APOLLO_API_KEY: '  ' } }).apollo).toBeNull();
+  it('runs Claude through the key when there is one, else through Claude Code when Callum found it, else not at all', () => {
+    const keyed = createCtx({ db: openDb(':memory:'), env: { ANTHROPIC_API_KEY: 'sk-ant-k' }, claudeCodePath: '/usr/local/bin/claude' });
+    expect(keyed.model).toBeInstanceOf(ApiModel);
+    expect(keyed.finder).toBeInstanceOf(ModelFinder);
+    expect(keyed.writer).toBeInstanceOf(ClaudeWriter);
+    const plan = createCtx({ db: openDb(':memory:'), env: {}, claudeCodePath: '/usr/local/bin/claude' });
+    expect(plan.model).toBeInstanceOf(ClaudeCodeModel);
+    expect((plan.model as ClaudeCodeModel).path).toBe('/usr/local/bin/claude');
+    expect(plan.finder).toBeInstanceOf(ModelFinder);
+    expect(plan.writer).toBeInstanceOf(ClaudeWriter);
+    const none = createCtx({ db: openDb(':memory:'), env: { ANTHROPIC_API_KEY: '  ' } });
+    expect(none.model).toBeNull();
+    expect(none.finder).toBeNull();
+    expect(none.writer).toBeInstanceOf(TemplateWriter);
   });
 
-  it('reads the Apollo key stored in Your Callum, and prefers the environment', () => {
-    const db = openDb(':memory:');
-    const stored = createCtx({ db, env: {} });
-    stored.repo.setChannelSecret('apollo', { key: 'from-the-app' });
-    expect(createCtx({ db, env: {} }).apollo).toBeInstanceOf(ApolloSource);
-    expect(createCtx({ db, env: { APOLLO_API_KEY: 'from-env' } }).apollo).toBeInstanceOf(ApolloSource);
-    expect(createCtx({ db: openDb(':memory:'), env: {} }).apollo).toBeNull();
+  it('switches between the key and Claude Code as a key is saved and removed', () => {
+    const ctx = createCtx({ db: openDb(':memory:'), env: {}, claudeCodePath: '/usr/local/bin/claude' });
+    ctx.repo.setChannelSecret('anthropic', { key: 'sk-ant-saved' });
+    ctx.reloadKeys();
+    expect(ctx.model?.engine).toBe('api');
+    expect(ctx.claudeKey).toBe('saved');
+    ctx.repo.setChannelSecret('anthropic', null);
+    ctx.reloadKeys();
+    expect(ctx.model?.engine).toBe('claude_code');
+    expect(ctx.claudeKey).toBeNull();
+  });
+
+  it('looks for Claude Code again only when it was told how', () => {
+    const quiet = createCtx({ db: openDb(':memory:'), env: {} });
+    quiet.findClaudeCodeAgain();
+    expect(quiet.model).toBeNull();
+    let where: string | null = null;
+    const ctx = createCtx({ db: openDb(':memory:'), env: {}, findClaudeCode: () => where });
+    const seen: string[] = [];
+    ctx.bus.on((s) => seen.push(s));
+    ctx.findClaudeCodeAgain();
+    expect(ctx.model).toBeNull();
+    expect(seen).toEqual([]);
+    where = '/opt/homebrew/bin/claude';
+    ctx.findClaudeCodeAgain();
+    expect(ctx.model?.engine).toBe('claude_code');
+    expect(ctx.finder).toBeInstanceOf(ModelFinder);
+    expect(seen).toEqual(['settings']);
+  });
+
+  it('finds made-up people in the demo, never with Claude', () => {
+    const ctx = createCtx({ db: openDb(':memory:'), env: {}, demo: true });
+    expect(ctx.finder).toBeInstanceOf(DemoFinder);
+    expect(ctx.model).toBeNull();
   });
 
   it('uses the writer it is given, and the template writer without a key', () => {

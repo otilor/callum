@@ -2,18 +2,18 @@ import type { AskAction, AskAnswer, Channel, Person, Tone } from '../../shared/t
 import { CHANNELS } from '../../shared/types.js';
 import type { Ctx } from '../context.js';
 import { switchChannel, personTz } from '../engine/lifecycle.js';
-import { ApolloError, type ApolloEnrichment, type ApolloQuery } from '../leads/apollo.js';
+import { FindError, MAX_FIND as FINDER_MAX } from '../leads/finder.js';
 import { importPeople } from '../leads/import.js';
 import { resumeChannel } from '../runner/incidents.js';
 import { assertCanResume } from './channels.js';
 import { CHANNEL_NAME, cancelPendingRefunding, joinList, plural, requireProject, userTz, whenText } from './common.js';
 import { UserError } from './errors.js';
 
-const NEEDS_LIST = 'Callum needs a list for that. Bring a CSV or a LinkedIn search link.';
+const NEEDS_CLAUDE = 'Finding people needs Claude. Sign in to Claude Code on this computer, or add a Claude key in Your Callum.';
 const UNKNOWN = "Callum can find people, pause a channel, change the tone, or tell you who's warming up.";
 const TONES: readonly Tone[] = ['warm', 'direct', 'playful'];
 const MAX_ASK = 500;
-const MAX_FIND = 100;
+const MAX_FIND = FINDER_MAX;
 
 /** The channel at the start of a sentence. */
 const Cap = (ch: Channel): string => (ch === 'email' ? 'Email' : CHANNEL_NAME[ch]);
@@ -75,7 +75,7 @@ export async function ask(ctx: Ctx, projectId: number, text: string): Promise<As
     case 'why':
       return answer(whyText(ctx));
     case 'find': {
-      if (!ctx.apollo) return answer(NEEDS_LIST);
+      if (!ctx.finder) return answer(NEEDS_CLAUDE);
       const count = clampCount(intent.count);
       const like = intent.likePersonId === null ? null : byId.get(intent.likePersonId) ?? null;
       const query = typeof intent.query === 'string' ? intent.query.trim() : '';
@@ -83,14 +83,13 @@ export async function ask(ctx: Ctx, projectId: number, text: string): Promise<As
       if (like && !like.role?.trim()) {
         return answer(`Callum doesn't know what ${like.firstName} does, so it can't look for more like them. Tell it who to find instead.`, [like.id]);
       }
-      const credits = `That uses about ${plural(count, 'Apollo credit', 'Apollo credits')}.`;
       const action: AskAction = {
         kind: 'find_more',
         label: like ? `Find ${count} more like ${like.firstName}` : `Find ${count} people`,
         args: { likePersonId: like?.id ?? null, query: like ? null : query, count },
       };
       const what = like ? `${count} more like ${like.firstName}` : `${count} people`;
-      return answer(`Callum can look for ${what}. ${credits}`, like ? [like.id] : [], action);
+      return answer(`Callum can look for ${what} on the web. It takes a few minutes.`, like ? [like.id] : [], action);
     }
     case 'pause':
     case 'resume': {
@@ -138,12 +137,6 @@ export async function ask(ctx: Ctx, projectId: number, text: string): Promise<As
 
 // ---- act ---------------------------------------------------------------------
 
-function apolloFailure(e: unknown): unknown {
-  if (!(e instanceof ApolloError)) return e;
-  const spent = e.partial?.creditsUsed ?? 0;
-  return new UserError(spent > 0 ? `${e.message} That used ${plural(spent, 'Apollo credit', 'Apollo credits')}.` : e.message);
-}
-
 /** Addresses the mailbox has already written to, so nobody is written to twice. A mailbox that does not answer is not a reason to stop. */
 async function knownEmails(ctx: Ctx): Promise<Set<string>> {
   try {
@@ -155,8 +148,8 @@ async function knownEmails(ctx: Ctx): Promise<Set<string>> {
 }
 
 async function findMore(ctx: Ctx, projectId: number, args: { likePersonId: number | null; query: string | null; count: number }): Promise<AskAnswer> {
-  const apollo = ctx.apollo;
-  if (!apollo) throw new UserError(NEEDS_LIST);
+  const finder = ctx.finder;
+  if (!finder) throw new UserError(NEEDS_CLAUDE);
   const project = requireProject(ctx, projectId);
   if (project.state === 'wrapped') throw new UserError(`${project.name} is wrapped up.`);
   const count = clampCount(args.count);
@@ -164,57 +157,33 @@ async function findMore(ctx: Ctx, projectId: number, args: { likePersonId: numbe
   if (args.likePersonId !== null && args.likePersonId !== undefined && (!like || like.projectId !== projectId || like.status === 'removed')) {
     throw new UserError("Callum can't find that person in this project.");
   }
-  let query: ApolloQuery;
+  let description: string;
   if (like) {
     const role = like.role?.trim();
     if (!role) throw new UserError(`${like.firstName} has no role on file, so Callum can't find people like them. Try describing who to find.`);
-    query = { query: null, titles: [role], count };
+    description = `People in the same kind of role as ${like.name}: ${role}${like.company ? `, at companies like ${like.company}` : ''}. Not ${like.name}.`;
   } else {
     const words = typeof args.query === 'string' ? args.query.trim() : '';
     if (words === '') throw new UserError(UNKNOWN);
-    query = { query: words, titles: [], count };
+    description = words;
   }
 
-  // Searching is free and shows a preview. Looking people up costs credits, so only the people found are looked up.
-  // People already looked up are left out, and further pages are read for new ones, so no credit is spent twice.
-  let previews;
-  let skippedKnown = 0;
+  let found;
   try {
-    const found = await apollo.search({ ...query, exclude: (id) => ctx.repo.hasApolloId(id) });
-    previews = found.previews;
-    skippedKnown = found.skippedKnown;
+    const known = ctx.repo.listPeople().slice().reverse().map((p) => (p.company ? `${p.name} (${p.company})` : p.name));
+    found = await finder.find({ description, count, known });
   } catch (e) {
-    throw apolloFailure(e);
+    if (e instanceof FindError) throw new UserError(e.message);
+    throw e;
   }
-  if (previews.length === 0) {
-    return answer(skippedKnown > 0
-      ? 'Everyone Apollo found is already in Callum, so nothing was spent. Try different words.'
-      : 'Apollo found nobody for that. Try different words.');
-  }
+  if (found.length === 0) return answer('Callum found nobody it could reach for that. Try different words.');
 
-  let enriched: ApolloEnrichment;
-  let stopped: string | null = null;
-  try {
-    enriched = await apollo.enrich(previews.map((p) => p.apolloId));
-  } catch (e) {
-    if (e instanceof ApolloError && e.partial && e.partial.people.length > 0) {
-      enriched = e.partial;
-      stopped = e.message;
-    } else {
-      throw apolloFailure(e);
-    }
-  }
-
-  const result = importPeople(ctx.repo, projectId, enriched.people, { known: await knownEmails(ctx) });
-  ctx.bus.emit('people');
+  const result = importPeople(ctx.repo, projectId, found, { known: await knownEmails(ctx) });
+  if (result.added.length > 0 || result.updated.length > 0) ctx.bus.emit('people');
   const n = result.added.length;
-  const noChannel = result.skipped.filter((s) => s.reason === 'no_channel').length;
-  const already = result.skipped.length - noChannel;
+  const already = result.skipped.filter((s) => s.reason !== 'no_channel').length;
   let text = n === 0 ? 'Nobody new was added.' : `Added ${n} ${n === 1 ? 'person' : 'people'}. They start as strangers.`;
-  if (noChannel > 0) text += ` ${plural(noChannel, 'person', 'people')} had no email or LinkedIn and ${noChannel === 1 ? 'was' : 'were'} left out.`;
   if (already > 0) text += ` ${already === 1 ? '1 person was' : `${already} people were`} already in Callum or asked not to be contacted.`;
-  text += ` That used ${plural(enriched.creditsUsed, 'Apollo credit', 'Apollo credits')}.`;
-  if (stopped) text += ` Apollo stopped partway, so only the people it had already looked up were added. ${stopped}`;
   return answer(text, result.added.map((p) => p.id));
 }
 

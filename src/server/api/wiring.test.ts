@@ -69,7 +69,7 @@ describe('the feature routes', () => {
       const res = await (method === 'GET' ? h.get(path) : h.post(path));
       expect(res.status, path).toBe(200);
     }
-    for (const path of ['/api/people/preview', '/api/people/commit', '/api/people/describe', '/api/people/sample', '/api/people/discard-project', '/api/apollo/connect', '/api/settings/claude-key', '/api/people/1/switch-channel', '/api/people/1/wake']) {
+    for (const path of ['/api/people/preview', '/api/people/commit', '/api/people/describe', '/api/people/sample', '/api/people/discard-project', '/api/settings/claude-key', '/api/people/1/switch-channel', '/api/people/1/wake']) {
       const res = await h.post(path, {});
       expect(res.status, path).not.toBe(404);
     }
@@ -157,25 +157,25 @@ describe('the Claude key', () => {
 });
 
 describe('keys and wrapping up', () => {
-  it('wrap up and delete forgets the saved Apollo and Claude keys', async () => {
+  it('wrap up and delete forgets the saved Claude key', async () => {
     const writers: string[] = [];
-    const h = setup({ writers, verify: async () => undefined });
+    const h = setup({ demo: false, writers, verify: async () => undefined });
     await h.post('/api/settings/claude-key', { key: SECRET });
-    h.ctx.repo.setChannelSecret('apollo', { key: 'apollo-key' });
-    h.ctx.reloadKeys();
-    expect(h.ctx.apollo).not.toBeNull();
-    expect((await state(h)).apolloConnected).toBe(true);
+    const before = await state(h);
+    expect(before.claudeConnected).toBe(true);
+    expect(before.claudeEngine).toBe('api');
+    expect(before.canFind).toBe(true);
 
     await h.post('/api/wrap', { deleteData: true });
-    expect(h.ctx.apollo).toBeNull();
     const after = await state(h);
-    expect(after.apolloConnected).toBe(false);
     expect(after.claudeConnected).toBe(false);
+    expect(after.claudeEngine).toBeNull();
+    expect(after.canFind).toBe(false);
     expect(h.ctx.repo.getChannelSecret('anthropic')).toBeNull();
     expect(writers.at(-1)).toBe('');
   });
 
-  it('wrap up without deleting keeps them', async () => {
+  it('wrap up without deleting keeps it', async () => {
     const h = setup({ verify: async () => undefined });
     await h.post('/api/settings/claude-key', { key: SECRET });
     await h.post('/api/wrap', { deleteData: false });
@@ -183,25 +183,83 @@ describe('keys and wrapping up', () => {
   });
 });
 
-describe('Apollo in the state', () => {
-  it('is connected by an environment key or a saved one', async () => {
-    expect((await state(setup())).apolloConnected).toBe(false);
-    expect((await state(setup({ env: { APOLLO_API_KEY: 'k' } }))).apolloConnected).toBe(true);
-    const saved = setup();
-    saved.ctx.repo.setChannelSecret('apollo', { key: 'saved-key' });
-    saved.ctx.reloadKeys();
-    expect((await state(saved)).apolloConnected).toBe(true);
-    expect(JSON.stringify(await state(saved))).not.toContain('saved-key');
+describe('Claude in the state', () => {
+  it('runs on a key from the environment or a saved one, and never shows it', async () => {
+    const none = await state(setup({ demo: false }));
+    expect([none.claudeEngine, none.canFind, none.claudeConnected]).toEqual([null, false, false]);
+    const fromEnv = await state(setup({ demo: false, env: { ANTHROPIC_API_KEY: 'env-key-123' } }));
+    expect([fromEnv.claudeEngine, fromEnv.canFind, fromEnv.claudeConnected]).toEqual(['api', true, true]);
+    expect(JSON.stringify(fromEnv)).not.toContain('env-key-123');
+  });
+
+  it('runs on Claude Code when there is no key, and the key wins when there is one', async () => {
+    const db = openDb(':memory:');
+    const ctx = createCtx({ db, env: {}, dataDir: '/tmp/callum-test', claudeCodePath: '/usr/local/bin/claude' });
+    expect(ctx.model?.engine).toBe('claude_code');
+    expect(ctx.finder).not.toBeNull();
+    ctx.repo.setChannelSecret('anthropic', { key: SECRET });
+    ctx.reloadKeys();
+    expect(ctx.model?.engine).toBe('api');
+    ctx.repo.setChannelSecret('anthropic', null);
+    ctx.reloadKeys();
+    expect(ctx.model?.engine).toBe('claude_code');
   });
 
   it('reads a saved key when Callum starts', async () => {
     const db = openDb(':memory:');
     const first = createCtx({ db, env: {}, dataDir: '/tmp/callum-test' });
-    first.repo.setChannelSecret('apollo', { key: 'saved-key' });
     first.repo.setChannelSecret('anthropic', { key: SECRET });
     const again: Ctx = createCtx({ db, env: {}, dataDir: '/tmp/callum-test' });
-    expect(again.apollo).not.toBeNull();
     expect(again.claudeKey).toBe('saved');
+    expect(again.model?.engine).toBe('api');
+  });
+});
+
+describe('what Your Callum shows about Claude', () => {
+  it('says where Claude runs and whether Claude Code is signed in, never with a key', async () => {
+    const ctx = createCtx({ db: openDb(':memory:'), env: {}, dataDir: '/tmp/callum-test', claudeCodePath: '/usr/local/bin/claude', findClaudeCode: () => '/usr/local/bin/claude' });
+    const asked: (string | null)[] = [];
+    const status = async (path: string | null) => {
+      asked.push(path);
+      return { found: true, signedIn: true, account: 'claude.ai' };
+    };
+    const app = createApp(ctx, { password: null, webDir: null, extraRoutes: [keysRoutes(ctx, { status, verify: async () => undefined })], onError: () => undefined });
+    const info = async () => (await (await app.request('/api/settings/claude')).json()) as Record<string, unknown>;
+    expect(await info()).toEqual({ engine: 'claude_code', keySource: null, claudeCode: { found: true, signedIn: true, account: 'claude.ai' }, lastError: null });
+    expect(asked).toEqual(['/usr/local/bin/claude']);
+
+    await app.request('/api/settings/claude-key', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: SECRET }) });
+    const withKey = await info();
+    expect(withKey).toMatchObject({ engine: 'api', keySource: 'saved' });
+    expect(JSON.stringify(withKey)).not.toContain(SECRET);
+  });
+
+  it('clears an old "not signed in" once Claude Code says it is signed in', async () => {
+    const ctx = createCtx({ db: openDb(':memory:'), env: {}, dataDir: '/tmp/callum-test', claudeCodePath: '/usr/local/bin/claude' });
+    const model = ctx.model as NonNullable<typeof ctx.model>;
+    model.lastError = "Claude Code isn't signed in on this computer. Open a terminal, run claude, and sign in with your Claude account.";
+    let signedIn = false;
+    const app = createApp(ctx, { password: null, webDir: null, extraRoutes: [keysRoutes(ctx, { status: async () => ({ found: true, runs: true, signedIn, account: signedIn ? 'claude.ai' : null }) })], onError: () => undefined });
+    expect(await (await app.request('/api/settings/claude')).json()).toMatchObject({ lastError: expect.stringContaining("isn't signed in") });
+    signedIn = true;
+    expect(await (await app.request('/api/settings/claude')).json()).toMatchObject({ claudeCode: { signedIn: true }, lastError: null });
+  });
+
+  it('finds Claude Code installed after Callum started', async () => {
+    let installed: string | null = null;
+    const ctx = createCtx({ db: openDb(':memory:'), env: {}, dataDir: '/tmp/callum-test', claudeCodePath: null, findClaudeCode: () => installed });
+    const app = createApp(ctx, { password: null, webDir: null, extraRoutes: [keysRoutes(ctx, { status: async (p) => ({ found: p !== null, signedIn: false, account: null }) })], onError: () => undefined });
+    expect(await (await app.request('/api/settings/claude')).json()).toMatchObject({ engine: null, claudeCode: { found: false } });
+    expect(ctx.finder).toBeNull();
+    installed = '/home/ada/.local/bin/claude';
+    expect(await (await app.request('/api/settings/claude')).json()).toMatchObject({ engine: 'claude_code', claudeCode: { found: true, signedIn: false } });
+    expect(ctx.finder).not.toBeNull();
+  });
+
+  it('never runs Claude Code in the demo', async () => {
+    const ctx = createCtx({ db: openDb(':memory:'), demo: true, env: {}, dataDir: '/tmp/callum-test' });
+    const app = createApp(ctx, { password: null, webDir: null, extraRoutes: [keysRoutes(ctx, { status: () => { throw new Error('ran'); } })], onError: () => undefined });
+    expect(await (await app.request('/api/settings/claude')).json()).toEqual({ engine: null, keySource: null, claudeCode: { found: false, signedIn: false, account: null }, lastError: null });
   });
 });
 

@@ -39,10 +39,8 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
   const [error, setError] = useState('');
   const [done, setDone] = useState<AddCommit | null>(null);
   const [joined, setJoined] = useState<Person[]>([]);
-  // Everyone this batch has brought so far, including what an "Add the rest" brought, for Undo.
-  const [fromBatch, setFromBatch] = useState<Person[]>([]);
 
-  const undo = async (batchId: string, spentCredits: boolean, brought: Person[]) => {
+  const undo = async (batchId: string, brought: Person[]) => {
     try {
       await peopleApi.undo(batchId);
     } catch (e) {
@@ -51,10 +49,10 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
     }
     const gone = new Set(brought.map((p) => p.id));
     setJoined((all) => all.filter((p) => !gone.has(p.id)));
-    setFromBatch([]);
     setDone(null);
-    toast(spentCredits ? 'Undone. Nobody was added. The Apollo credits stay spent.' : 'Undone. Nobody was added.');
-    await finder.rerun();
+    toast('Undone. Nobody was added.');
+    // People Claude found are shown again as they were; searching again would take minutes and find others.
+    if (!finder.found?.web) await finder.rerun();
   };
 
   const add = async () => {
@@ -64,12 +62,11 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
     setError('');
     try {
       const result = await peopleApi.commit({ batchId: found.batchId, projectId: project.id, drop: finder.dropped });
-      const brought = [...fromBatch, ...result.added];
+      const brought = result.added;
       setDone(result);
       setJoined((all) => [...all, ...result.added]);
-      setFromBatch(brought);
       if (result.added.length > 0) {
-        toast(result.line, { ms: UNDO_MS, action: { label: 'Undo', onAction: () => void undo(found.batchId, found.apollo, brought) } });
+        toast(result.line, { ms: UNDO_MS, action: { label: 'Undo', onAction: () => void undo(found.batchId, brought) } });
       }
     } catch (e) {
       setError(messageOf(e));
@@ -81,7 +78,6 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
   const again = () => {
     setDone(null);
     setError('');
-    setFromBatch([]);
     finder.reset();
   };
 
@@ -98,11 +94,7 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
       <p className="ap-done-title">{text?.title}</p>
       {text?.rest ? <p className="ap-done-sub">{text.rest}</p> : null}
       {done.groups.length > 0 ? <p className="ap-done-skipped">{`Left out: ${done.groups.map((g) => g.line).join(', ')}.`}</p> : null}
-      {done.warning ? <AlertLine>{done.warning}</AlertLine> : null}
       {error ? <AlertLine>{error}</AlertLine> : null}
-      {done.remaining ? (
-        <button type="button" className="ap-btn ap-btn-ink" aria-busy={busy} disabled={busy} onClick={() => void add()}>Add the rest</button>
-      ) : null}
       <button type="button" className="ap-btn ap-btn-quiet" onClick={again}>Add more people</button>
     </div>
   ) : undefined;
@@ -125,7 +117,7 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
         <p>{`New people join the river as strangers. Nobody hears from Callum before ${slot}.`}</p>
       </div>
 
-      <WhoPanel finder={finder} replace={finished} onNotFit={(p) => toast(p.source === 'apollo' ? `${firstOf(p)} is out. No credit goes on ${firstOf(p)}.` : `${firstOf(p)} is out and will not join.`)}>
+      <WhoPanel finder={finder} replace={finished} onNotFit={(p) => toast(`${firstOf(p)} is out and will not join.`)}>
         <div className="ap-actions">
           <button type="button" className="ap-btn ap-btn-ink ap-btn-lg" aria-busy={busy} disabled={busy || n === 0} onClick={() => void add()}>
             {`Add ${n} ${n === 1 ? 'person' : 'people'}`}

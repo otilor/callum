@@ -36,7 +36,7 @@ function state(over: Partial<AppState> = {}): AppState {
   return {
     settings: { senderName: null, senderEmail: null, timezone: 'UTC', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications: null, morningBrief: true },
     projects: [project(1, 'Reconciliation'), project(2, 'Payroll')],
-    channels: [], people: [], outbox: [], incidents: [], demo: false, apolloConnected: false, claudeConnected: false, auth: { password: false },
+    channels: [], people: [], outbox: [], incidents: [], demo: false, canFind: false, claudeEngine: null, claudeConnected: false, auth: { password: false },
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: null, line: '' },
     ...over,
   };

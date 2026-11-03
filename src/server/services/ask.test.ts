@@ -1,34 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApolloSource } from '../leads/apollo.js';
+import type { PersonLead } from '../../shared/types.js';
+import { FindError, type FindQuery, type PeopleFinder } from '../leads/finder.js';
 import { act, ask } from './ask.js';
 import { harness, type Harness } from './testing.test-helpers.js';
 
-interface FakeApollo { source: ApolloSource; searches: string[]; lookups: string[][] }
+const NEEDS_CLAUDE = 'Finding people needs Claude. Sign in to Claude Code on this computer, or add a Claude key in Your Callum.';
 
-/** An Apollo that answers from a list: previews on search, the email and LinkedIn on lookup. */
-function apollo(people: { id: string; first: string; last: string; email?: string; linkedin?: string }[], opts: { failLookupAfter?: number } = {}): FakeApollo {
-  const searches: string[] = [];
-  const lookups: string[][] = [];
-  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-    if (url.includes('api_search')) {
-      searches.push(decodeURIComponent(url.split('?')[1] ?? ''));
-      return json({
-        people: people.map((p) => ({ id: p.id, first_name: p.first, last_name_obfuscated: `${p.last.slice(0, 2)}***`, title: 'Head of Finance', organization: { name: 'Fieldnote' }, has_email: Boolean(p.email) })),
-        pagination: { total_entries: people.length, total_pages: 1 },
-      });
-    }
-    const ids = ((JSON.parse(String(init?.body)) as { details: { id: string }[] }).details).map((d) => d.id);
-    lookups.push(ids);
-    if (opts.failLookupAfter !== undefined && lookups.length > opts.failLookupAfter) return json({}, 429);
-    const matches = ids.map((id) => people.find((p) => p.id === id)).filter((p) => p !== undefined).map((p) => ({
-      first_name: p.first, last_name: p.last, name: `${p.first} ${p.last}`, title: 'Head of Finance', organization: { name: 'Fieldnote' },
-      ...(p.linkedin ? { linkedin_url: p.linkedin } : {}), ...(p.email ? { email: p.email, email_status: 'verified' } : {}),
-    }));
-    return json({ matches, credits_consumed: matches.length });
-  }) as typeof fetch;
-  return { source: new ApolloSource('test-key', fetchImpl), searches, lookups };
+/** A people finder that answers from a list and records what it was asked. */
+function finder(people: { first: string; last: string; email?: string; linkedin?: string }[], opts: { fail?: string } = {}): PeopleFinder & { asked: FindQuery[] } {
+  const asked: FindQuery[] = [];
+  return {
+    asked,
+    async find(q) {
+      asked.push(q);
+      if (opts.fail) throw new FindError(opts.fail);
+      return people.slice(0, q.count).map((p): PersonLead => ({
+        name: `${p.first} ${p.last}`, role: 'Head of Finance', company: 'Fieldnote', source: 'web', note: 'Leads finance at Fieldnote.',
+        ...(p.linkedin ? { linkedinUrl: p.linkedin } : {}), ...(p.email ? { email: p.email } : {}),
+      }));
+    },
+  };
 }
 
 function withKemi(h: Harness) {
@@ -64,20 +55,21 @@ describe('ask', () => {
     expect((await ask(h.ctx, h.project.id, 'why is nothing going out')).text).toBe('Reconciliation is paused. Nothing goes out on its own there until you resume.');
   });
 
-  it('asks for a list when there is no Apollo', async () => {
+  it('says Claude is needed when there is none', async () => {
     const h = harness();
+    h.ctx.finder = null;
     withKemi(h);
     const res = await ask(h.ctx, h.project.id, 'find 20 more like Kemi');
-    expect(res).toEqual({ text: 'Callum needs a list for that. Bring a CSV or a LinkedIn search link.', personIds: [], action: null });
+    expect(res).toEqual({ text: NEEDS_CLAUDE, personIds: [], action: null });
   });
 
-  it('offers to find more like a person, with the cost', async () => {
+  it('offers to find more like a person, and says it takes a few minutes', async () => {
     const h = harness();
     const kemi = withKemi(h);
-    h.ctx.apollo = apollo([]).source;
+    h.ctx.finder = finder([]);
     const res = await ask(h.ctx, h.project.id, 'find 20 more like Kemi');
     expect(res).toEqual({
-      text: 'Callum can look for 20 more like Kemi. That uses about 20 Apollo credits.',
+      text: 'Callum can look for 20 more like Kemi on the web. It takes a few minutes.',
       personIds: [kemi.id],
       action: { kind: 'find_more', label: 'Find 20 more like Kemi', args: { likePersonId: kemi.id, query: null, count: 20 } },
     });
@@ -85,16 +77,16 @@ describe('ask', () => {
 
   it('offers to find people for a description', async () => {
     const h = harness();
-    h.ctx.apollo = apollo([]).source;
+    h.ctx.finder = finder([]);
     const res = await ask(h.ctx, h.project.id, 'find 15 CFOs in Lagos');
     expect(res.action).toEqual({ kind: 'find_more', label: 'Find 15 people', args: { likePersonId: null, query: 'CFOs in Lagos', count: 15 } });
-    expect(res.text).toBe('Callum can look for 15 people. That uses about 15 Apollo credits.');
+    expect(res.text).toBe('Callum can look for 15 people on the web. It takes a few minutes.');
   });
 
   it('does not offer to find more like someone with no role', async () => {
     const h = harness();
     h.person({ name: 'Kemi Eze', role: null });
-    h.ctx.apollo = apollo([]).source;
+    h.ctx.finder = finder([]);
     const res = await ask(h.ctx, h.project.id, 'find 5 more like Kemi');
     expect(res.action).toBeNull();
     expect(res.text).toBe("Callum doesn't know what Kemi does, so it can't look for more like them. Tell it who to find instead.");
@@ -228,28 +220,28 @@ describe('act', () => {
 describe('act find_more', () => {
   const find = (likePersonId: number | null, query: string | null, count = 3) => ({ kind: 'find_more' as const, label: '', args: { likePersonId, query, count } });
 
-  it('needs Apollo', async () => {
+  it('needs Claude', async () => {
     const h = harness();
-    await expect(act(h.ctx, h.project.id, find(null, 'CFOs'))).rejects.toThrow('Callum needs a list for that. Bring a CSV or a LinkedIn search link.');
+    h.ctx.finder = null;
+    await expect(act(h.ctx, h.project.id, find(null, 'CFOs'))).rejects.toThrow(NEEDS_CLAUDE);
   });
 
-  it('searches for free, looks up the people it found, imports them as strangers, and says what it cost', async () => {
+  it('asks Claude for people like someone, imports the ones it can reach as strangers, and leaves that person out', async () => {
     const h = harness();
     const kemi = withKemi(h);
-    const fake = apollo([
-      { id: 'a1', first: 'Tunde', last: 'Adeyemi', email: 'tunde@fieldnote.com' },
-      { id: 'a2', first: 'Bola', last: 'Ojo', linkedin: 'https://www.linkedin.com/in/bola-ojo' },
-      { id: 'a3', first: 'Sade', last: 'Bello' },
+    const fake = finder([
+      { first: 'Tunde', last: 'Adeyemi', email: 'tunde@fieldnote.com' },
+      { first: 'Bola', last: 'Ojo', linkedin: 'https://www.linkedin.com/in/bola-ojo' },
     ]);
-    h.ctx.apollo = fake.source;
+    h.ctx.finder = fake;
     const res = await act(h.ctx, h.project.id, find(kemi.id, null));
-    expect(fake.searches[0]).toContain('person_titles[]=Head of Finance');
-    expect(fake.lookups).toEqual([['a1', 'a2', 'a3']]);
-    expect(res.text).toBe('Added 2 people. They start as strangers. 1 person had no email or LinkedIn and was left out. That used 3 Apollo credits.');
+    expect(fake.asked[0]?.description).toBe('People in the same kind of role as Kemi Eze: Head of Finance, at companies like Oko Pay. Not Kemi Eze.');
+    expect(fake.asked[0]?.known).toEqual(['Kemi Eze (Oko Pay)']);
+    expect(res.text).toBe('Added 2 people. They start as strangers.');
     const added = h.ctx.repo.listPeople().filter((p) => p.id !== kemi.id);
     expect(added.map((p) => [p.name, p.status, p.stage, p.source, p.projectId])).toEqual([
-      ['Tunde Adeyemi', 'active', 'stranger', 'apollo', h.project.id],
-      ['Bola Ojo', 'active', 'stranger', 'apollo', h.project.id],
+      ['Tunde Adeyemi', 'active', 'stranger', 'web', h.project.id],
+      ['Bola Ojo', 'active', 'stranger', 'web', h.project.id],
     ]);
     expect(res.personIds).toEqual(added.map((p) => p.id));
     expect(h.scopes).toContain('people');
@@ -257,11 +249,11 @@ describe('act find_more', () => {
 
   it('searches by the words when nobody is the model', async () => {
     const h = harness();
-    const fake = apollo([{ id: 'a1', first: 'Tunde', last: 'Adeyemi', email: 'tunde@fieldnote.com' }]);
-    h.ctx.apollo = fake.source;
+    const fake = finder([{ first: 'Tunde', last: 'Adeyemi', email: 'tunde@fieldnote.com' }]);
+    h.ctx.finder = fake;
     const res = await act(h.ctx, h.project.id, find(null, 'CFOs in Lagos', 1));
-    expect(fake.searches[0]).toContain('q_keywords=CFOs in Lagos');
-    expect(res.text).toBe('Added 1 person. They start as strangers. That used 1 Apollo credit.');
+    expect(fake.asked[0]).toMatchObject({ description: 'CFOs in Lagos', count: 1 });
+    expect(res.text).toBe('Added 1 person. They start as strangers.');
   });
 
   it('imports into the project being viewed and skips people who are already in Callum', async () => {
@@ -269,47 +261,34 @@ describe('act find_more', () => {
     const other = h.ctx.repo.insertProject({ name: 'Payroll' });
     h.person({ projectId: other.id, email: 'tunde@fieldnote.com' });
     h.person({ email: 'bola@fieldnote.com' });
-    h.ctx.apollo = apollo([
-      { id: 'a1', first: 'Tunde', last: 'Adeyemi', email: 'tunde@fieldnote.com' },
-      { id: 'a2', first: 'Bola', last: 'Ojo', email: 'bola@fieldnote.com' },
-      { id: 'a3', first: 'Sade', last: 'Bello', email: 'sade@fieldnote.com' },
-    ]).source;
+    h.ctx.finder = finder([
+      { first: 'Tunde', last: 'Adeyemi', email: 'tunde@fieldnote.com' },
+      { first: 'Bola', last: 'Ojo', email: 'bola@fieldnote.com' },
+      { first: 'Sade', last: 'Bello', email: 'sade@fieldnote.com' },
+    ]);
     const res = await act(h.ctx, h.project.id, find(null, 'finance', 3));
-    expect(res.text).toBe('Added 1 person. They start as strangers. 2 people were already in Callum or asked not to be contacted. That used 3 Apollo credits.');
+    expect(res.text).toBe('Added 1 person. They start as strangers. 2 people were already in Callum or asked not to be contacted.');
   });
 
-  it('says when Apollo found nobody, and spends nothing', async () => {
+  it('says when Claude found nobody it could reach', async () => {
     const h = harness();
-    const fake = apollo([]);
-    h.ctx.apollo = fake.source;
+    h.ctx.finder = finder([]);
     const res = await act(h.ctx, h.project.id, find(null, 'unicorn wranglers'));
-    expect(res.text).toBe('Apollo found nobody for that. Try different words.');
-    expect(fake.lookups).toEqual([]);
+    expect(res.text).toBe('Callum found nobody it could reach for that. Try different words.');
   });
 
-  it('adds the people it had already looked up when Apollo stops partway, and says so', async () => {
+  it('passes on what went wrong with Claude, in words', async () => {
     const h = harness();
-    const people = Array.from({ length: 12 }, (_, i) => ({ id: `a${i}`, first: `First${i}`, last: `Last${i}`, email: `p${i}@fieldnote.com` }));
-    h.ctx.apollo = apollo(people, { failLookupAfter: 1 }).source;
-    const res = await act(h.ctx, h.project.id, find(null, 'finance', 12));
-    expect(res.text).toBe(
-      "Added 10 people. They start as strangers. That used 10 Apollo credits. Apollo stopped partway, so only the people it had already looked up were added. Apollo's lookup limit is reached. Try again in an hour.",
-    );
-    expect(h.ctx.repo.listPeople()).toHaveLength(10);
-  });
-
-  it('shows Apollo\'s own words when it fails before anything was looked up', async () => {
-    const h = harness();
-    h.ctx.apollo = apollo([{ id: 'a1', first: 'Tunde', last: 'Adeyemi', email: 'tunde@fieldnote.com' }], { failLookupAfter: 0 }).source;
+    h.ctx.finder = finder([], { fail: "Your Claude plan's usage limit is reached for now. Callum tries again later." });
     await expect(act(h.ctx, h.project.id, find(null, 'finance', 1))).rejects.toMatchObject({
-      name: 'UserError', message: "Apollo's lookup limit is reached. Try again in an hour.",
+      name: 'UserError', message: "Your Claude plan's usage limit is reached for now. Callum tries again later.",
     });
     expect(h.ctx.repo.listPeople()).toEqual([]);
   });
 
   it('refuses a model with no role and an empty request', async () => {
     const h = harness();
-    h.ctx.apollo = apollo([]).source;
+    h.ctx.finder = finder([]);
     const p = h.person({ name: 'Kemi Eze', role: null });
     await expect(act(h.ctx, h.project.id, find(p.id, null))).rejects.toThrow("Kemi has no role on file, so Callum can't find people like them. Try describing who to find.");
     await expect(act(h.ctx, h.project.id, find(null, '  '))).rejects.toThrow("Callum can find people, pause a channel, change the tone, or tell you who's warming up.");
@@ -317,7 +296,7 @@ describe('act find_more', () => {
 
   it('only looks for people like someone who is in this project and still there', async () => {
     const h = harness();
-    h.ctx.apollo = apollo([]).source;
+    h.ctx.finder = finder([]);
     const other = h.ctx.repo.insertProject({ name: 'Payroll' });
     const elsewhere = h.person({ projectId: other.id, role: 'CFO' });
     const gone = h.person({ role: 'CFO', status: 'removed' });
@@ -328,11 +307,11 @@ describe('act find_more', () => {
 
   it('does not add people to a project that is wrapped up', async () => {
     const h = harness();
-    const fake = apollo([{ id: 'a1', first: 'Tunde', last: 'Adeyemi', email: 'tunde@fieldnote.com' }]);
-    h.ctx.apollo = fake.source;
+    const fake = finder([{ first: 'Tunde', last: 'Adeyemi', email: 'tunde@fieldnote.com' }]);
+    h.ctx.finder = fake;
     h.ctx.repo.updateProject(h.project.id, { state: 'wrapped' });
     await expect(act(h.ctx, h.project.id, find(null, 'finance', 1))).rejects.toThrow('Reconciliation is wrapped up.');
-    expect(fake.lookups).toEqual([]);
+    expect(fake.asked).toEqual([]);
   });
 });
 
@@ -348,7 +327,7 @@ describe('ask more', () => {
 
   it('does not offer a search with nobody to be like and nothing to look for', async () => {
     const h = harness();
-    h.ctx.apollo = apollo([]).source;
+    h.ctx.finder = finder([]);
     vi.spyOn(h.ctx.writer, 'parseAsk').mockResolvedValue({ intent: 'find', likePersonId: null, query: null, count: 5 });
     const res = await ask(h.ctx, h.project.id, 'find some');
     expect(res.action).toBeNull();

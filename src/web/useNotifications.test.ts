@@ -20,7 +20,7 @@ function state(people: Person[], notifications: boolean | null = true): AppState
     settings: { senderName: null, senderEmail: null, timezone: 'Africa/Lagos', onboarded: true, currentProjectId: 1, pauseState: 'running', pausedUntil: null, notifications, morningBrief: true },
     projects: [], channels: [], people, outbox: [], incidents: [],
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: null, line: '' },
-    demo: false, apolloConnected: false, claudeConnected: false, auth: { password: false },
+    demo: false, canFind: false, claudeEngine: null, claudeConnected: false, auth: { password: false },
   };
 }
 

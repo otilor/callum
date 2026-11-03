@@ -2,7 +2,7 @@ import { useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { PreviewPerson } from '../../../shared/types.js';
 import { Marble } from '../../ui/Marble.js';
 import { useCountUp } from '../firstrun/motion.js';
-import { faceLabel, seedOf, shownName, shownSub, skipDetail, credits } from './words.js';
+import { faceLabel, seedOf, shownName, shownSub, skipDetail } from './words.js';
 import type { Found, Way, WhoFinder } from './useWhoFinder.js';
 import './AddPeople.css';
 
@@ -80,11 +80,11 @@ export function WhoPanel({ finder, order = ['csv', 'paste', 'link', 'describe'],
     : `${lines.length} ${lines.length === 1 ? 'person' : 'people'}${noWay > 0 ? `. ${noWay} ${noWay === 1 ? 'has' : 'have'} no email, LinkedIn or X yet, so Callum will skip ${noWay === 1 ? 'that row' : 'those rows'}.` : ', all reachable.'}`;
 
   const describing = way === 'describe' && phase !== 'preview';
-  const heading = found ? (title ? title(found, kept.length) : found.apollo ? `Callum found ${kept.length}` : `${kept.length} ${found.word}`) : '';
+  const heading = found ? (title ? title(found, kept.length) : found.web ? `Callum found ${kept.length}` : `${kept.length} ${found.word}`) : '';
   const skippedTotal = found?.groups.reduce((n, g) => n + g.names.length, 0) ?? 0;
   const peek = finder.peek;
-  const peekHint = hint ?? (found?.apollo
-    ? 'Tap a face to check anyone. Not a fit leaves them out before anything is spent.'
+  const peekHint = hint ?? (found?.web
+    ? 'Tap a face to check anyone. Not a fit leaves them out.'
     : way === 'link' ? 'Tap a face to check anyone. Callum will invite them on LinkedIn, 15 a day.' : 'Tap a face to check anyone before they join.');
 
   return (
@@ -142,7 +142,7 @@ export function WhoPanel({ finder, order = ['csv', 'paste', 'link', 'describe'],
         ) : null}
         {phase === 'reading' && way === 'paste' ? <p className="ap-looking fade-in" role="status"><Pulses />Callum is reading your names</p> : null}
         {phase === 'reading' && way === 'link' ? <p className="ap-looking fade-in" role="status"><Pulses />Callum is reading the search on this computer</p> : null}
-        {phase === 'looking' ? <p className="ap-looking fade-in" role="status"><Pulses />Callum is looking</p> : null}
+        {phase === 'looking' ? <p className="ap-looking fade-in" role="status"><Pulses />Callum is looking on the web. This takes a few minutes.</p> : null}
 
         {way === 'paste' && phase === 'idle' ? (
           <div className="ap-paste">
@@ -195,22 +195,10 @@ export function WhoPanel({ finder, order = ['csv', 'paste', 'link', 'describe'],
 
             {phase === 'nosource' ? (
               <div className="ap-nosource fade-in">
-                <p>Describing people needs a people search connected. Bring a list instead, or connect Apollo and Callum can look for you.</p>
-                {!finder.apollo.open ? (
-                  <div className="ap-row">
-                    <button type="button" className="ap-btn ap-btn-ink ap-btn-sm" onClick={finder.openApollo}>Connect Apollo</button>
-                    <button type="button" className="ap-btn ap-btn-white ap-btn-sm" onClick={() => finder.setWay('csv')}>Bring a list</button>
-                  </div>
-                ) : (
-                  <form className="ap-apollo fade-in" onSubmit={(e) => { e.preventDefault(); finder.connectApollo(); }}>
-                    <div className="ap-row">
-                      <label htmlFor="ap-key" className="sr-only">Apollo API key</label>
-                      <input id="ap-key" type="password" autoComplete="off" className="ap-soft ap-key" value={finder.apollo.key} onChange={(e) => finder.setApolloKey(e.target.value)} placeholder="Apollo API key" />
-                      <button type="submit" className="ap-btn ap-btn-ink ap-btn-sm" aria-busy={finder.apollo.busy} disabled={finder.apollo.busy || finder.apollo.key.trim() === ''}>Connect</button>
-                    </div>
-                    <span className="ap-note">Find it in Apollo under Settings, then API. Callum uses it to find people and their emails. Adding people uses Apollo credits.</span>
-                  </form>
-                )}
+                <p>{finder.noClaudeLine}</p>
+                <div className="ap-row">
+                  <button type="button" className="ap-btn ap-btn-ink ap-btn-sm" onClick={() => finder.setWay('csv')}>Bring a list</button>
+                </div>
               </div>
             ) : null}
 
@@ -278,7 +266,6 @@ export function WhoPanel({ finder, order = ['csv', 'paste', 'link', 'describe'],
                     <button type="button" className="ap-btn ap-btn-white ap-btn-sm" onClick={() => { const out = finder.notFit(peek.key); if (out) onNotFit?.(out); }}>Not a fit</button>
                   </div>
                 ) : <p className="ap-hint">{kept.length === 0 ? 'Everyone was left out. Choose another list to go on.' : peekHint}</p>}
-                {found.apollo && kept.length > 0 ? <p className="ap-credits">{`Adding uses about ${credits(kept.length)}.`}</p> : null}
               </div>
               {found.groups.length > 0 ? (
                 <div className="ap-skipped">

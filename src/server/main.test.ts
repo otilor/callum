@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, statSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -81,9 +81,28 @@ describe('startServer', () => {
   });
 
   it('starts a real (not demo) Callum empty', async () => {
-    const { server } = await start({ env: {} });
+    const { server } = await start({ env: { CALLUM_CLAUDE_CODE: 'off' } });
     expect(server.ctx.repo.listProjects()).toEqual([]);
     expect(server.ctx.demo).toBe(false);
+  });
+
+  it.skipIf(process.platform === 'win32')('uses Claude Code on this computer, except in the demo or when it is turned off', async () => {
+    const bin = join(mkdtempSync(join(tmpdir(), 'callum-claude-')), 'bin');
+    mkdirSync(bin);
+    const claude = join(bin, 'claude');
+    // Never run: these checks only start Callum and look at what it chose.
+    writeFileSync(claude, '#!/bin/sh\nexit 1\n');
+    chmodSync(claude, 0o755);
+    const real = await start({ env: { PATH: bin, HOME: bin } });
+    expect(real.server.ctx.claudeCodePath).toBe(claude);
+    expect(real.server.ctx.model?.engine).toBe('claude_code');
+    expect(real.server.ctx.finder).not.toBeNull();
+    const off = await start({ env: { PATH: bin, HOME: bin, CALLUM_CLAUDE_CODE: 'off' } });
+    expect(off.server.ctx.claudeCodePath).toBeNull();
+    expect(off.server.ctx.model).toBeNull();
+    const demo = await start({ env: { PATH: bin, HOME: bin, CALLUM_DEMO: '1' } });
+    expect(demo.server.ctx.claudeCodePath).toBeNull();
+    expect(demo.server.ctx.model).toBeNull();
   });
 
   it('keeps the morning scene for CALLUM_DEMO_SCENE=morning', async () => {
@@ -132,7 +151,7 @@ describe('startServer', () => {
   it('will not open to other computers without a password', async () => {
     const dataDir = join(mkdtempSync(join(tmpdir(), 'callum-boot-')), 'data');
     for (const host of ['0.0.0.0', '::', '192.168.1.20']) {
-      await expect(startServer({ dataDir, host, port: 0, password: null, webDir: null, env: {}, log: () => undefined })).rejects.toThrow(
+      await expect(startServer({ dataDir, host, port: 0, password: null, webDir: null, env: { CALLUM_CLAUDE_CODE: 'off' }, log: () => undefined })).rejects.toThrow(
         'Callum needs CALLUM_PASSWORD to be reached from other computers.',
       );
     }
@@ -155,7 +174,7 @@ describe('startServer', () => {
     const first = await start();
     const port = Number(new URL(first.server.url).port);
     await expect(
-      startServer({ dataDir: join(mkdtempSync(join(tmpdir(), 'callum-boot-')), 'data'), host: '127.0.0.1', port, password: null, webDir: null, env: {}, log: () => undefined }),
+      startServer({ dataDir: join(mkdtempSync(join(tmpdir(), 'callum-boot-')), 'data'), host: '127.0.0.1', port, password: null, webDir: null, env: { CALLUM_CLAUDE_CODE: 'off' }, log: () => undefined }),
     ).rejects.toThrow(/EADDRINUSE/);
   });
 });

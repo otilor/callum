@@ -9,7 +9,7 @@ import { Wordmark } from '../../ui/Wordmark.js';
 import { River } from '../add/River.js';
 import { messageOf, useWhoFinder } from '../add/useWhoFinder.js';
 import { AlertLine, WhoPanel } from '../add/WhoPanel.js';
-import { credits, firstOf, seedOf } from '../add/words.js';
+import { firstOf, seedOf } from '../add/words.js';
 import './NewProject.css';
 
 export const EXAMPLE_OFFER = 'You help growing teams in Lagos and Accra run payroll without spreadsheets.';
@@ -99,7 +99,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
 
   const message = drafts[tone] ?? sample?.body ?? '';
   const writing = !sample && !edited && sampleError?.key !== sampleKey;
-  const target = sample ? [sample.to.name, sample.to.company ? `at ${sample.to.company}` : ''].filter(Boolean).join(' ') : first ? [first.source === 'apollo' ? firstOf(first) : first.name, first.company ? `at ${first.company}` : ''].filter(Boolean).join(' ') : 'Kemi Eze at Oko Pay';
+  const target = sample ? [sample.to.name, sample.to.company ? `at ${sample.to.company}` : ''].filter(Boolean).join(' ') : first ? [first.name, first.company ? `at ${first.company}` : ''].filter(Boolean).join(' ') : 'Kemi Eze at Oko Pay';
 
   const saveName = () => {
     const v = draftName.trim();
@@ -390,7 +390,6 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
               </span>
               <span>{channelLine}</span>
             </div>
-            {finder.found?.apollo && chosen > 0 ? <p className="np-quiet np-credits">{`Adding uses about ${credits(chosen)}.`}</p> : null}
             {error ? <AlertLine>{error}</AlertLine> : null}
             <div className="np-actions">
               <button type="button" className="np-btn np-btn-quiet np-btn-lg" disabled={imported !== null} onClick={() => go(1)}>Back</button>
@@ -425,8 +424,6 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
             <div className="np-ready-text">
               <h1 ref={headingRef} tabIndex={-1} id="np-qr" className="np-title np-title-m">{`${project?.name ?? name} is ready`}</h1>
               <p className="np-lede">{`You'll OK the first 10 hellos ${fromWords(firstSendAt, tz, now())}.`}</p>
-              {imported?.creditsUsed !== undefined ? <p className="np-quiet">{`${imported.added.length} ${imported.added.length === 1 ? 'person joined' : 'people joined'}. That used ${imported.creditsUsed.toLocaleString('en-US')} Apollo ${imported.creditsUsed === 1 ? 'credit' : 'credits'}.`}</p> : null}
-              {imported?.warning ? <AlertLine>{imported.warning}</AlertLine> : null}
             </div>
             <div className="np-actions">
               <button type="button" className="np-btn np-btn-ink np-btn-lg np-start" onClick={() => void open()}>

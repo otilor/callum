@@ -53,7 +53,7 @@ export function appState(over: Partial<AppState> = {}): AppState {
     incidents: [],
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: null, line: 'All caught up. Callum keeps the river moving.' },
     demo: false,
-    apolloConnected: false,
+    canFind: false, claudeEngine: null,
     auth: { password: false },
     claudeConnected: false,
     ...over,

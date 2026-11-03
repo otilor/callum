@@ -8,7 +8,6 @@ Callum keeps every password, token and cookie on your computer, in its own datab
 - [Microsoft](#microsoft)
 - [LinkedIn](#linkedin)
 - [X](#x)
-- [Apollo](#apollo)
 - [Claude](#claude)
 
 ## Google
@@ -144,22 +143,36 @@ In Callum choose X and paste the access token. Open "Tokens that refresh themsel
 
 The scopes Callum needs are `dm.read dm.write tweet.read users.read offline.access`.
 
-## Apollo
-
-Apollo lets you describe the people you want to meet ("founders of seed-stage fintechs in Lagos") instead of bringing a list. Without it, Callum still takes a pasted list, a CSV, or a LinkedIn search link.
-
-1. Sign in to [apollo.io](https://www.apollo.io) and open Settings, then Integrations, then API.
-2. Create an API key. Use a master key, or allow People Search for it.
-3. In Callum choose Add people, then Describe, and paste the key when Callum asks. Or set `APOLLO_API_KEY` on a server.
-
-Searching is free. Adding the people you keep uses Apollo credits, and Callum tells you how many before it spends any.
-
 ## Claude
 
-Callum works without a Claude key, using plain templates for hellos, follow-ups and replies. With one, Callum writes in the tone you choose, rewrites your sample hello in place, understands replies in other languages, and drafts answers in the language the person wrote in.
+Callum uses Claude to write hellos, follow-ups and replies in your voice, to read replies in any language, and to find people from a description ("founders of seed-stage fintechs in Accra"). It needs no paid data service: Claude searches the public web and reads the pages it finds.
+
+### With your Claude plan (the default)
+
+On your own computer Callum runs the Claude Code you already have, signed in with your own Claude account. Callum never sees or keeps your Claude sign-in.
+
+1. Install Claude Code from [the Claude Code setup page](https://code.claude.com/docs/en/setup) if you haven't.
+2. Open a terminal, run `claude`, and sign in with your Claude account. Once is enough.
+3. Open Your Callum and check the Claude row. It says when Claude Code is found and signed in.
+
+Callum looks for the `claude` program on your PATH and in the places its installers use. If it is somewhere else, set `CALLUM_CLAUDE_PATH` to it. To stop Callum using Claude Code at all, set `CALLUM_CLAUDE_CODE=off`.
+
+What Callum asks of Claude counts toward your plan's usage, like anything else you do with Claude Code. Finding people takes a few minutes and a few dozen web searches for ten people. When your plan's limit is reached, Callum says so, writes that message from its templates, and tries Claude again for the next one.
+
+### With a Claude API key (the option)
+
+A key is the way to run Callum on a server or in Docker, where there is no Claude Code signed in. On your own computer a key wins over Claude Code when both are there.
 
 1. Sign in at [console.anthropic.com](https://console.anthropic.com), open API keys and create a key.
-2. Set `ANTHROPIC_API_KEY` to the key before Callum starts. On a server or in Docker this goes in the environment or in your `.env` file. For the desktop app, start it from a terminal with the variable set, or set it as a user environment variable for your account.
-3. To use another model, set `CALLUM_MODEL`. The default is `claude-opus-5-5`.
+2. Paste it in Your Callum, in the Claude row. On a server or in Docker set `ANTHROPIC_API_KEY` instead, in the environment or in your `.env` file.
+3. To use another model, set `CALLUM_MODEL`. The default with a key is `claude-opus-5-5`.
 
-If Claude cannot be reached for a message, Callum falls back to its templates for that message and carries on.
+API use is billed to that key by Anthropic.
+
+### Finding people
+
+Callum asks Claude for people it saw named on real pages, each with a way to reach them: a LinkedIn profile, an X handle, or an email address printed on a public page. Callum checks each email against the page it came from and drops any it can't see there, so it never guesses one. LinkedIn profiles and X handles come from what Claude saw in search results; Callum checks their shape but can't open LinkedIn to confirm them, so look over the list before you add it. Most people come back with a LinkedIn profile. You can always bring your own list, a CSV, or a LinkedIn search link instead.
+
+### Without Claude
+
+Callum still works. It writes from plain templates and takes the people you bring. If Claude can't be reached for one message, Callum uses its templates for that message and carries on.

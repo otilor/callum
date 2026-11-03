@@ -48,7 +48,7 @@ function appState(over: Partial<AppState> = {}, settings: Partial<AppState['sett
       { channel: 'email', status: 'connected', identity: 'g@x.com', connectedAt: AT, pausedUntil: null, halfPaceUntil: null, invitesBlockedUntil: null, lastPolledAt: null },
       { channel: 'linkedin', status: 'connected', identity: 'g', connectedAt: AT, pausedUntil: null, halfPaceUntil: null, invitesBlockedUntil: null, lastPolledAt: null },
     ],
-    people: [], outbox: [], incidents: [], demo: false, apolloConnected: false, claudeConnected: false, auth: { password: false },
+    people: [], outbox: [], incidents: [], demo: false, canFind: false, claudeEngine: null, claudeConnected: false, auth: { password: false },
     brief: { wantToTalk: 0, sentYesterday: 0, acceptedRecently: [], acceptedIds: [], nextSendAt: null, line: '' },
     ...over,
   };

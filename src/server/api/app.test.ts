@@ -9,7 +9,7 @@ import { ConnectError, type AdapterFactory } from '../channels/types.js';
 import { createCtx, type Ctx } from '../context.js';
 import { openDb } from '../db/db.js';
 import { fixedClock } from '../engine/clock.js';
-import { ApolloSource } from '../leads/apollo.js';
+import { FindError } from '../leads/finder.js';
 import { UserError } from '../services/errors.js';
 import { createApp, SOMETHING_WENT_WRONG } from './app.js';
 import { FEATURE_ROUTES } from './features.js';
@@ -74,9 +74,10 @@ describe('state', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('application/json');
     const body = (await res.json()) as AppState;
-    expect(Object.keys(body).sort()).toEqual(['apolloConnected', 'auth', 'brief', 'channels', 'claudeConnected', 'demo', 'incidents', 'outbox', 'people', 'projects', 'settings']);
+    expect(Object.keys(body).sort()).toEqual(['auth', 'brief', 'canFind', 'channels', 'claudeConnected', 'claudeEngine', 'demo', 'incidents', 'outbox', 'people', 'projects', 'settings']);
     expect(body.auth).toEqual({ password: false });
-    expect(body.apolloConnected).toBe(false);
+    expect(body.canFind).toBe(true);
+    expect(body.claudeEngine).toBeNull();
     expect(body.claudeConnected).toBe(false);
     expect(body.demo).toBe(true);
     expect(body.channels.map((c) => c.channel).sort()).toEqual(['email', 'linkedin', 'x']);
@@ -336,66 +337,42 @@ describe('adding people', () => {
   });
 });
 
-describe('searching with Apollo', () => {
-  it('asks for a list when Apollo is not connected', async () => {
-    const h = setup();
+describe('searching with Claude', () => {
+  it('asks for Claude or a list when there is no Claude on this computer', async () => {
+    const h = setup({ demo: false });
     await h.post('/api/projects', { offer: 'Offer', name: 'One' });
     const res = await h.post('/api/leads/search', { query: 'heads of finance in Lagos' });
     expect(res.status).toBe(422);
-    expect(await res.json()).toEqual({ error: 'Callum needs a list for that. Bring a CSV or a LinkedIn search link.' });
+    const body = (await res.json()) as { error: string; detail: { code: string } };
+    expect(body.detail).toEqual({ code: 'no_claude' });
+    expect(body.error).toContain('Sign in to Claude Code');
   });
 
   it('looks people up and adds them to the project', async () => {
     const h = setup();
     const project = (await (await h.post('/api/projects', { offer: 'Offer', name: 'One' })).json()) as Project;
-    const calls: string[] = [];
-    h.ctx.apollo = new ApolloSource('key', (input: string | URL | Request) => {
-      const url = String(input);
-      calls.push(url);
-      const json = url.includes('api_search')
-        ? { people: [{ id: 'a1', first_name: 'Kemi', last_name_obfuscated: 'Ez***', title: 'Head of Finance', has_email: true, organization: { name: 'Oko Pay' } }], pagination: { total_entries: 40, total_pages: 2 } }
-        : { matches: [{ id: 'a1', first_name: 'Kemi', last_name: 'Eze', name: 'Kemi Eze', title: 'Head of Finance', email_status: 'verified', email: 'kemi@okopay.com', organization: { name: 'Oko Pay' } }], credits_consumed: 1 };
-      return Promise.resolve(new Response(JSON.stringify(json), { headers: { 'content-type': 'application/json' } }));
-    });
-    const res = await h.post('/api/leads/search', { query: 'heads of finance', count: 5, projectId: project.id });
+    const asked: { description: string; count: number; known?: string[] }[] = [];
+    h.ctx.finder = {
+      find: async (q) => {
+        asked.push(q);
+        return [{ name: 'Kemi Eze', role: 'Head of Finance', company: 'Oko Pay', linkedinUrl: 'https://www.linkedin.com/in/kemi-eze', source: 'web', note: 'Leads finance. Found on okopay.com.' }];
+      },
+    };
+    const res = await h.post('/api/leads/search', { query: ' heads of finance ', count: 5, projectId: project.id });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { total: number; added: Person[]; skipped: unknown[]; creditsUsed: number };
-    expect(body.total).toBe(40);
-    expect(body.creditsUsed).toBe(1);
-    expect(body.added.map((p) => [p.name, p.email, p.source, p.projectId])).toEqual([['Kemi Eze', 'kemi@okopay.com', 'apollo', project.id]]);
-    expect(calls).toHaveLength(2);
+    const body = (await res.json()) as { total: number; added: Person[]; skipped: unknown[] };
+    expect(body.total).toBe(1);
+    expect(body.added.map((p) => [p.name, p.linkedinUrl, p.source, p.projectId])).toEqual([['Kemi Eze', 'https://www.linkedin.com/in/kemi-eze', 'web', project.id]]);
+    expect(asked).toEqual([{ description: 'heads of finance', count: 5, known: [] }]);
   });
 
-  it('adds the people it had already looked up when Apollo stops part way, and says so', async () => {
+  it('turns a failed search into its own plain words', async () => {
     const h = setup();
     await h.post('/api/projects', { offer: 'Offer', name: 'One' });
-    const previews = Array.from({ length: 11 }, (_, i) => ({ id: `a${i}`, first_name: `P${i}`, last_name_obfuscated: 'Ez***', has_email: true, organization: { name: 'Oko Pay' } }));
-    let enrichCalls = 0;
-    h.ctx.apollo = new ApolloSource('key', (input: string | URL | Request) => {
-      if (String(input).includes('api_search')) {
-        return Promise.resolve(new Response(JSON.stringify({ people: previews, pagination: { total_entries: 11, total_pages: 1 } })));
-      }
-      enrichCalls += 1;
-      if (enrichCalls > 1) return Promise.resolve(new Response('{}', { status: 429 }));
-      const matches = previews.slice(0, 10).map((p) => ({ id: p.id, first_name: p.first_name, last_name: 'Eze', name: `${p.first_name} Eze`, email_status: 'verified', email: `${p.first_name.toLowerCase()}@okopay.com` }));
-      return Promise.resolve(new Response(JSON.stringify({ matches, credits_consumed: 10 })));
-    });
-    const res = await h.post('/api/leads/search', { query: 'finance', count: 11 });
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { added: Person[]; creditsUsed: number; error: string };
-    expect(body.added).toHaveLength(10);
-    expect(body.creditsUsed).toBe(10);
-    expect(body.error).toContain("Apollo's lookup limit is reached");
-    expect(body.error).toContain('10');
-  });
-
-  it('turns an Apollo failure into its own plain words', async () => {
-    const h = setup();
-    await h.post('/api/projects', { offer: 'Offer', name: 'One' });
-    h.ctx.apollo = new ApolloSource('key', () => Promise.resolve(new Response('{}', { status: 401 })));
+    h.ctx.finder = { find: () => Promise.reject(new FindError("Claude Code isn't signed in on this computer.")) };
     const res = await h.post('/api/leads/search', { query: 'cfo' });
     expect(res.status).toBe(422);
-    expect(((await res.json()) as { error: string }).error).toContain("Apollo didn't accept the API key");
+    expect(((await res.json()) as { error: string }).error).toBe("Claude Code isn't signed in on this computer.");
   });
 });
 
@@ -543,7 +520,7 @@ describe('ask', () => {
     const unknown = (await (await h.post('/api/ask', { text: 'sing me a song', projectId: project.id })).json()) as { text: string; action: unknown };
     expect(unknown.text).toBe("Callum can find people, pause a channel, change the tone, or tell you who's warming up.");
     const find = (await (await h.post('/api/ask', { text: 'find 20 more like Person1', projectId: project.id })).json()) as { text: string };
-    expect(find.text).toBe('Callum needs a list for that. Bring a CSV or a LinkedIn search link.');
+    expect(find.text).toBe("Callum doesn't know what Person1 does, so it can't look for more like them. Tell it who to find instead.");
     expect((await h.post('/api/ask', { projectId: project.id })).status).toBe(422);
   });
 
@@ -784,13 +761,13 @@ describe('what an action and a search must carry', () => {
   it('keeps a search to between 1 and 200 people', async () => {
     const h = setup();
     await h.post('/api/projects', { offer: 'Offer', name: 'One' });
-    for (const count of [0, -3, 201, 'many', 1.5]) {
+    for (const count of [0, -3, 51, 'many', 1.5]) {
       const res = await h.post('/api/leads/search', { query: 'cfo', count });
       expect(res.status).toBe(422);
-      expect(((await res.json()) as { error: string }).error).toBe('Pick between 1 and 200 people to look for.');
+      expect(((await res.json()) as { error: string }).error).toBe('Pick between 1 and 50 people to look for.');
     }
-    // A good count gets past the check and reaches the Apollo question.
-    expect(((await (await h.post('/api/leads/search', { query: 'cfo', count: 200 })).json()) as { error: string }).error).toContain('Callum needs a list');
+    // A good count gets past the check and reaches the search.
+    expect((await h.post('/api/leads/search', { query: 'cfo', count: 50 })).status).toBe(200);
   });
 });
 

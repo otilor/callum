@@ -29,21 +29,23 @@ test('first run: connect email, bring a list, pick a voice, see the plan, start'
   await expect(page.getByText('What do you offer?')).toBeVisible();
   await page.getByRole('button', { name: 'Looks right' }).click();
 
-  // Who to meet. Describing them needs Apollo; without it Callum says so and asks for a list instead of pretending.
+  // Who to meet. The demo's search makes up people on .example addresses, so nobody real is reached.
   await expect(page.getByText('Who do you want to meet?')).toBeVisible();
   const describe = page.getByPlaceholder('Describe them like you would to a friend');
   await describe.fill('heads of people at fintechs in Accra');
   await describe.press('Enter');
   await page.getByRole('button', { name: 'Find them' }).click();
-  await expect(page.getByText('Callum needs a list for that. Bring a CSV or a LinkedIn search link.')).toBeVisible();
-  expect((await app.state()).people).toHaveLength(40);
+  await expect(page.getByText('50 people found')).toBeVisible();
+  const found = (await app.state()).people;
+  expect(found).toHaveLength(50);
+  expect(found.filter((p) => p.source === 'web' && p.note?.includes('made-up'))).toHaveLength(10);
 
   await page.getByRole('button', { name: 'Bring a list' }).click();
   await page.getByLabel('Paste names, one per line, or a LinkedIn search link').fill('Amina Yusuf, amina@example.com, Lagoon Pay\nJoseph Park, joseph@example.com, Ireti Labs');
   await page.getByRole('button', { name: 'Use my list' }).click();
-  await expect(page.getByText('42 people found')).toBeVisible();
+  await expect(page.getByText('52 people found')).toBeVisible();
   const afterList = await app.state();
-  expect(afterList.people).toHaveLength(42);
+  expect(afterList.people).toHaveLength(52);
   expect(afterList.people.filter((p) => p.email === 'amina@example.com' || p.email === 'joseph@example.com')).toHaveLength(2);
   await page.getByRole('button', { name: 'Next' }).click();
 

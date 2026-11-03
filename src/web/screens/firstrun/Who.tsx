@@ -8,7 +8,7 @@ import { useToast } from '../../ui/Toast.js';
 import { ArrowUp, CloseIcon, ErrorLine, UploadIcon } from './icons.js';
 import { useCountUp } from './motion.js';
 
-export const SEARCH_COUNT = 25;
+export const SEARCH_COUNT = 10;
 /** Past this many matches the describe bar asks for a narrower search. */
 export const TOO_MANY = 5000;
 
@@ -19,10 +19,6 @@ const PEEKS = 8;
 
 export function describePerson(p: Person): string {
   return [p.role, p.company].filter(Boolean).join(' at ');
-}
-
-function credits(n: number): string {
-  return `${formatCount(n)} Apollo ${n === 1 ? 'credit' : 'credits'}`;
 }
 
 function messageOf(e: unknown): string {
@@ -44,6 +40,8 @@ export function Who({ projectId, people, onAdded, onRemoved, onBack, onNext }: W
   const toast = useToast();
   const [q, setQ] = useState('');
   const [looking, setLooking] = useState(false);
+  // Looking on the web takes a few minutes; reading a list does not.
+  const [onWeb, setOnWeb] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [listText, setListText] = useState('');
   const [file, setFile] = useState<{ name: string; text: string } | null>(null);
@@ -52,7 +50,7 @@ export function Who({ projectId, people, onAdded, onRemoved, onBack, onNext }: W
   const [out, setOut] = useState('');
   const [error, setError] = useState('');
   const [notes, setNotes] = useState<string[]>([]);
-  // A search can spend Apollo credits, so it waits here, with its price, until the person says go.
+  // A search takes a few minutes, so it waits here until the person says go.
   const [asking, setAsking] = useState<string | null>(null);
   const [tooMany, setTooMany] = useState<{ total: number; query: string } | null>(null);
   const [audience, setAudience] = useState<string | null>(null);
@@ -82,20 +80,19 @@ export function Who({ projectId, people, onAdded, onRemoved, onBack, onNext }: W
     setTooMany(null);
     setListOpen(false);
     setLooking(true);
+    setOnWeb(true);
     try {
       const res = await api.search(text, SEARCH_COUNT, projectId);
       setAudience(text);
       if (res.total > TOO_MANY) setTooMany({ total: res.total, query: text });
       const extra: string[] = [];
-      // Apollo's own count when the server has it; otherwise everyone it looked up, kept or skipped.
-      const spent = res.creditsUsed ?? res.added.length + res.skipped.length;
-      if (spent > 0) extra.push(`That used ${res.creditsUsed === undefined ? 'about ' : ''}${credits(spent)}.`);
-      else if (res.total <= TOO_MANY) extra.push(`Nobody matched "${text}". Try a wider role or a nearby city.`);
+      if (res.added.length + res.skipped.length === 0 && res.total <= TOO_MANY) extra.push(`Nobody matched "${text}". Try a wider role or a nearby city.`);
       take(res.added, res.skipped, extra);
     } catch (e) {
       setError(messageOf(e));
     } finally {
       setLooking(false);
+      setOnWeb(false);
     }
   };
 
@@ -196,7 +193,7 @@ export function Who({ projectId, people, onAdded, onRemoved, onBack, onNext }: W
 
       {asking ? (
         <div className="fr-estimate fade-in">
-          <p>{`Callum can look for ${SEARCH_COUNT} people. That uses about ${SEARCH_COUNT} Apollo credits.`}</p>
+          <p>{`Callum can look for ${SEARCH_COUNT} people on the web. It takes a few minutes.`}</p>
           <div className="fr-actions">
             <Button className="btn-sm" variant="ghost" onClick={() => setAsking(null)}>Not now</Button>
             <Button className="btn-sm" onClick={() => void search(asking)}>Find them</Button>
@@ -263,11 +260,11 @@ export function Who({ projectId, people, onAdded, onRemoved, onBack, onNext }: W
       {error ? <ErrorLine>{error}</ErrorLine> : null}
 
       <div className="fr-live" aria-live="polite">
-        <span className="sr-only">{looking ? 'Callum is looking' : count > 0 ? `${count} people found` : ''}</span>
+        <span className="sr-only">{looking ? (onWeb ? 'Callum is looking on the web. This takes a few minutes.' : 'Callum is looking') : count > 0 ? `${count} people found` : ''}</span>
         {looking ? (
           <div className="fr-looking fade-in" aria-hidden="true">
             <span className="fr-pulses"><span /><span /><span /></span>
-            Callum is looking
+            {onWeb ? 'Callum is looking on the web. This takes a few minutes.' : 'Callum is looking'}
           </div>
         ) : null}
         {count > 0 ? (
