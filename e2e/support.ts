@@ -35,7 +35,7 @@ export interface State {
 export interface Person {
   id: number; name: string; firstName: string; projectId: number; channel: string; stage: string; status: string; touches: number;
   email: string | null; replyKind: string | null; draft: string | null; snoozedUntil: string | null; restUntil: string | null; source: string;
-  nextTouchAt: string | null;
+  nextTouchAt: string | null; note: string | null;
 }
 export interface Outbox {
   id: number; personId: number; channel: string; kind: string; subject: string | null; body: string; state: string;
