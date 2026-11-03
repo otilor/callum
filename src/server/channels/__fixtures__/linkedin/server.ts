@@ -261,6 +261,8 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
     if (profile) {
       const slug = profile[1] ?? '';
       if (slug === 'blocked') return redirect(res, '/checkpoint/challenge/AQxyz');
+      // A session LinkedIn has ended: the page sends the browser back to itself until it gives up.
+      if (slug === 'loop') return redirect(res, '/in/loop/');
       if (slug === 'ghost') return html(res, 200, read('unavailable.html'));
       // A member-id address lands on the vanity address, like LinkedIn's own redirect.
       const vanity = Object.entries(MEMBER_IDS).find(([, id]) => id === slug)?.[0];

@@ -240,7 +240,11 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
   }
 
   async function open(page: Page, path: string): Promise<number> {
-    const res = await page.goto(url(path), { waitUntil: 'domcontentloaded' });
+    const res = await page.goto(url(path), { waitUntil: 'domcontentloaded' }).catch((err: unknown) => {
+      // A session LinkedIn has ended sends every page back to itself until the browser gives up: that is signed out.
+      if (String((err as Error)?.message ?? err).includes('ERR_TOO_MANY_REDIRECTS')) throw new Stop(fail('auth', SIGNED_OUT_MESSAGE));
+      throw err;
+    });
     await pause();
     return res?.status() ?? 0;
   }
@@ -922,6 +926,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
             return [...events, ...(await collectReplies(page, from, now))];
           });
         } catch (err) {
+          if (err instanceof Stop) throw new ConnectError(err.result.error.message, err.result.error.code);
           throw err instanceof ConnectError ? err : new ConnectError("Couldn't check LinkedIn for replies. Callum will try again.", 'temporary');
         }
       });
@@ -984,6 +989,7 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
         });
       }).catch((err: unknown) => {
         // Whatever went wrong while loading pages reaches the person as plain words, never as browser text.
+        if (err instanceof Stop) throw new ConnectError(err.result.error.message, err.result.error.code);
         throw err instanceof ConnectError ? err : new ConnectError("Couldn't search LinkedIn right now. Callum will try again.", 'temporary');
       });
     },

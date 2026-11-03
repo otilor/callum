@@ -27,6 +27,12 @@ describe('linkedin invitations against a local LinkedIn stand-in', () => {
       expect(li.fixture.invites.some((i) => i.slug.startsWith('decoy'))).toBe(false);
     });
 
+    it('says LinkedIn signed Callum out when every page redirects back to itself, and never that it may have sent', async () => {
+      const before = li.fixture.invites.length;
+      expect(await li.main.send(message('loop'))).toEqual({ ok: false, error: { code: 'auth', message: expect.stringContaining('signed Callum out') } });
+      expect(li.fixture.invites).toHaveLength(before);
+    });
+
     describe("LinkedIn's late-2026 profile page", () => {
       it('finds the top card by its h2 name, opens "More", and sends from the Connect link with the note', async () => {
         const before = li.fixture.invites.length;
