@@ -104,6 +104,8 @@ export interface LinkedinFixture {
   memberIdHeaders: boolean;
   /** The feed's header has no Me menu Callum knows, as after a LinkedIn redesign: the name is only on the user's profile. */
   newHeader: boolean;
+  /** LinkedIn has ended the session: every page sends the browser back to itself. */
+  loopAll: boolean;
   close(): Promise<void>;
 }
 
@@ -211,6 +213,7 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
     hidePreviews: false,
     memberIdHeaders: false,
     newHeader: false,
+    loopAll: false,
     close: async () => undefined,
   };
 
@@ -233,6 +236,7 @@ export async function startLinkedinFixture(): Promise<LinkedinFixture> {
     if (path.startsWith('/checkpoint/challenge/')) return html(res, 200, read('checkpoint.html'));
 
     if (!signedIn(req)) return redirect(res, `/authwall?trk=${encodeURIComponent(path)}`);
+    if (fixture.loopAll) return redirect(res, path);
 
     if (path === '/feed/') {
       const feed = fill(read('feed.html'), { me: esc(FIXTURE_USER) });

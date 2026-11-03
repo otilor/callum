@@ -29,7 +29,14 @@ describe('linkedin invitations against a local LinkedIn stand-in', () => {
 
     it('says LinkedIn signed Callum out when every page redirects back to itself, and never that it may have sent', async () => {
       const before = li.fixture.invites.length;
-      expect(await li.main.send(message('loop'))).toEqual({ ok: false, error: { code: 'auth', message: expect.stringContaining('signed Callum out') } });
+      li.fixture.loopAll = true;
+      try {
+        expect(await li.main.send(message('kemi'))).toEqual({ ok: false, error: { code: 'auth', message: expect.stringContaining('signed Callum out') } });
+      } finally {
+        li.fixture.loopAll = false;
+      }
+      // One page looping while the feed loads is not a sign-out: it is tried again later.
+      expect(await li.main.send(message('loop'))).toEqual({ ok: false, error: { code: 'temporary', message: expect.stringContaining('try again later') } });
       expect(li.fixture.invites).toHaveLength(before);
     });
 

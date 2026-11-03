@@ -240,10 +240,20 @@ export function createLinkedinAdapter(secret: Record<string, string> | null, dep
   }
 
   async function open(page: Page, path: string): Promise<number> {
-    const res = await page.goto(url(path), { waitUntil: 'domcontentloaded' }).catch((err: unknown) => {
-      // A session LinkedIn has ended sends every page back to itself until the browser gives up: that is signed out.
-      if (String((err as Error)?.message ?? err).includes('ERR_TOO_MANY_REDIRECTS')) throw new Stop(fail('auth', SIGNED_OUT_MESSAGE));
-      throw err;
+    const looped = (err: unknown) => String((err as Error)?.message ?? err).includes('ERR_TOO_MANY_REDIRECTS');
+    const res = await page.goto(url(path), { waitUntil: 'domcontentloaded' }).catch(async (err: unknown) => {
+      if (!looped(err)) throw err;
+      // A session LinkedIn has ended sends every page back to itself until the browser gives up. One page doing it is
+      // not enough to say so: the feed has to loop too.
+      // Asked without navigating: a second navigation on a page that just failed one can leave it unable to close.
+      const feedLoops =
+        path === '/feed/' ||
+        (await page
+          .context()
+          .request.get(url('/feed/'), { maxRedirects: 10, timeout: 15_000 })
+          .then(() => false, (e: unknown) => /redirect/i.test(String((e as Error)?.message ?? e))));
+      if (feedLoops) throw new Stop(fail('auth', SIGNED_OUT_MESSAGE));
+      throw new Stop(fail('temporary', "LinkedIn kept sending that page back to itself. Callum will try again later."));
     });
     await pause();
     return res?.status() ?? 0;
