@@ -92,12 +92,12 @@ export function siteDomain(typed: string): string | null {
  */
 export async function offerFromSite(ctx: Ctx, typed: string, read: SiteReader = readSite): Promise<{ domain: string | null; offer: string | null }> {
   const domain = siteDomain(typed);
-  if (!domain) return { domain: null, offer: null };
+  if (!domain || ctx.demo) return { domain, offer: null };
   try {
     const page = await read(domain);
     if (!page.trim()) return { domain, offer: null };
     const line = (await ctx.writer.offerLine(page, domain)).replace(/\s+/g, ' ').trim();
-    return { domain, offer: line && findPlaceholders(line).length === 0 && offerSaysEnough(line) ? line : null };
+    return { domain, offer: line && !writtenWithBlank(line) && offerSaysEnough(line) ? line : null };
   } catch {
     return { domain, offer: null };
   }
@@ -109,6 +109,9 @@ export async function offerWithSite(ctx: Ctx, typed: string | null, read: SiteRe
   if (!text || !site?.[1] || ctx.demo || /@/.test(site.input.slice(Math.max(0, site.index - 1), site.index))) return typed;
   const words = text.replace(site[0], ' ').split(/\s+/).filter((w) => /\p{L}/u.test(w));
   if (words.length >= 8) return typed;
+  // A line already written from the site, with the site kept beside it ("You help ... (tethers.com)"), is not read again.
+  const said = text.replace(/\(\s*[^()]*\)\s*$/, '').trim();
+  if (said !== text && SITE.exec(text.slice(said.length))?.[1]?.toLowerCase() === site[1].toLowerCase() && offerSaysEnough(said)) return typed;
   const domain = site[1].toLowerCase();
   try {
     const page = await read(domain);

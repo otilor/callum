@@ -104,7 +104,7 @@ async function pasteThree(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByLabelText(/One person per line/));
   await user.paste('Yaw Mensah, yaw@kumasifoods.com\nEfua Boateng, efua@osuhealth.com\nKwame Asante, kwame@temacables.com');
   await user.click(screen.getByRole('button', { name: 'Read the names' }));
-  await screen.findByText('3 people join Payroll');
+  await screen.findByText(/^3 people join /);
 }
 
 describe('NewProject, the offer', () => {
@@ -133,6 +133,38 @@ describe('NewProject, the offer', () => {
     await user.type(screen.getByLabelText('What you offer, in one line'), ' Fast.');
     expect(screen.queryByText(/Callum read tethers.com/)).not.toBeInTheDocument();
     expect(screen.getByDisplayValue('You help YC founders keep their first customers. Fast.')).toBeInTheDocument();
+
+    // Changing the website takes back the line from the old one until the new one is read.
+    await user.type(screen.getByLabelText('Your website'), 'x');
+    expect(screen.queryByLabelText('What you offer, in one line')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText('Read your site first, or describe it in your own words.')).toBeInTheDocument();
+  });
+
+  it('saves a project from a website with the site beside the line, and the next project starts clean', async () => {
+    const user = userEvent.setup();
+    show();
+    await user.click(screen.getByRole('radio', { name: 'Use my website' }));
+    mocks.readSite.mockResolvedValueOnce({ domain: 'tethers.com', offer: 'You help YC founders keep their first customers.' });
+    await user.type(screen.getByLabelText('Your website'), 'tethers.com{Enter}');
+    await screen.findByDisplayValue('You help YC founders keep their first customers.');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    mocks.createProject.mockResolvedValue(project({ id: 2, name: 'Tethers', startedAt: null }));
+    mocks.commit.mockResolvedValue({ added: [person(21, 'Yaw Mensah')], line: '', groups: [] });
+    mocks.start.mockResolvedValue({ firstSendAt: '2026-11-03T08:00:00.000Z' });
+    await pasteThree(user);
+    await user.click(screen.getByRole('button', { name: 'These 3 look right' }));
+    await screen.findByRole('heading', { name: 'How should you sound?' });
+    expect(mocks.sample).toHaveBeenCalledWith(expect.objectContaining({ offer: 'You help YC founders keep their first customers. (tethers.com)' }));
+    await user.click(screen.getByRole('button', { name: 'Start Tethers' }));
+    await screen.findByRole('heading', { name: 'Tethers is ready' });
+    expect(mocks.createProject).toHaveBeenCalledWith({ offer: 'You help YC founders keep their first customers. (tethers.com)', name: 'Tethers', tone: 'warm' });
+
+    await user.click(screen.getByRole('button', { name: /another project/i }));
+    expect(await screen.findByRole('heading', { name: 'What do you offer?' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Describe it' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText('What you offer, in one line')).toHaveValue('');
+    expect(screen.queryByText(/Tethers/)).not.toBeInTheDocument();
   });
 
   it('asks what you offer and holds Next until there is a line', async () => {

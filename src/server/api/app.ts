@@ -104,10 +104,12 @@ export function createApp(ctx: Ctx, opts: AppOptions): Hono {
   app.use('/api/login', bodyLimit({ maxSize: LOGIN_BODY_LIMIT, onError: (c) => c.json({ error: TOO_LARGE }, 413) }));
   app.use('/api/*', bodyLimit({ maxSize: BODY_LIMIT, onError: (c) => c.json({ error: TOO_LARGE }, 413) }));
   app.use('/api/*', auth.gate);
-  // Every change wakes the runner, so a send that is due now does not wait for the next 5 seconds.
+  // Every change wakes the runner, so a send that is due now does not wait for the next 5 seconds. Posts that change
+  // nothing (signing in or out, reading a website for the offer) do not.
+  const NOT_A_CHANGE = new Set(['/api/login', '/api/logout', '/api/offer/site']);
   app.use('/api/*', async (c, next) => {
     await next();
-    if (c.req.method === 'POST' && c.res.status < 400 && c.req.path !== '/api/login' && c.req.path !== '/api/logout') {
+    if (c.req.method === 'POST' && c.res.status < 400 && !NOT_A_CHANGE.has(c.req.path)) {
       opts.runner?.tick().catch(report);
     }
   });

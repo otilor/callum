@@ -137,4 +137,23 @@ describe('offerFromSite', () => {
     expect(await offerFromSite(h.ctx, 'tethers.com', async () => { throw new Error('offline'); })).toEqual({ domain: 'tethers.com', offer: null });
     expect(await offerFromSite(h.ctx, 'not a site', async () => page)).toEqual({ domain: null, offer: null });
   });
+
+  it('never reads a site in the demo, and never takes a line with a blank in it', async () => {
+    let reads = 0;
+    const demo = harness();
+    demo.ctx.demo = true;
+    expect(await offerFromSite(demo.ctx, 'tethers.com', async () => { reads++; return page; })).toEqual({ domain: 'tethers.com', offer: null });
+    expect(reads).toBe(0);
+    const h = harness();
+    h.ctx.writer.offerLine = async () => 'You help [who] close their first enterprise deals.';
+    expect(await offerFromSite(h.ctx, 'tethers.com', async () => page)).toEqual({ domain: 'tethers.com', offer: null });
+  });
+
+  it('does not read the site again for a line already written from it', async () => {
+    const h = harness();
+    let reads = 0;
+    const read = async () => { reads++; return page; };
+    expect(await offerWithSite(h.ctx, 'You help founders keep customers. (tethers.com)', read)).toBe('You help founders keep customers. (tethers.com)');
+    expect(reads).toBe(0);
+  });
 });

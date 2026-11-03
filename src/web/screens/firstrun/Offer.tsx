@@ -25,9 +25,11 @@ export interface OfferProps {
   /** The website read last, to start the box with. */
   site: string;
   onReadSite(line: string, domain: string): void;
+  /** The website changed after Callum read it. */
+  onSiteEdit(): void;
 }
 
-export function Offer({ offer, onOffer, readFrom, reading, name, onRename, error, nameProblem, busy, onBack, onNext, way, onWay, site, onReadSite }: OfferProps) {
+export function Offer({ offer, onOffer, readFrom, reading, name, onRename, error, nameProblem, busy, onBack, onNext, way, onWay, site, onReadSite, onSiteEdit }: OfferProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [nameError, setNameError] = useState('');
@@ -49,7 +51,7 @@ export function Offer({ offer, onOffer, readFrom, reading, name, onRename, error
       <h1 id="q2" className="fr-title">What do you offer?</h1>
       <div className="fr-offer-col">
         <OfferWays way={way} onWay={onWay} />
-        {way === 'site' ? <SiteField initial={site} onRead={onReadSite} /> : null}
+        {way === 'site' ? <SiteField initial={site} onRead={onReadSite} onEdit={onSiteEdit} /> : null}
         {way === 'words' || site !== '' ? (
           <>
             <span className="fr-offer-note">

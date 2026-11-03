@@ -77,7 +77,9 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
     return wanted === '' ? null : (others.find((p) => p.name.toLowerCase() === wanted && p.id !== project?.id) ?? null);
   }, [name, others, project]);
   const clashText = clash ? `You already have a project called ${clash.name}. Nothing has started yet. Pick another name.` : '';
-  const nameBlocked = !hasOffer || name === '' || clash !== null;
+  // With "Use my website" chosen, the line has to come from a site Callum read.
+  const needsRead = way === 'site' && !site;
+  const nameBlocked = needsRead || !hasOffer || name === '' || clash !== null;
 
   const kept = finder.kept;
   const first = kept[0] ?? null;
@@ -230,6 +232,8 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
     setStep(0);
     setPhase('flow');
     setOffer('');
+    setWay('words');
+    setSite(null);
     setNameOverride(null);
     setEditing(false);
     setNameError('');
@@ -284,6 +288,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
                     setSite({ domain, line });
                     setNameError('');
                   }}
+                  onEdit={() => setSite(null)}
                 />
               ) : null}
               {way === 'words' || site ? (
@@ -351,7 +356,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
             </div>
             <div className="np-actions">
               <button type="button" className="np-btn np-btn-ink" aria-disabled={nameBlocked} onClick={() => { if (!nameBlocked) go(1); }}>Next</button>
-              {nameBlocked ? <span className="np-why">{!hasOffer ? (way === 'site' ? 'Read your site first, or describe it in your own words.' : 'Write one line about what you offer first.') : clash ? 'Pick another name to continue.' : 'Callum needs a name to continue.'}</span> : null}
+              {nameBlocked ? <span className="np-why">{needsRead ? 'Read your site first, or describe it in your own words.' : !hasOffer ? 'Write one line about what you offer first.' : clash ? 'Pick another name to continue.' : 'Callum needs a name to continue.'}</span> : null}
             </div>
           </section>
         ) : null}

@@ -133,7 +133,8 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
 
   const submitOffer = async () => {
     const text = withSite(offer, site?.domain ?? null);
-    if (!text) return setOfferError(offerWay === 'site' ? 'Read your site first, or describe it in your own words.' : 'Say what you offer in one line.');
+    if (offerWay === 'site' && !site) return setOfferError('Read your site first, or describe it in your own words.');
+    if (!text) return setOfferError('Say what you offer in one line.');
     setOfferError('');
     setNameProblem('');
     setOfferBusy(true);
@@ -249,6 +250,7 @@ export function FirstRun({ state, refresh, now = () => new Date(), pollMs }: Fir
               setOfferError('');
             }}
             site={site?.domain ?? ''}
+            onSiteEdit={() => setSite(null)}
             onReadSite={(line, domain) => {
               setOffer(line);
               setSite({ domain, line });
