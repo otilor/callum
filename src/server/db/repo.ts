@@ -1,0 +1,510 @@
+import type {
+  Channel, ChannelAccount, Incident, Message, NewIncident, NewMessage, NewOutboxItem, NewPerson,
+  NewProject, OutboxItem, OutboxState, OutKind, Person, PersonStatus, Project, ProjectState, Settings, Stage,
+} from '../../shared/types.js';
+import { CHANNELS } from '../../shared/types.js';
+import { createHash } from 'node:crypto';
+import type { Db } from './db.js';
+import { inTransaction } from './transaction.js';
+import { normalizeEmail, normalizeLinkedinUrl, normalizeXHandle } from './handles.js';
+
+type Row = Record<string, unknown>;
+type Param = string | number | null;
+
+/** SQLite stores approvalCounted as 0/1; the rest of the app sees a boolean. */
+function outboxOut(item: OutboxItem): OutboxItem {
+  return { ...item, approvalCounted: Boolean(item.approvalCounted) };
+}
+function outboxIn<T extends { approvalCounted?: boolean }>(o: T): Row {
+  const { approvalCounted, ...rest } = o;
+  return approvalCounted === undefined ? rest : { ...rest, approvalCounted: approvalCounted ? 1 : 0 };
+}
+
+const snake = (k: string): string => k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+const camel = (k: string): string => k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+
+function fromRow<T>(row: Row): T {
+  const out: Row = {};
+  for (const [k, v] of Object.entries(row)) out[camel(k)] = v;
+  return out as T;
+}
+
+const PERSON_KEYS = [
+  'projectId', 'name', 'firstName', 'company', 'role', 'email', 'linkedinUrl', 'xHandle', 'timezone', 'channel',
+  'stage', 'status', 'touches', 'lastTouchAt', 'nextTouchAt', 'linkedinState', 'invitedAt',
+  'snoozedUntil', 'restUntil', 'badge', 'replyKind', 'suggested', 'draft', 'lastInbound', 'repliedAt',
+  'source', 'note', 'apolloId',
+] as const;
+const PROJECT_KEYS = [
+  'name', 'offer', 'audience', 'tone', 'sample', 'calendarUrl', 'approvalsLeft', 'startedAt', 'state', 'pausedUntil',
+] as const;
+const MESSAGE_KEYS = ['personId', 'channel', 'direction', 'kind', 'subject', 'body', 'at', 'externalId'] as const;
+const OUTBOX_KEYS = [
+  'personId', 'channel', 'kind', 'subject', 'body', 'state', 'origin', 'sendAfter', 'undoUntil', 'error', 'approvalCounted',
+  'claimedAt', 'detail',
+] as const;
+const INCIDENT_KEYS = ['channel', 'kind', 'state', 'message', 'detail', 'personId', 'resolvedAt'] as const;
+const CHANNEL_KEYS = [
+  'status', 'identity', 'connectedAt', 'rampIdentity', 'pausedUntil', 'halfPaceUntil', 'invitesBlockedUntil', 'lastPolledAt',
+] as const;
+
+const DEFAULT_SETTINGS: Settings = {
+  senderName: null, senderEmail: null, timezone: 'UTC', onboarded: false, currentProjectId: null,
+  pauseState: 'running', pausedUntil: null, notifications: null, morningBrief: true,
+};
+
+function defaultChannel(channel: Channel): ChannelAccount {
+  return {
+    channel, status: 'disconnected', identity: null, connectedAt: null, rampIdentity: null,
+    pausedUntil: null, halfPaceUntil: null, invitesBlockedUntil: null, lastPolledAt: null,
+  };
+}
+
+function normalizeHandles<T extends { email?: string | null; linkedinUrl?: string | null; xHandle?: string | null }>(p: T): T {
+  const out = { ...p };
+  if (out.email !== undefined) out.email = normalizeEmail(out.email);
+  if (out.linkedinUrl !== undefined) out.linkedinUrl = normalizeLinkedinUrl(out.linkedinUrl);
+  if (out.xHandle !== undefined) out.xHandle = normalizeXHandle(out.xHandle);
+  return out;
+}
+
+/** The handles a stop is remembered by, as they are on a person or a row of a list. */
+export interface HandleSet { email?: string | null; linkedinUrl?: string | null; xHandle?: string | null }
+
+/**
+ * One entry per handle of someone who asked to stop: the kind, and a SHA-256 of the normalised value (a LinkedIn
+ * profile is its slug), so the do-not-contact list holds no address anyone could read back.
+ */
+function suppressionKeys(h: HandleSet): { kind: string; hash: string }[] {
+  const out: { kind: string; hash: string }[] = [];
+  const add = (kind: string, value: string | null) => {
+    if (value) out.push({ kind, hash: createHash('sha256').update(value).digest('hex') });
+  };
+  add('email', normalizeEmail(h.email));
+  add('linkedin', /\/in\/([^/?#]+)/.exec(normalizeLinkedinUrl(h.linkedinUrl) ?? '')?.[1] ?? null);
+  add('x', normalizeXHandle(h.xHandle));
+  return out;
+}
+
+/** An inbound event that could not be handled. Kept so it is tried again instead of being lost. */
+export interface InboundFailure {
+  id: number; channel: Channel; externalId: string | null; personId: number | null;
+  event: string; error: string; attempts: number; createdAt: string; updatedAt: string;
+}
+
+/** The rows of `channel_secrets`: one per channel, and the Apollo and Claude keys. */
+export type SecretKey = Channel | 'apollo' | 'anthropic';
+
+export class DuplicateProjectName extends Error {
+  constructor(name: string) {
+    super(`You already have a project called ${name}. Pick another name.`);
+    this.name = 'DuplicateProjectName';
+  }
+}
+
+const isDuplicateName = (e: unknown): boolean =>
+  e instanceof Error && /UNIQUE constraint failed/i.test(e.message) && /projects/i.test(e.message);
+
+export class Repo {
+  constructor(
+    private readonly db: Db,
+    private readonly now: () => string = () => new Date().toISOString(),
+  ) {}
+
+  // ---- helpers -----------------------------------------------------------
+
+  private insertRow(table: string, keys: readonly string[], values: Row): number {
+    const cols = keys.filter((k) => values[k] !== undefined);
+    const sql = `INSERT INTO ${table} (${cols.map(snake).join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`;
+    const res = this.db.prepare(sql).run(...cols.map((k) => values[k] as Param));
+    return Number(res.lastInsertRowid);
+  }
+
+  private updateRow(table: string, keys: readonly string[], id: number, patch: Row): void {
+    const cols = keys.filter((k) => patch[k] !== undefined);
+    if (cols.length === 0) return;
+    const sql = `UPDATE ${table} SET ${cols.map((k) => `${snake(k)} = ?`).join(', ')} WHERE id = ?`;
+    this.db.prepare(sql).run(...cols.map((k) => patch[k] as Param), id);
+  }
+
+  private select<T>(sql: string, params: Param[] = []): T[] {
+    return (this.db.prepare(sql).all(...params) as Row[]).map((r) => fromRow<T>(r));
+  }
+
+  private selectOne<T>(sql: string, params: Param[] = []): T | null {
+    const row = this.db.prepare(sql).get(...params) as Row | undefined;
+    return row ? fromRow<T>(row) : null;
+  }
+
+  private require<T>(found: T | null, what: string, id: number): T {
+    if (!found) throw new Error(`${what} ${id} not found`);
+    return found;
+  }
+
+  // ---- settings ----------------------------------------------------------
+
+  getSettings(): Settings {
+    const row = this.db.prepare('SELECT data FROM settings WHERE id = 1').get() as { data: string } | undefined;
+    const stored = row ? (JSON.parse(row.data) as Partial<Settings>) : {};
+    return { ...DEFAULT_SETTINGS, ...stored };
+  }
+
+  updateSettings(patch: Partial<Settings>): Settings {
+    const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    const next = { ...this.getSettings(), ...defined } as Settings;
+    this.db
+      .prepare('INSERT INTO settings (id, data) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data')
+      .run(JSON.stringify(next));
+    return next;
+  }
+
+  // ---- projects ----------------------------------------------------------
+
+  insertProject(p: NewProject): Project {
+    const t = this.now();
+    let id: number;
+    try {
+      id = this.insertRow('projects', [...PROJECT_KEYS, 'createdAt', 'updatedAt'], { ...p, createdAt: t, updatedAt: t });
+    } catch (e) {
+      if (isDuplicateName(e)) throw new DuplicateProjectName(p.name);
+      throw e;
+    }
+    return this.require(this.getProject(id), 'project', id);
+  }
+
+  /** Removes a project that never started and has nobody in it. Returns whether it was removed. */
+  deleteEmptyProject(id: number): boolean {
+    const res = this.db.prepare(
+      'DELETE FROM projects WHERE id = ? AND started_at IS NULL AND NOT EXISTS (SELECT 1 FROM people WHERE project_id = ?)',
+    ).run(id, id);
+    return Number(res.changes) > 0;
+  }
+
+  getProject(id: number): Project | null {
+    return this.selectOne<Project>('SELECT * FROM projects WHERE id = ?', [id]);
+  }
+
+  updateProject(id: number, patch: Partial<Project>): Project {
+    this.require(this.getProject(id), 'project', id);
+    try {
+      this.updateRow('projects', [...PROJECT_KEYS, 'updatedAt'], id, { ...patch, updatedAt: this.now() });
+    } catch (e) {
+      if (isDuplicateName(e) && patch.name !== undefined) throw new DuplicateProjectName(patch.name);
+      throw e;
+    }
+    return this.require(this.getProject(id), 'project', id);
+  }
+
+  listProjects(filter: { state?: ProjectState[] } = {}): Project[] {
+    const { state } = filter;
+    if (!state) return this.select<Project>('SELECT * FROM projects ORDER BY id');
+    if (state.length === 0) return [];
+    return this.select<Project>(`SELECT * FROM projects WHERE state IN (${state.map(() => '?').join(', ')}) ORDER BY id`, state);
+  }
+
+  /** Names are unique ignoring case; `exceptId` lets a project keep its own name. */
+  projectNameTaken(name: string, exceptId?: number): boolean {
+    const row = this.db
+      .prepare('SELECT 1 AS taken FROM projects WHERE name = ? COLLATE NOCASE AND (? IS NULL OR id != ?) LIMIT 1')
+      .get(name, exceptId ?? null, exceptId ?? null);
+    return row !== undefined;
+  }
+
+  // ---- channels ----------------------------------------------------------
+
+  getChannel(ch: Channel): ChannelAccount {
+    const found = this.selectOne<ChannelAccount>('SELECT * FROM channels WHERE channel = ?', [ch]);
+    return found ?? defaultChannel(ch);
+  }
+
+  listChannels(): ChannelAccount[] {
+    return CHANNELS.map((c) => this.getChannel(c));
+  }
+
+  updateChannel(ch: Channel, patch: Partial<ChannelAccount>): ChannelAccount {
+    const next: ChannelAccount = { ...this.getChannel(ch) };
+    for (const k of CHANNEL_KEYS) {
+      if (patch[k] !== undefined) (next as unknown as Row)[k] = patch[k];
+    }
+    const cols: readonly string[] = ['channel', ...CHANNEL_KEYS];
+    const sql = `INSERT OR REPLACE INTO channels (${cols.map(snake).join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`;
+    this.db.prepare(sql).run(...cols.map((k) => (next as unknown as Row)[k] as Param));
+    return next;
+  }
+
+  getChannelSecret(ch: SecretKey): Record<string, string> | null {
+    const row = this.db.prepare('SELECT data FROM channel_secrets WHERE channel = ?').get(ch) as { data: string } | undefined;
+    return row ? (JSON.parse(row.data) as Record<string, string>) : null;
+  }
+
+  setChannelSecret(ch: SecretKey, data: Record<string, string> | null): void {
+    if (data === null) {
+      this.db.prepare('DELETE FROM channel_secrets WHERE channel = ?').run(ch);
+      return;
+    }
+    this.db
+      .prepare('INSERT INTO channel_secrets (channel, data) VALUES (?, ?) ON CONFLICT(channel) DO UPDATE SET data = excluded.data')
+      .run(ch, JSON.stringify(data));
+  }
+
+  // ---- people ------------------------------------------------------------
+
+  insertPerson(p: NewPerson): Person {
+    if (!this.getProject(p.projectId)) throw new Error('No such project');
+    const t = this.now();
+    const n = normalizeHandles(p);
+    const values: Row = {
+      ...n,
+      firstName: n.firstName ?? (n.name.trim().split(/\s+/)[0] || n.name),
+      stage: n.stage ?? 'stranger',
+      status: n.status ?? 'active',
+      touches: n.touches ?? 0,
+      linkedinState: n.linkedinState ?? 'none',
+      createdAt: t,
+      updatedAt: t,
+    };
+    const id = this.insertRow('people', [...PERSON_KEYS, 'createdAt', 'updatedAt'], values);
+    const person = this.require(this.getPerson(id), 'person', id);
+    if (person.status === 'stopped') this.suppress(person);
+    return person;
+  }
+
+  getPerson(id: number): Person | null {
+    return this.selectOne<Person>('SELECT * FROM people WHERE id = ?', [id]);
+  }
+
+  updatePerson(id: number, patch: Partial<Person>): Person {
+    this.require(this.getPerson(id), 'person', id);
+    this.updateRow('people', [...PERSON_KEYS, 'updatedAt'], id, { ...normalizeHandles(patch), updatedAt: this.now() });
+    const person = this.require(this.getPerson(id), 'person', id);
+    // However someone came to be stopped, every handle they have is on the do-not-contact list from that moment.
+    if (person.status === 'stopped') this.suppress(person);
+    return person;
+  }
+
+  // ---- the do-not-contact list -----------------------------------------
+
+  /** Remembers these handles as people who asked to stop. This survives "delete my data" on purpose. */
+  suppress(h: HandleSet): void {
+    const insert = this.db.prepare('INSERT OR IGNORE INTO suppressions (kind, hash, created_at) VALUES (?, ?, ?)');
+    const t = this.now();
+    for (const k of suppressionKeys(h)) insert.run(k.kind, k.hash, t);
+  }
+
+  /** True when any of these handles belongs to someone who asked to stop, whether or not they are still in Callum. */
+  isSuppressed(h: HandleSet): boolean {
+    const find = this.db.prepare('SELECT 1 AS found FROM suppressions WHERE kind = ? AND hash = ? LIMIT 1');
+    return suppressionKeys(h).some((k) => find.get(k.kind, k.hash) !== undefined);
+  }
+
+  /** Empties the list. Only a demo scene being replaced does this: it holds made-up people. */
+  clearSuppressions(): void {
+    this.db.exec('DELETE FROM suppressions');
+  }
+
+  listPeople(filter: { status?: PersonStatus[]; stage?: Stage[]; projectId?: number } = {}): Person[] {
+    const { sql, params } = this.peopleWhere(filter);
+    return this.select<Person>(`SELECT * FROM people${sql} ORDER BY id`, params);
+  }
+
+  countPeople(projectId: number, filter: { status?: PersonStatus[]; stage?: Stage[] } = {}): number {
+    const { sql, params } = this.peopleWhere({ ...filter, projectId });
+    return Number((this.db.prepare(`SELECT COUNT(*) AS n FROM people${sql}`).get(...params) as { n: number }).n);
+  }
+
+  private peopleWhere(filter: { status?: PersonStatus[]; stage?: Stage[]; projectId?: number }): { sql: string; params: Param[] } {
+    const where: string[] = [];
+    const params: Param[] = [];
+    const inList = (col: string, vals: readonly string[] | undefined) => {
+      if (!vals) return;
+      where.push(vals.length === 0 ? '0' : `${col} IN (${vals.map(() => '?').join(', ')})`);
+      params.push(...vals);
+    };
+    if (filter.projectId !== undefined) { where.push('project_id = ?'); params.push(filter.projectId); }
+    inList('status', filter.status);
+    inList('stage', filter.stage);
+    return { sql: where.length ? ` WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  /** Removes a person and their outbox items, unless Callum has a message with them or they asked to stop. Returns whether they were removed. */
+  deletePerson(id: number): boolean {
+    return this.transaction(() => {
+      const res = this.db
+        .prepare("DELETE FROM people WHERE id = ? AND status != 'stopped' AND NOT EXISTS (SELECT 1 FROM messages WHERE person_id = ?)")
+        .run(id, id);
+      if (Number(res.changes) === 0) return false;
+      this.db.prepare('UPDATE incidents SET person_id = NULL WHERE person_id = ?').run(id);
+      return true;
+    });
+  }
+
+  /**
+   * True when Apollo was already paid for this id: someone in Callum has it, or the look-up came back with nobody to
+   * write to (no email or LinkedIn) or the person was taken out again. Looking them up again would cost a credit twice.
+   */
+  hasApolloId(apolloId: string): boolean {
+    return this.db.prepare('SELECT 1 AS found FROM people WHERE apollo_id = ? UNION ALL SELECT 1 FROM apollo_seen WHERE apollo_id = ? LIMIT 1').get(apolloId, apolloId) !== undefined;
+  }
+
+  /** Remembers ids Apollo has been paid for, so a later search leaves them out. */
+  markApolloSeen(ids: Iterable<string>): void {
+    const insert = this.db.prepare('INSERT OR IGNORE INTO apollo_seen (apollo_id, created_at) VALUES (?, ?)');
+    const t = this.now();
+    for (const id of ids) insert.run(id, t);
+  }
+
+  findPersonByHandle(h: { email?: string | null; linkedinUrl?: string | null; xHandle?: string | null }): Person | null {
+    const clauses: string[] = [];
+    const params: Param[] = [];
+    const email = normalizeEmail(h.email);
+    const linkedin = normalizeLinkedinUrl(h.linkedinUrl);
+    const x = normalizeXHandle(h.xHandle);
+    if (email) { clauses.push('email = ?'); params.push(email); }
+    if (linkedin) { clauses.push('linkedin_url = ?'); params.push(linkedin); }
+    if (x) { clauses.push('x_handle = ?'); params.push(x); }
+    if (clauses.length === 0) return null;
+    return this.selectOne<Person>(`SELECT * FROM people WHERE ${clauses.join(' OR ')} ORDER BY id LIMIT 1`, params);
+  }
+
+  /** The person Callum wrote to in a message with one of these provider ids (Message-IDs, with or without angle brackets). */
+  findPersonByOutboundMessageId(channel: Channel, ids: string[]): Person | null {
+    const wanted = [...new Set(ids.map((id) => id.trim()).filter(Boolean).flatMap((id) => {
+      const bare = id.replace(/^<|>$/g, '');
+      return bare ? [bare, `<${bare}>`] : [];
+    }))];
+    if (wanted.length === 0) return null;
+    return this.selectOne<Person>(
+      `SELECT p.* FROM people p JOIN messages m ON m.person_id = p.id
+       WHERE m.direction = 'out' AND m.channel = ? AND m.external_id IN (${wanted.map(() => '?').join(', ')})
+       ORDER BY m.at DESC, m.id DESC LIMIT 1`,
+      [channel, ...wanted],
+    );
+  }
+
+  // ---- messages ----------------------------------------------------------
+
+  insertMessage(m: NewMessage): Message {
+    const id = this.insertRow('messages', MESSAGE_KEYS, m as unknown as Row);
+    return this.require(this.selectOne<Message>('SELECT * FROM messages WHERE id = ?', [id]), 'message', id);
+  }
+
+  listMessages(personId: number): Message[] {
+    return this.select<Message>('SELECT * FROM messages WHERE person_id = ? ORDER BY at, id', [personId]);
+  }
+
+  /** True when a message with this provider id is stored on the channel in that direction. */
+  hasMessageWithExternalId(channel: Channel, externalId: string, direction: 'in' | 'out'): boolean {
+    const row = this.db
+      .prepare('SELECT 1 AS found FROM messages WHERE channel = ? AND external_id = ? AND direction = ? LIMIT 1')
+      .get(channel, externalId, direction);
+    return row !== undefined;
+  }
+
+  /** Outbound messages on a channel sent at or after `sinceIso`; `kinds` null means any kind. */
+  countOut(channel: Channel, kinds: OutKind[] | null, sinceIso: string): number {
+    if (kinds && kinds.length === 0) return 0;
+    const params: Param[] = [channel, sinceIso];
+    let sql = "SELECT COUNT(*) AS n FROM messages WHERE direction = 'out' AND channel = ? AND at >= ?";
+    if (kinds) {
+      sql += ` AND kind IN (${kinds.map(() => '?').join(', ')})`;
+      params.push(...kinds);
+    }
+    return Number((this.db.prepare(sql).get(...params) as { n: number }).n);
+  }
+
+  // ---- outbox ------------------------------------------------------------
+
+  insertOutbox(o: NewOutboxItem): OutboxItem {
+    const t = this.now();
+    const id = this.insertRow('outbox', [...OUTBOX_KEYS, 'createdAt', 'updatedAt'], { ...outboxIn(o), createdAt: t, updatedAt: t });
+    return this.require(this.getOutbox(id), 'outbox item', id);
+  }
+
+  getOutbox(id: number): OutboxItem | null {
+    const item = this.selectOne<OutboxItem>('SELECT * FROM outbox WHERE id = ?', [id]);
+    return item && outboxOut(item);
+  }
+
+  updateOutbox(id: number, patch: Partial<OutboxItem>): OutboxItem {
+    this.require(this.getOutbox(id), 'outbox item', id);
+    this.updateRow('outbox', [...OUTBOX_KEYS, 'updatedAt'], id, { ...outboxIn(patch), updatedAt: this.now() });
+    return this.require(this.getOutbox(id), 'outbox item', id);
+  }
+
+  /** `dueBefore` is inclusive: items whose sendAfter is at or before that instant. */
+  listOutbox(filter: { state?: OutboxState[]; personId?: number; dueBefore?: string } = {}): OutboxItem[] {
+    const where: string[] = [];
+    const params: Param[] = [];
+    if (filter.state) {
+      where.push(filter.state.length === 0 ? '0' : `state IN (${filter.state.map(() => '?').join(', ')})`);
+      params.push(...filter.state);
+    }
+    if (filter.personId !== undefined) { where.push('person_id = ?'); params.push(filter.personId); }
+    if (filter.dueBefore !== undefined) { where.push('send_after <= ?'); params.push(filter.dueBefore); }
+    return this.select<OutboxItem>(
+      `SELECT * FROM outbox${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY send_after, id`,
+      params,
+    ).map(outboxOut);
+  }
+
+  // ---- incidents ---------------------------------------------------------
+
+  insertIncident(i: NewIncident): Incident {
+    const id = this.insertRow('incidents', [...INCIDENT_KEYS, 'createdAt'], {
+      ...i, state: 'open', createdAt: this.now(),
+    });
+    return this.require(this.selectOne<Incident>('SELECT * FROM incidents WHERE id = ?', [id]), 'incident', id);
+  }
+
+  updateIncident(id: number, patch: Partial<Incident>): Incident {
+    this.require(this.selectOne<Incident>('SELECT * FROM incidents WHERE id = ?', [id]), 'incident', id);
+    this.updateRow('incidents', INCIDENT_KEYS, id, patch as unknown as Row);
+    return this.require(this.selectOne<Incident>('SELECT * FROM incidents WHERE id = ?', [id]), 'incident', id);
+  }
+
+  listIncidents(filter: { open?: boolean } = {}): Incident[] {
+    if (filter.open === undefined) return this.select<Incident>('SELECT * FROM incidents ORDER BY id');
+    return this.select<Incident>('SELECT * FROM incidents WHERE state = ? ORDER BY id', [filter.open ? 'open' : 'resolved']);
+  }
+
+  // ---- inbound events that failed -----------------------------------------
+
+  insertInboundFailure(f: Pick<InboundFailure, 'channel' | 'externalId' | 'personId' | 'event' | 'error'>): InboundFailure {
+    const t = this.now();
+    const res = this.db
+      .prepare('INSERT INTO inbound_failed (channel, external_id, person_id, event, error, attempts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)')
+      .run(f.channel, f.externalId, f.personId, f.event, f.error, t, t);
+    return this.require(this.selectOne<InboundFailure>('SELECT * FROM inbound_failed WHERE id = ?', [Number(res.lastInsertRowid)]), 'inbound failure', Number(res.lastInsertRowid));
+  }
+
+  listInboundFailures(): InboundFailure[] {
+    return this.select<InboundFailure>('SELECT * FROM inbound_failed ORDER BY id');
+  }
+
+  updateInboundFailure(id: number, patch: { attempts: number; error: string }): void {
+    this.db.prepare('UPDATE inbound_failed SET attempts = ?, error = ?, updated_at = ? WHERE id = ?').run(patch.attempts, patch.error, this.now(), id);
+  }
+
+  deleteInboundFailure(id: number): void {
+    this.db.prepare('DELETE FROM inbound_failed WHERE id = ?').run(id);
+  }
+
+  // ---- transactions ------------------------------------------------------
+
+  /** Run `fn` so that all of its writes land together or not at all. Nests as a savepoint. */
+  transaction<T>(fn: () => T): T {
+    return inTransaction(this.db, fn);
+  }
+
+  // ---- reset -------------------------------------------------------------
+
+  deleteAll(): void {
+    this.transaction(() => {
+      // `suppressions` is not here: someone who asked to stop is still not written to after the user's data is deleted.
+      for (const t of ['messages', 'outbox', 'incidents', 'inbound_failed', 'people', 'projects', 'channels', 'channel_secrets', 'settings', 'apollo_seen']) {
+        this.db.exec(`DELETE FROM ${t}`);
+      }
+      this.db.exec("DELETE FROM sqlite_sequence WHERE name IN ('messages','outbox','incidents','inbound_failed','people','projects')");
+    });
+  }
+}

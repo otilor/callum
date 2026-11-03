@@ -1,0 +1,265 @@
+/* The river: the bed, the current, the faces. Motion follows V2Morning and V2Paused. */
+.river {
+  position: relative;
+}
+.river-field {
+  position: relative;
+}
+.river-bed {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.river .current {
+  stroke-dasharray: 1 22;
+  opacity: 0.45;
+}
+.river.is-running .current {
+  opacity: 1;
+  animation: river-flow 2.4s linear infinite;
+}
+.river.is-running .current-slow {
+  animation-duration: 3.8s;
+}
+@keyframes river-flow {
+  to {
+    stroke-dashoffset: -23;
+  }
+}
+
+.river-face {
+  position: absolute;
+  padding: 0;
+  border: 2.5px solid #ffffff;
+  border-radius: 50%;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: left 1.3s cubic-bezier(0.45, 0, 0.2, 1), top 1.3s cubic-bezier(0.45, 0, 0.2, 1), width 0.9s ease, height 0.9s ease,
+    margin 0.9s ease, filter 1.1s ease, opacity 0.6s ease, box-shadow 0.6s ease, transform 0.25s ease;
+  animation: river-face-in 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  outline-offset: 3px;
+}
+.river-face:hover,
+.river-face:focus-visible {
+  transform: scale(1.14);
+  z-index: 4;
+}
+@keyframes river-face-in {
+  from {
+    opacity: 0;
+    transform: translateX(-56px) scale(0.4);
+  }
+}
+.river-face.going-still {
+  animation: river-face-in 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) backwards, river-still-in 1.4s ease backwards;
+}
+@keyframes river-still-in {
+  from {
+    filter: none;
+    opacity: 1;
+  }
+}
+.river-face.next-ring {
+  animation: river-face-in 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) backwards, river-next-ring 1.8s ease-in-out 0.9s infinite;
+}
+@keyframes river-next-ring {
+  50% {
+    box-shadow: 0 0 0 5px rgba(169, 184, 245, 0.55);
+  }
+}
+.river-face.cur-ring {
+  animation: river-face-in 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) backwards, river-cur-ring 1.2s ease-in-out 0.9s infinite;
+}
+@keyframes river-cur-ring {
+  50% {
+    box-shadow: 0 0 0 6px rgba(63, 82, 217, 0.35);
+  }
+}
+
+.ping-a,
+.ping-b {
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 2.5px solid #3f52d9;
+  pointer-events: none;
+  opacity: 0;
+}
+.ping-a {
+  animation: river-ping-a 1.25s ease-out 2;
+}
+.ping-b {
+  animation: river-ping-b 1.25s ease-out 2;
+}
+@keyframes river-ping-a {
+  0% {
+    transform: scale(0.85);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+@keyframes river-ping-b {
+  0% {
+    transform: scale(0.85);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.river-badge {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1d2140;
+}
+.river-badge-pause {
+  background: #646b85;
+  animation: river-pause-in 0.5s ease 2.4s backwards;
+}
+@keyframes river-pause-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+.river-badge-booked {
+  background: #ffb020;
+}
+.river-badge-sending {
+  background: #ffb020;
+  animation: river-sending 1.1s ease-in-out infinite;
+}
+@keyframes river-sending {
+  50% {
+    transform: scale(0.78);
+  }
+}
+
+.river-group {
+  position: absolute;
+  padding: 0;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: #f4f5f9;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s ease;
+  animation: river-face-in 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.river-group:is(button):hover {
+  transform: scale(1.08);
+}
+span.river-group {
+  cursor: default;
+}
+.river-group-count {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.river-popover {
+  position: absolute;
+  z-index: 8;
+}
+
+/* The count under each lane. */
+.river-zones {
+  position: relative;
+  height: 58px;
+}
+.river-zone {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.river-zone strong {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.river-zone span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  color: var(--slate);
+  white-space: nowrap;
+}
+.river-zone i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 3px solid;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+.river.is-compact .river-zones {
+  height: 52px;
+}
+.river.is-compact .river-zone strong {
+  font-size: 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .river-face,
+  .river-group {
+    transition: none;
+  }
+  .ping-a,
+  .ping-b {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .river-zone strong {
+    font-size: 22px;
+  }
+  .river-zone span {
+    gap: 4px;
+    font-size: 12px;
+  }
+  .river-zone i {
+    display: none;
+  }
+}
+
+.river-badge-mark {
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  color: #ffffff;
+  background: #646b85;
+}
+.river-badge-error {
+  background: #d9480f;
+}
+.river-badge-intro {
+  background: #ffb020;
+  color: #1d2140;
+}

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "types": ["node"],
+    "rootDir": "electron",
+    "outDir": "dist/electron"
+  },
+  "include": ["electron/**/*.ts"],
+  "exclude": ["electron/preload.ts", "electron/browser.ts", "**/*.test.ts"]
+}

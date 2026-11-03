@@ -1,0 +1,426 @@
+import { readFileSync } from 'node:fs';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { PersonLead } from '../../shared/types.js';
+import { openDb } from '../db/db.js';
+import { Repo } from '../db/repo.js';
+import { makeProject } from '../db/testing.test-helpers.js';
+import { importPeople } from './import.js';
+import { parseCsv } from './parse.js';
+
+let repo: Repo;
+let tick: number;
+let projectId: number;
+beforeEach(() => {
+  tick = 0;
+  repo = new Repo(openDb(':memory:'), () => new Date(Date.UTC(2026, 0, 1, 0, 0, tick++)).toISOString());
+  projectId = makeProject(repo, { name: 'Payroll' }).id;
+});
+
+const messy =
+  '﻿First Name;Last Name;Work Email;Company;LinkedIn\r\n' +
+  'Kemi;Eze;kemi@okopay.com;Oko Pay;\r\n' +
+  ';;;;\r\n' +
+  'Femi;Ade;;Ledgerly;linkedin.com/in/femi-ade\r\n' +
+  'Kemi;Eze;KEMI@okopay.com;Oko Pay;\r\n' +
+  'Tunde;Bakare;;Paystack Partners;\r\n';
+
+describe('importPeople with real exports', () => {
+  const fixture = (name: string) => readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), 'utf8');
+
+  it('imports LinkedIn, Apollo, HubSpot and Google files in turn: new people join, repeats are named', () => {
+    const run = (file: string) => {
+      const parsed = parseCsv(fixture(file));
+      const result = importPeople(repo, projectId, parsed.people);
+      return { added: result.added.map((p) => p.name), skipped: result.skipped.map((s) => `${s.name}:${s.reason}`), unreadable: parsed.skipped.map((s) => `${s.name}:${s.reason}`) };
+    };
+    expect(run('linkedin-connections.csv')).toEqual({
+      added: ['Kemi Eze', 'Femi Ade', 'Zoë Müller', 'Ada Okafor'], skipped: [], unreadable: ['Tunde Bakare:no_channel'],
+    });
+    // Kemi (LinkedIn URL) and Femi (LinkedIn URL) are already here; Amaka is new; Sade has no way to be reached.
+    expect(run('apollo-export.csv')).toEqual({
+      added: ['Amaka Obi'], skipped: ['Kemi Eze:duplicate', 'Femi Ade:duplicate'], unreadable: ['Sade Bello:no_channel'],
+    });
+    // HubSpot knows Kemi only by email. The Apollo file already gave her email to the Kemi Callum has, so she is recognised.
+    expect(run('hubspot-contacts.csv')).toEqual({
+      added: ['Tomás Rivera', 'Priya Nair'], skipped: ['Kemi Eze:duplicate'], unreadable: ['Nobody:no_channel'],
+    });
+    expect(run('google-contacts.csv')).toEqual({
+      added: ['sade'], skipped: ['Kemi Eze:duplicate', 'Femi Ade:duplicate'], unreadable: ['Mum:no_channel'],
+    });
+    expect(repo.listPeople().map((p) => p.name)).toEqual(['Kemi Eze', 'Femi Ade', 'Zoë Müller', 'Ada Okafor', 'Amaka Obi', 'Tomás Rivera', 'Priya Nair', 'sade']);
+    // The LinkedIn-only Kemi learned her email from the Apollo file, and her X handle from HubSpot.
+    expect(repo.listPeople()[0]).toMatchObject({ email: 'kemi@okopay.com', linkedinUrl: 'https://www.linkedin.com/in/kemi-eze-5a2b1c', xHandle: 'kemieze', source: 'csv' });
+  });
+});
+
+describe('importPeople', () => {
+  it('adds people to the project as strangers and reports nothing skipped', () => {
+    const { people } = parseCsv(messy);
+    const { added, skipped } = importPeople(repo, projectId, people);
+    expect(skipped).toEqual([]);
+    expect(added.map((p) => [p.name, p.projectId, p.stage, p.status, p.source, p.email, p.linkedinUrl])).toEqual([
+      ['Kemi Eze', projectId, 'stranger', 'active', 'csv', 'kemi@okopay.com', null],
+      ['Femi Ade', projectId, 'stranger', 'active', 'csv', null, 'https://www.linkedin.com/in/femi-ade'],
+    ]);
+    expect(repo.listPeople({ projectId })).toHaveLength(2);
+  });
+
+  it('review focus 5: the messy file end to end, with one person already stopped, then imported again', () => {
+    const parsed = parseCsv(messy);
+    expect(parsed.people).toHaveLength(2);
+    expect(parsed.skipped.map((s) => s.reason)).toEqual(['duplicate', 'no_channel']);
+
+    const kemi = repo.insertPerson({ name: 'Kemi Eze', source: 'referral', projectId, email: 'kemi@okopay.com' });
+    repo.updatePerson(kemi.id, { status: 'stopped' });
+
+    const first = importPeople(repo, projectId, parsed.people);
+    expect(first.added.map((p) => p.name)).toEqual(['Femi Ade']);
+    expect(first.skipped).toEqual([{ name: 'Kemi Eze', reason: 'stopped', row: 2 }]);
+
+    const second = importPeople(repo, projectId, parsed.people);
+    expect(second.added).toEqual([]);
+    expect(second.skipped).toEqual([
+      { name: 'Kemi Eze', reason: 'stopped', row: 2 },
+      { name: 'Femi Ade', reason: 'duplicate', row: 4 },
+    ]);
+    expect(repo.listPeople()).toHaveLength(2);
+  });
+
+  it('a second import of the same file is all duplicates', () => {
+    const { people } = parseCsv(messy);
+    importPeople(repo, projectId, people);
+    const again = importPeople(repo, projectId, people);
+    expect(again.added).toEqual([]);
+    expect(again.skipped).toEqual([
+      { name: 'Kemi Eze', reason: 'duplicate', row: 2 },
+      { name: 'Femi Ade', reason: 'duplicate', row: 4 },
+    ]);
+  });
+
+  it('skips someone with no email, LinkedIn or X, and anything that does not normalise into one', () => {
+    const lead = (o: Partial<PersonLead> & { name: string }): PersonLead => ({ source: 'csv', ...o });
+    const { added, skipped } = importPeople(repo, projectId, [
+      lead({ name: 'Tunde Bakare', company: 'Paystack' }),
+      lead({ name: 'Bad Link', linkedinUrl: 'https://example.com/in/bad', email: '' }),
+      lead({ name: 'Ok Person', xHandle: '@okperson' }),
+    ]);
+    expect(skipped).toEqual([
+      { name: 'Tunde Bakare', reason: 'no_channel' },
+      { name: 'Bad Link', reason: 'no_channel' },
+    ]);
+    expect(added.map((p) => [p.name, p.xHandle])).toEqual([['Ok Person', 'okperson']]);
+  });
+
+  it('skips emails the user has already written to (known), whatever the case', () => {
+    const { added, skipped } = importPeople(
+      repo, projectId,
+      [
+        { name: 'Kemi Eze', email: 'Kemi@OkoPay.com', source: 'csv' },
+        { name: 'Femi Ade', email: 'femi@ledgerly.io', source: 'csv' },
+      ],
+      { known: new Set(['kemi@okopay.com']) },
+    );
+    expect(skipped).toEqual([{ name: 'Kemi Eze', reason: 'known' }]);
+    expect(added.map((p) => p.name)).toEqual(['Femi Ade']);
+  });
+
+  it('matches an existing person by LinkedIn or X as well as email', () => {
+    repo.insertPerson({ name: 'Femi Ade', source: 'csv', projectId, linkedinUrl: 'https://www.linkedin.com/in/femi-ade' });
+    repo.insertPerson({ name: 'Ada', source: 'csv', projectId, xHandle: 'adaokafor' });
+    const { added, skipped } = importPeople(repo, projectId, [
+      { name: 'F. Ade', email: 'new@ledgerly.io', linkedinUrl: 'linkedin.com/in/Femi-Ade/', source: 'csv' },
+      { name: 'Ada O', email: 'ada@okafor.dev', xHandle: 'https://twitter.com/AdaOkafor', source: 'csv' },
+    ]);
+    expect(added).toEqual([]);
+    expect(skipped).toEqual([
+      { name: 'F. Ade', reason: 'duplicate' },
+      { name: 'Ada O', reason: 'duplicate' },
+    ]);
+  });
+
+  it('treats a person who closed, rested or was removed as a duplicate, not as new', () => {
+    for (const [i, status] of (['closed', 'resting', 'removed', 'held', 'snoozed'] as const).entries()) {
+      const p = repo.insertPerson({ name: `P${i}`, source: 'csv', projectId, email: `p${i}@x.example` });
+      repo.updatePerson(p.id, { status });
+    }
+    const { added, skipped } = importPeople(repo, projectId, [0, 1, 2, 3, 4].map((i) => ({ name: `P${i}`, email: `p${i}@x.example`, source: 'csv' as const })));
+    expect(added).toEqual([]);
+    expect(skipped.map((s) => s.reason)).toEqual(['duplicate', 'duplicate', 'duplicate', 'duplicate', 'duplicate']);
+  });
+
+  it('skips repeats inside one batch by any shared handle, keeping the first', () => {
+    const { added, skipped } = importPeople(repo, projectId, [
+      { name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'paste' },
+      { name: 'Kemi E', email: 'KEMI@okopay.com', source: 'paste' },
+      { name: 'K Eze', linkedinUrl: 'https://www.linkedin.com/in/kemi-eze', source: 'paste' },
+      { name: 'Kemi again', email: 'other@okopay.com', linkedinUrl: 'linkedin.com/in/kemi-eze', source: 'paste' },
+    ]);
+    expect(added.map((p) => p.name)).toEqual(['Kemi Eze', 'K Eze']);
+    expect(skipped).toEqual([
+      { name: 'Kemi E', reason: 'duplicate' },
+      { name: 'Kemi again', reason: 'duplicate' },
+    ]);
+  });
+
+  it('keeps the details it was given', () => {
+    const { added } = importPeople(repo, projectId, [
+      { name: 'Kemi Eze', firstName: 'Kemi', email: 'kemi@okopay.com', company: 'Oko Pay', role: 'Head of Finance', timezone: 'Africa/Lagos', source: 'referral', note: 'Via Femi' },
+    ]);
+    expect(added[0]).toMatchObject({
+      name: 'Kemi Eze', firstName: 'Kemi', company: 'Oko Pay', role: 'Head of Finance', timezone: 'Africa/Lagos', source: 'referral', note: 'Via Femi',
+    });
+  });
+
+  describe('a skipped repeat teaches Callum the person\'s other handles', () => {
+    it('fills in a missing email, LinkedIn or X on the person already there', () => {
+      const kemi = repo.insertPerson({ name: 'Kemi Eze', source: 'csv', projectId, linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' });
+      const { skipped } = importPeople(repo, projectId, [
+        { name: 'Kemi Eze', email: 'Kemi@OkoPay.com', linkedinUrl: 'linkedin.com/in/kemi-eze', xHandle: '@KemiEze', company: 'Other Co', source: 'apollo' },
+      ]);
+      expect(skipped).toEqual([{ name: 'Kemi Eze', reason: 'duplicate' }]);
+      expect(repo.getPerson(kemi.id)).toMatchObject({ email: 'kemi@okopay.com', xHandle: 'kemieze', company: null, source: 'csv' });
+      // Later, a list that only has her email finds her.
+      expect(importPeople(repo, projectId, [{ name: 'K Eze', email: 'kemi@okopay.com', source: 'csv' }]).skipped).toEqual([{ name: 'K Eze', reason: 'duplicate' }]);
+    });
+
+    it('lets a stop on one handle hold for the others, so a different list cannot bring her back', () => {
+      const kemi = repo.insertPerson({ name: 'Kemi Eze', source: 'csv', projectId, linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' });
+      repo.updatePerson(kemi.id, { status: 'stopped' });
+      importPeople(repo, projectId, [{ name: 'Kemi Eze', email: 'kemi@okopay.com', linkedinUrl: 'linkedin.com/in/kemi-eze', source: 'apollo' }]);
+      const later = importPeople(repo, projectId, [{ name: 'Kemi', email: 'kemi@okopay.com', source: 'paste' }]);
+      expect(later.added).toEqual([]);
+      expect(later.skipped).toEqual([{ name: 'Kemi', reason: 'stopped' }]);
+      expect(repo.getPerson(kemi.id)?.status).toBe('stopped');
+    });
+
+    it('never overwrites a handle the person already has, or takes one that belongs to someone else', () => {
+      const kemi = repo.insertPerson({ name: 'Kemi Eze', source: 'csv', projectId, email: 'kemi@okopay.com' });
+      const other = repo.insertPerson({ name: 'Femi Ade', source: 'csv', projectId, xHandle: 'shared' });
+      importPeople(repo, projectId, [{ name: 'Kemi Eze', email: 'kemi@okopay.com', xHandle: 'shared', source: 'csv' }]);
+      // Both Kemi (by email) and Femi (by X) matched: the row links two people, so nothing is filled in.
+      expect(repo.getPerson(kemi.id)?.xHandle).toBeNull();
+      expect(repo.getPerson(other.id)?.email).toBeNull();
+      importPeople(repo, projectId, [{ name: 'K', email: 'kemi@okopay.com', linkedinUrl: 'linkedin.com/in/kemi', source: 'csv' }]);
+      importPeople(repo, projectId, [{ name: 'K', email: 'kemi.new@okopay.com', linkedinUrl: 'linkedin.com/in/kemi', source: 'csv' }]);
+      expect(repo.getPerson(kemi.id)).toMatchObject({ email: 'kemi@okopay.com', linkedinUrl: 'https://www.linkedin.com/in/kemi' });
+    });
+
+    it('leaves a person in another project untouched', () => {
+      const second = makeProject(repo, { name: 'Reconciliation' });
+      const kemi = repo.insertPerson({ name: 'Kemi Eze', source: 'csv', projectId, linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' });
+      const result = importPeople(repo, second.id, [{ name: 'Kemi Eze', email: 'kemi@okopay.com', linkedinUrl: 'linkedin.com/in/kemi-eze', source: 'csv' }]);
+      expect(result.skipped).toEqual([{ name: 'Kemi Eze', reason: 'other_project', projectName: 'Payroll' }]);
+      expect(result.updated).toEqual([]);
+      expect(repo.getPerson(kemi.id)).toEqual(kemi);
+      expect(repo.listPeople({ projectId: second.id })).toEqual([]);
+    });
+
+    it('reports who was updated, once each, and nobody when nothing was learned', () => {
+      const kemi = repo.insertPerson({ name: 'Kemi Eze', source: 'csv', projectId, linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' });
+      const result = importPeople(repo, projectId, [
+        { name: 'Kemi Eze', email: 'kemi@okopay.com', linkedinUrl: 'linkedin.com/in/kemi-eze', source: 'csv' },
+        { name: 'Kemi Eze', xHandle: 'kemieze', linkedinUrl: 'linkedin.com/in/kemi-eze', source: 'csv' },
+        { name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' },
+      ]);
+      expect(result.updated).toHaveLength(1);
+      expect(result.updated[0]).toEqual(repo.getPerson(kemi.id));
+      expect(result.updated[0]).toMatchObject({ email: 'kemi@okopay.com', xHandle: 'kemieze' });
+      expect(importPeople(repo, projectId, [{ name: 'K', email: 'kemi@okopay.com', source: 'csv' }]).updated).toEqual([]);
+    });
+
+    it('someone added earlier in the same import is reported once, as added, with what they learned', () => {
+      const result = importPeople(repo, projectId, [
+        { name: 'Kemi Eze', linkedinUrl: 'linkedin.com/in/kemi-eze', source: 'csv', row: 2 },
+        { name: 'Femi Ade', email: 'femi@ledgerly.io', source: 'csv', row: 3 },
+        { name: 'Kemi Eze', email: 'kemi@okopay.com', linkedinUrl: 'linkedin.com/in/kemi-eze', source: 'csv', row: 4 },
+      ]);
+      expect(result.skipped).toEqual([{ name: 'Kemi Eze', reason: 'duplicate', row: 4 }]);
+      expect(result.added.map((p) => [p.name, p.email])).toEqual([['Kemi Eze', 'kemi@okopay.com'], ['Femi Ade', 'femi@ledgerly.io']]);
+      expect(result.added[0]).toEqual(repo.getPerson(result.added[0]!.id));
+      expect(result.updated).toEqual([]);
+    });
+
+    it('a stopped person in another project still learns the handle, so the stop holds', () => {
+      const second = makeProject(repo, { name: 'Reconciliation' });
+      const kemi = repo.insertPerson({ name: 'Kemi Eze', source: 'csv', projectId, linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' });
+      repo.updatePerson(kemi.id, { status: 'stopped' });
+      const result = importPeople(repo, second.id, [{ name: 'Kemi Eze', email: 'kemi@okopay.com', linkedinUrl: 'linkedin.com/in/kemi-eze', source: 'csv' }]);
+      expect(result.skipped).toEqual([{ name: 'Kemi Eze', reason: 'stopped' }]);
+      expect(result.updated.map((p) => p.id)).toEqual([kemi.id]);
+      expect(importPeople(repo, second.id, [{ name: 'Kemi', email: 'kemi@okopay.com', source: 'paste' }]).skipped).toEqual([{ name: 'Kemi', reason: 'stopped' }]);
+    });
+
+    it('carries the source row onto every kind of skip', () => {
+      const second = makeProject(repo, { name: 'Reconciliation' });
+      repo.insertPerson({ name: 'A', source: 'csv', projectId, email: 'dup@x.example' });
+      repo.insertPerson({ name: 'B', source: 'csv', projectId: second.id, email: 'other@x.example' });
+      const stopped = repo.insertPerson({ name: 'C', source: 'csv', projectId, email: 'stop@x.example' });
+      repo.updatePerson(stopped.id, { status: 'stopped' });
+      const { skipped } = importPeople(repo, projectId, [
+        { name: 'Dup', email: 'dup@x.example', source: 'csv', row: 2 },
+        { name: 'Other', email: 'other@x.example', source: 'csv', row: 3 },
+        { name: 'Stop', email: 'stop@x.example', source: 'csv', row: 4 },
+        { name: 'Known', email: 'known@x.example', source: 'csv', row: 5 },
+        { name: 'None', source: 'csv', row: 6 },
+        { name: 'New', email: 'new@x.example', source: 'csv', row: 7 },
+        { name: 'New again', email: 'new@x.example', source: 'csv', row: 8 },
+      ], { known: new Set(['known@x.example']) });
+      expect(skipped).toEqual([
+        { name: 'Dup', reason: 'duplicate', row: 2 },
+        { name: 'Other', reason: 'other_project', projectName: 'Reconciliation', row: 3 },
+        { name: 'Stop', reason: 'stopped', row: 4 },
+        { name: 'Known', reason: 'known', row: 5 },
+        { name: 'None', reason: 'no_channel', row: 6 },
+        { name: 'New again', reason: 'duplicate', row: 8 },
+      ]);
+    });
+  });
+
+  describe('projects', () => {
+    it('someone in another project is skipped as other_project, with that project\'s name', () => {
+      const second = makeProject(repo, { name: 'Reconciliation' });
+      importPeople(repo, projectId, [{ name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' }]);
+      const { added, skipped } = importPeople(repo, second.id, [
+        { name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' },
+        { name: 'Femi Ade', email: 'femi@ledgerly.io', source: 'csv' },
+      ]);
+      expect(skipped).toEqual([{ name: 'Kemi Eze', reason: 'other_project', projectName: 'Payroll' }]);
+      expect(added.map((p) => [p.name, p.projectId])).toEqual([['Femi Ade', second.id]]);
+      expect(repo.listPeople({ projectId: second.id })).toHaveLength(1);
+    });
+
+    it('the same project is a duplicate, and stop is global', () => {
+      const second = makeProject(repo, { name: 'Reconciliation' });
+      const kemi = repo.insertPerson({ name: 'Kemi Eze', source: 'csv', projectId, email: 'kemi@okopay.com' });
+      repo.updatePerson(kemi.id, { status: 'stopped' });
+      repo.insertPerson({ name: 'Femi Ade', source: 'csv', projectId, email: 'femi@ledgerly.io' });
+
+      const intoSecond = importPeople(repo, second.id, [
+        { name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' },
+        { name: 'Femi Ade', email: 'femi@ledgerly.io', source: 'csv' },
+      ]);
+      expect(intoSecond.skipped).toEqual([
+        { name: 'Kemi Eze', reason: 'stopped' },
+        { name: 'Femi Ade', reason: 'other_project', projectName: 'Payroll' },
+      ]);
+      const intoFirst = importPeople(repo, projectId, [{ name: 'Femi Ade', email: 'femi@ledgerly.io', source: 'csv' }]);
+      expect(intoFirst.skipped).toEqual([{ name: 'Femi Ade', reason: 'duplicate' }]);
+    });
+
+    it('stopped wins when different handles match different people', () => {
+      const second = makeProject(repo, { name: 'Reconciliation' });
+      repo.insertPerson({ name: 'Kemi Eze', source: 'csv', projectId: second.id, email: 'kemi@okopay.com' });
+      const stopped = repo.insertPerson({ name: 'K Eze', source: 'csv', projectId, linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' });
+      repo.updatePerson(stopped.id, { status: 'stopped' });
+      const { skipped } = importPeople(repo, second.id, [
+        { name: 'Kemi Eze', email: 'kemi@okopay.com', linkedinUrl: 'linkedin.com/in/kemi-eze', source: 'csv' },
+      ]);
+      expect(skipped).toEqual([{ name: 'Kemi Eze', reason: 'stopped' }]);
+    });
+
+    it('same project beats another project when a person matches in both', () => {
+      const second = makeProject(repo, { name: 'Reconciliation' });
+      repo.insertPerson({ name: 'Kemi Eze', source: 'csv', projectId, email: 'kemi@okopay.com' });
+      repo.insertPerson({ name: 'K Eze', source: 'csv', projectId: second.id, linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' });
+      const { skipped } = importPeople(repo, second.id, [
+        { name: 'Kemi Eze', email: 'kemi@okopay.com', linkedinUrl: 'linkedin.com/in/kemi-eze', source: 'csv' },
+      ]);
+      expect(skipped).toEqual([{ name: 'Kemi Eze', reason: 'duplicate' }]);
+    });
+
+    it('refuses a project that does not exist, and adds nobody', () => {
+      expect(() => importPeople(repo, 99, [{ name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' }])).toThrow('No such project');
+      expect(repo.listPeople()).toEqual([]);
+    });
+  });
+
+  it('adds everyone or no one: a failure part way rolls the batch back', () => {
+    const real = repo.insertPerson.bind(repo);
+    let calls = 0;
+    repo.insertPerson = (p) => { if (++calls === 2) throw new Error('disk full'); return real(p); };
+    expect(() => importPeople(repo, projectId, [
+      { name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' },
+      { name: 'Femi Ade', email: 'femi@ledgerly.io', source: 'csv' },
+    ])).toThrow('disk full');
+    expect(repo.listPeople()).toEqual([]);
+  });
+});
+
+describe('importPeople as a dry run', () => {
+  const leads: PersonLead[] = [
+    { name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' },
+    { name: 'Femi Ade', email: 'femi@ledgerly.io', source: 'csv' },
+    { name: 'Nobody', source: 'csv' },
+    { name: 'Kemi Again', email: 'KEMI@okopay.com', source: 'csv' },
+    { name: 'Tunde Bello', email: 'tunde@sent.com', source: 'csv' },
+  ];
+
+  it('reports the same people as a real import and writes nothing', () => {
+    const dry = importPeople(repo, projectId, leads, { dryRun: true, known: new Set(['tunde@sent.com']) });
+    expect(repo.listPeople()).toEqual([]);
+    expect(dry.added.map((p) => [p.id, p.name, p.email, p.projectId, p.stage])).toEqual([[0, 'Kemi Eze', 'kemi@okopay.com', projectId, 'stranger'], [0, 'Femi Ade', 'femi@ledgerly.io', projectId, 'stranger']]);
+    expect(dry.addedAt).toEqual([0, 1]);
+    expect(dry.skipped.map((s) => `${s.name}:${s.reason}`)).toEqual(['Nobody:no_channel', 'Kemi Again:duplicate', 'Tunde Bello:known']);
+    const real = importPeople(repo, projectId, leads, { known: new Set(['tunde@sent.com']) });
+    expect(real.added.map((p) => p.name)).toEqual(dry.added.map((p) => p.name));
+    expect(real.skipped).toEqual(dry.skipped);
+    expect(real.addedAt).toBeUndefined();
+  });
+
+  it('does not teach people the handles of a repeat', () => {
+    const kemi = repo.insertPerson({ projectId, name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' });
+    const dry = importPeople(repo, projectId, [{ name: 'Kemi Eze', email: 'kemi@okopay.com', linkedinUrl: 'linkedin.com/in/kemi', source: 'csv' }], { dryRun: true });
+    expect(dry.skipped).toEqual([{ name: 'Kemi Eze', reason: 'duplicate' }]);
+    expect(dry.updated).toEqual([]);
+    expect(repo.getPerson(kemi.id)?.linkedinUrl).toBeNull();
+  });
+
+  it('works for a project that does not exist yet: everyone Callum has is in another project', () => {
+    repo.insertPerson({ projectId, name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' });
+    const stopped = repo.insertPerson({ projectId, name: 'Ruth Adeleke', email: 'ruth@x.com', source: 'csv' });
+    repo.updatePerson(stopped.id, { status: 'stopped' });
+    const dry = importPeople(repo, null, [
+      { name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv' },
+      { name: 'Ruth Adeleke', email: 'ruth@x.com', source: 'csv' },
+      { name: 'New One', email: 'new@x.com', source: 'csv' },
+      { name: 'New One Twice', email: 'new@x.com', source: 'csv' },
+    ], { dryRun: true });
+    expect(dry.added.map((p) => p.name)).toEqual(['New One']);
+    expect(dry.skipped).toEqual([
+      { name: 'Kemi Eze', reason: 'other_project', projectName: 'Payroll' },
+      { name: 'Ruth Adeleke', reason: 'stopped' },
+      { name: 'New One Twice', reason: 'duplicate' },
+    ]);
+    expect(() => importPeople(repo, null, [{ name: 'A', email: 'a@x.com', source: 'csv' }])).toThrow('No such project');
+  });
+});
+
+describe('importPeople and the do-not-contact list', () => {
+  const lead = (over: Partial<PersonLead> = {}): PersonLead => ({ name: 'Kemi Eze', email: 'kemi@okopay.com', source: 'csv', ...over });
+
+  it('skips someone who asked to stop after everything was deleted, as asked not to be contacted, on any handle', () => {
+    const kemi = repo.insertPerson({ projectId, name: 'Kemi Eze', source: 'csv', email: 'kemi@okopay.com', linkedinUrl: 'https://www.linkedin.com/in/kemi-eze' });
+    repo.updatePerson(kemi.id, { status: 'stopped' });
+    repo.deleteAll();
+    projectId = makeProject(repo, { name: 'Payroll' }).id;
+    const result = importPeople(repo, projectId, [
+      lead(),
+      lead({ name: 'Kemi E', email: 'a-new-address@elsewhere.com', linkedinUrl: 'linkedin.com/in/Kemi-Eze' }),
+      lead({ name: 'Femi Ade', email: 'femi@ledgerly.io' }),
+    ]);
+    expect(result.added.map((p) => p.name)).toEqual(['Femi Ade']);
+    expect(result.skipped.map((s) => `${s.name}:${s.reason}`)).toEqual(['Kemi Eze:stopped', 'Kemi E:stopped']);
+    expect(repo.listPeople().map((p) => p.name)).toEqual(['Femi Ade']);
+  });
+
+  it('writes nothing for a dry run and still names the person as stopped', () => {
+    repo.suppress({ email: 'kemi@okopay.com' });
+    const result = importPeople(repo, projectId, [lead()], { dryRun: true });
+    expect(result.added).toEqual([]);
+    expect(result.skipped).toMatchObject([{ reason: 'stopped' }]);
+  });
+
+  it('adds the same person who was never stopped', () => {
+    expect(importPeople(repo, projectId, [lead()]).added).toHaveLength(1);
+  });
+});

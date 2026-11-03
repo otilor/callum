@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Callum drives the browser already installed on the computer, so installs download no browser or Electron binary.
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+jobs:
+  check:
+    name: Typecheck, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Build the web app
+        run: npm run build
+      - name: Build the server
+        run: npm run build:server
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build --tag callum:ci .
+
+  # The desktop app's tests and the installers for a release (tags v*) are in desktop.yml.
+
+  e2e:
+    name: Journeys in a browser
+    runs-on: ubuntu-latest
+    needs: check
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the web app and the server
+        run: npm run build && npm run build:server
+      # Nine journeys (first run, day one, a morning with replies, a person, adding people, two projects, leaving, a server
+      # with a password, a phone). Each starts the built server in demo mode on its own data folder and checks the API as
+      # well as the page.
+      - name: Run the journeys
+        run: npm run e2e
+        env:
+          CI: "true"
+      - name: Keep the report when a journey fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+
+  # Callum in normal mode against a real mail server (GreenMail): hellos arrive, a reply is threaded, a "stop" is honoured,
+  # two projects share one daily limit. Needs Java, which the runner has; the GreenMail jar is cached.
+  real-mail:
+    name: Real mail (GreenMail)
+    runs-on: ubuntu-latest
+    needs: check
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/cache@v4
+        with:
+          path: .cache/greenmail.jar
+          key: greenmail-2.1.3
+      - run: npm ci
+      - name: Run Callum against GreenMail
+        run: npm run test:real

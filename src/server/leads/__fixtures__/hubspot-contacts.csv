@@ -1,0 +1,5 @@
+"Record ID","First Name","Last Name","Email","Phone Number","Contact owner","Lifecycle Stage","Lead Status","Job Title","Associated Company","Time Zone","Twitter Username","Create Date"
+"101","Kemi","Eze","kemi@okopay.com","+234 801 234 5678","Gabriel Femi","Lead","New","Head of Finance Operations","Oko Pay","Africa/Lagos","kemieze","2026-10-01 09:12"
+"102","Tomás","Rivera","tomas@riveraprint.example","","Gabriel Femi","Subscriber","","Owner","Rivera Print, S.L.","Europe/Madrid","","2026-10-03 14:40"
+"103","Nobody","","","","Gabriel Femi","Lead","","","","","","2026-10-04 08:00"
+"104","Priya","Nair","PRIYA.NAIR@Helix.example","","Gabriel Femi","Lead","Open","CTO","Helix","Not/AZone","@priyanair","2026-10-05 11:20"

@@ -1,0 +1,689 @@
+.pv {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 22px 32px 28px;
+  background: var(--white);
+  color: var(--ink);
+}
+
+.pv-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.pv-bar-end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pv-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 16px 0 12px;
+  border: none;
+  border-radius: 20px;
+  background: var(--mist);
+  font-size: 14px;
+  font-weight: 600;
+}
+.pv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 13px 0 11px;
+  border-radius: 16px;
+  background: var(--mist);
+  font-size: 14px;
+  font-weight: 500;
+}
+.pv-bar .pv-chip {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+}
+.pv-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.pv-bar .pv-dot {
+  width: 8px;
+  height: 8px;
+}
+
+/* ---- find someone, and the faces ---- */
+.pv-find-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px 26px;
+}
+.pv-find {
+  position: relative;
+  flex: 0 1 360px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 18px;
+  border-radius: 26px;
+  background: var(--white);
+  box-shadow: 0 18px 44px -24px rgba(29, 33, 64, 0.3), 0 0 0 1px rgba(29, 33, 64, 0.07);
+}
+.pv-find:focus-within {
+  box-shadow: 0 0 0 2px var(--focus), 0 18px 44px -24px rgba(29, 33, 64, 0.3);
+}
+.pv-find input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 48px;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+}
+.pv-clear {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--mist);
+}
+.pv-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-height: 64px;
+}
+.pv-face-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 50px;
+}
+.pv-peek {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  transition: transform 0.2s ease;
+}
+.pv-peek:hover {
+  transform: translateY(-3px) scale(1.06);
+}
+.pv-face-name {
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--slate);
+}
+.pv-face-name[data-on='true'] {
+  font-weight: 600;
+  color: var(--ink);
+}
+.pv-nomatch {
+  align-self: center;
+  font-size: 15px;
+  color: var(--slate);
+}
+.pv-more {
+  align-self: center;
+  margin-top: -14px;
+  font-size: 14px;
+  color: var(--slate);
+}
+
+/* ---- the two columns ---- */
+.pv-cols {
+  display: flex;
+  align-items: stretch;
+  gap: 40px;
+}
+.pv-left {
+  flex: 0 0 auto;
+  width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.pv-swap {
+  animation: pv-swap 0.5s var(--ease) backwards;
+}
+@keyframes pv-swap {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.pv-who {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.pv-big {
+  position: relative;
+  flex: 0 0 auto;
+  width: 112px;
+  height: 112px;
+}
+.pv-big .marble {
+  transition: filter 1s ease, box-shadow 0.8s ease, opacity 0.8s ease;
+}
+.pv-badge {
+  position: absolute;
+  right: -2px;
+  bottom: 2px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--white);
+  border-radius: 50%;
+  background: var(--sun);
+}
+.pv-badge[data-kind='held'] {
+  background: var(--slate);
+}
+.pv-names {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.pv-names h1 {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.pv-sub {
+  font-size: 16px;
+  color: var(--slate);
+}
+.pv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pv-quiet {
+  font-size: 14px;
+  color: var(--slate);
+}
+
+/* ---- the path ---- */
+.pv-path {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pv-step {
+  display: flex;
+  gap: 14px;
+  min-height: 40px;
+}
+.pv-rail {
+  position: relative;
+  flex: 0 0 auto;
+  width: 16px;
+  display: flex;
+  justify-content: center;
+}
+.pv-line {
+  position: absolute;
+  top: 18px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--line);
+}
+.pv-line[data-done='true'] {
+  background: var(--ink);
+  opacity: 0.18;
+}
+.pv-pin {
+  position: relative;
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--white);
+  border: 2px solid #d5d9e4;
+}
+.pv-step[data-state='done'] .pv-pin {
+  background: var(--ink);
+  border: none;
+}
+.pv-step[data-state='sun'] .pv-pin {
+  background: var(--sun);
+  border: none;
+}
+.pv-step[data-state='next'] .pv-pin {
+  border: 2.5px solid var(--focus);
+}
+.pv-step[data-state='held'] .pv-pin {
+  border: 2px dashed var(--dash);
+}
+.pv-step[data-state='stop'] .pv-pin {
+  background: var(--error);
+  border: none;
+}
+.pv-step[data-state='rest'] .pv-pin {
+  border: 2px solid var(--tick);
+}
+.pv-step-text {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+}
+.pv-step-label {
+  font-weight: 600;
+}
+.pv-step[data-state='later'] .pv-step-label,
+.pv-step[data-state='rest'] .pv-step-label,
+.pv-step[data-state='held'] .pv-step-label {
+  font-weight: 400;
+  color: var(--slate);
+}
+.pv-step-text .pv-quiet {
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.pv-next {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pv-next-line {
+  display: flex;
+  gap: 10px;
+  font-size: 17px;
+  line-height: 1.4;
+  font-weight: 500;
+}
+.pv-next-line svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.pv-why {
+  margin-left: 30px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--slate);
+}
+
+/* ---- what can be done ---- */
+.pv-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pv-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pv-act {
+  min-height: 46px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 23px;
+  background: var(--mist);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+.pv-act:hover {
+  transform: translateY(-1px);
+}
+.pv-act[data-primary='true'] {
+  background: var(--ink);
+  color: var(--white);
+}
+.pv-act[aria-disabled='true'] {
+  background: var(--mist);
+  color: #9aa0b4;
+  transform: none;
+}
+.pv-reason {
+  display: flex;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--slate);
+}
+.pv-reason-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--dash);
+}
+.pv-moves {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pv-move {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.pv-reason-beside {
+  flex: 1 1 200px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--slate);
+}
+.pv-handle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pv-handle input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 22px;
+  background: var(--mist);
+  font-size: 15px;
+}
+.pv-handle input:focus {
+  box-shadow: 0 0 0 2px var(--focus);
+}
+.pv-handle button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 22px;
+  background: var(--ink);
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+}
+.pv-handle button[aria-disabled='true'] {
+  opacity: 0.35;
+}
+.pv-error {
+  font-size: 14px;
+  color: var(--error);
+}
+.pv-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  background: var(--error-tint);
+}
+.pv-confirm p {
+  font-size: 15px;
+  line-height: 1.45;
+}
+.pv-confirm-btns {
+  display: flex;
+  gap: 8px;
+}
+.pv-confirm-btns button {
+  min-height: 42px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 21px;
+  background: var(--white);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.pv-confirm-btns button[data-ink] {
+  background: var(--ink);
+  color: var(--white);
+}
+.pv-never {
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--slate);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pv-closed {
+  padding: 12px 16px;
+  border-radius: 18px;
+  background: var(--mist);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--slate);
+}
+
+/* ---- the whole conversation ---- */
+.pv-thread {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 688px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px 26px 18px;
+  border-radius: 34px;
+  background: var(--mist);
+}
+.pv-thread-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.pv-thread-head .pv-quiet {
+  white-space: nowrap;
+}
+.pv-thread-head h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+.pv-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 6px 4px 6px 0;
+  scrollbar-width: thin;
+  scrollbar-color: #d5d9e4 transparent;
+}
+.pv-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pv-mine {
+  align-items: flex-end;
+}
+.pv-theirs {
+  align-items: flex-start;
+}
+.pv-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--slate);
+}
+.pv-sun-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sun);
+}
+.pv-bubble {
+  max-width: 78%;
+  margin: 0;
+  padding: 14px 18px;
+  font-size: 16px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pv-bubble-callum {
+  border-radius: 22px 22px 6px 22px;
+  background: var(--white);
+  box-shadow: 0 10px 26px -18px rgba(29, 33, 64, 0.35);
+}
+.pv-bubble-them {
+  border-radius: 22px 22px 22px 6px;
+  background: var(--sun-tint);
+}
+.pv-bubble-you {
+  border-radius: 22px 22px 6px 22px;
+  background: var(--white);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+.pv-bubble-pending {
+  opacity: 0.7;
+}
+.pv-sending {
+  animation: pv-sending 1.1s ease-in-out infinite;
+}
+@keyframes pv-sending {
+  50% {
+    opacity: 0.45;
+  }
+}
+.pv-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  font-size: 13px;
+  color: var(--slate);
+}
+.pv-note-rule {
+  flex: 1 1 auto;
+  height: 1px;
+  background: #e2e5ee;
+}
+.pv-note-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  text-align: center;
+}
+.pv-note-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.pv-fixes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pv-fixes button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 16px;
+  background: var(--white);
+  font-size: 13px;
+  font-weight: 600;
+}
+.pv-compose {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 8px 8px 8px 18px;
+  border-radius: 26px;
+  background: var(--white);
+  box-shadow: 0 0 0 1px rgba(29, 33, 64, 0.06);
+}
+.pv-compose:focus-within {
+  box-shadow: 0 0 0 2px var(--focus);
+}
+.pv-compose textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 120px;
+  padding: 11px 0;
+  resize: none;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.pv-send {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.pv-send[aria-disabled='true'] {
+  background: var(--tick);
+}
+.pv-write-note {
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .pv {
+    padding: 18px 16px;
+  }
+  .pv-cols {
+    flex-direction: column;
+  }
+  .pv-left {
+    width: 100%;
+  }
+  .pv-thread {
+    height: 560px;
+  }
+  .pv-hide-narrow {
+    display: none;
+  }
+  .pv-strip {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pv-swap,
+  .pv-sending,
+  .pv-peek,
+  .pv-act,
+  .pv-big .marble {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -1,0 +1,93 @@
+# The desktop app: tested on every push, and built for macOS (Apple Silicon and Intel), Windows and Linux when a
+# version tag (v*) is pushed. Kept apart from ci.yml so the two can change without touching each other.
+name: Desktop
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    name: Desktop app on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the web app and compile the server and the desktop shell
+        run: npm run desktop:prepare
+      - name: Start the real app and check it
+        run: xvfb-run -a npm run e2e:desktop
+        env:
+          CI: "true"
+      - name: Package the unpacked app
+        run: npx electron-builder --dir
+      - name: Upload the report when it fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-test-results
+          path: test-results-desktop
+
+  # The release is made once, here; the installers below only add their files to it.
+  release:
+    name: Create the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: desktop
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+
+  installers:
+    name: Installer for ${{ matrix.name }}
+    needs: release
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon)
+            os: macos-latest
+            files: release/*.dmg
+          - name: macOS (Intel)
+            os: macos-15-intel
+            files: release/*.dmg
+          - name: Windows
+            os: windows-latest
+            files: release/*.exe
+          - name: Linux
+            os: ubuntu-latest
+            files: release/*.AppImage release/*.deb
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the installer
+        run: npm run desktop:dist
+      - name: Add it to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" ${{ matrix.files }} --repo "$GITHUB_REPOSITORY" --clobber

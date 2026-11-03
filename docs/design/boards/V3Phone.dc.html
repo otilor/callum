@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Callum v3, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1D2140}
+button,input,textarea{font-family:inherit}
+button:focus-visible,a:focus-visible,textarea:focus-visible{outline:2px solid #3F52D9;outline-offset:3px}
+input:focus{outline:none}
+input::placeholder,textarea::placeholder{color:#646B85}
+.ask-pill:focus-within{box-shadow:0 0 0 2px #3F52D9,0 18px 40px -20px rgba(29,33,64,.3)!important}
+.current{stroke-dasharray:1 14;animation:flow 2.4s linear infinite}
+.current-slow{animation-duration:3.8s}
+@keyframes flow{to{stroke-dashoffset:-15}}
+.is-paused .current{animation-play-state:paused;opacity:.45}
+.pface{position:absolute;border:2px solid #FFFFFF;border-radius:50%;box-sizing:border-box;transition:left 1.2s cubic-bezier(.45,0,.2,1),top 1.2s cubic-bezier(.45,0,.2,1),width .9s ease,height .9s ease,margin .9s ease,box-shadow .6s ease,filter .9s ease,opacity .6s ease,transform .6s ease}
+.badge{position:absolute;right:-5px;bottom:-5px;width:15px;height:15px;border-radius:50%;border:2px solid #FFFFFF;box-sizing:border-box;background:#1D2140;display:flex;align-items:center;justify-content:center}
+.toast-a{animation:toast-a .4s cubic-bezier(.2,.8,.2,1) backwards}
+.toast-b{animation:toast-b .4s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes toast-a{from{opacity:0;transform:translateY(12px)}}
+@keyframes toast-b{from{opacity:0;transform:translateY(12px)}}
+.ring-a{animation:ring-a 10s linear forwards}
+.ring-b{animation:ring-b 10s linear forwards}
+@keyframes ring-a{to{stroke-dashoffset:53.41}}
+@keyframes ring-b{to{stroke-dashoffset:53.41}}
+.fade-in{animation:fade-in .4s ease backwards}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}}
+.tab-a{animation:tab-a .35s ease backwards}
+.tab-b{animation:tab-b .35s ease backwards}
+@keyframes tab-a{from{opacity:0;transform:translateY(8px)}}
+@keyframes tab-b{from{opacity:0;transform:translateY(8px)}}
+.sheet-a{animation:sheet-a .45s cubic-bezier(.2,.8,.2,1) backwards}
+.sheet-b{animation:sheet-b .45s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes sheet-a{from{transform:translateY(100%)}}
+@keyframes sheet-b{from{transform:translateY(100%)}}
+.veil-in{animation:veil-in .3s ease backwards}
+@keyframes veil-in{from{opacity:0}}
+.panel-a{animation:panel-a .45s cubic-bezier(.2,.8,.2,1) backwards}
+.panel-b{animation:panel-b .45s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes panel-a{from{opacity:0;transform:translateY(14px)}}
+@keyframes panel-b{from{opacity:0;transform:translateY(14px)}}
+.note-in{animation:note-in .7s cubic-bezier(.2,.8,.2,1) .35s backwards}
+@keyframes note-in{from{opacity:0;transform:translateY(-18px) scale(.96)}}
+.lock-out{transition:opacity .45s ease,transform .45s ease}
+.row{transition:background-color .2s ease}
+.row:hover{background:#F4F5F9!important}
+.scroll{scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.draft{transition:box-shadow .2s ease}
+.draft:focus{box-shadow:0 0 0 2px #3F52D9;outline:none}
+@media (max-width: 760px){
+.phone{width:100%!important;max-width:390px}
+}
+@media (prefers-reduced-motion: reduce){
+.pface,.row,.draft,.lock-out{transition:none!important}
+.toast-a,.toast-b,.fade-in,.tab-a,.tab-b,.sheet-a,.sheet-b,.veil-in,.panel-a,.panel-b,.note-in{animation:none!important}
+.current{animation:none}
+}
+</style>
+</helmet>
+<div class="phone {{rootCls}}" style="position: relative; width: 390px; height: 844px; overflow: hidden; background: #FFFFFF; color: #1D2140; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums">
+
+<header style="position: absolute; left: 20px; right: 12px; top: 14px; height: 44px; display: flex; align-items: center; justify-content: space-between; z-index: 5">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 700; letter-spacing: -0.03em"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #FFB020"></span>callum</span>
+<div style="display: flex; align-items: center; gap: 4px">
+<span style="display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 12px; border-radius: 16px; background: #F4F5F9; font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; {{statusDot}}"></span>{{statusText}}</span>
+<button type="button" onClick="{{goYou}}" aria-label="You" style="width: 44px; height: 44px; padding: 0; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center"><span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #E7E9F0; background: radial-gradient(circle at 30% 30%, #8C6CFF 0 22%, transparent 58%), radial-gradient(circle at 72% 70%, #FFC145 0 18%, transparent 55%), #4CB5F5"></span></button>
+</div>
+</header>
+
+<sc-if value="{{isRiver}}" hint-placeholder-val="{{true}}">
+<div class="{{tabCls}}">
+<section aria-labelledby="brief-title" style="position: absolute; left: 20px; right: 20px; top: 68px; display: flex; flex-direction: column; gap: 10px">
+<h1 id="brief-title" style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1">{{hello}}</h1>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{pills}}" as="pl" hint-placeholder-count="3"><span style="display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 11px 0 9px; border-radius: 14px; background: #F4F5F9; font-size: 13px; font-weight: 500"><span aria-hidden="true" style="flex: 0 0 auto; border-radius: 50%; box-sizing: border-box; {{pl.dot}}"></span>{{pl.text}}</span></sc-for>
+</div>
+</section>
+
+<section aria-label="Your river" style="position: absolute; left: 0; right: 0; top: 136px; height: 112px">
+<svg aria-hidden="true" viewBox="0 0 390 100" preserveAspectRatio="none" style="position: absolute; left: 0; top: 30px; width: 100%; height: 76px; overflow: visible">
+<defs>
+<linearGradient id="v3-phone-bed" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#EEF0F6" stop-opacity="0"></stop>
+<stop offset="0.07" stop-color="#EEF0F6" stop-opacity="1"></stop>
+<stop offset="0.5" stop-color="#ECEFFB" stop-opacity="1"></stop>
+<stop offset="0.82" stop-color="#FFF4DD" stop-opacity="1"></stop>
+<stop offset="1" stop-color="#FFEBC2" stop-opacity="1"></stop>
+</linearGradient>
+</defs>
+<path d="M0,16.7 C62.4,8.3 124.8,23.3 195,15 C265.2,6.7 327.6,21.7 390,11.7 L390,87.3 C327.6,95 265.2,80 195,87.3 C124.8,94.7 62.4,81.7 0,86 Z" fill="url(#v3-phone-bed)"></path>
+<path class="current" d="M0,35 C70.2,27.3 132.6,43.3 195,34.7 C257.4,26.7 319.8,41.3 390,32" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"></path>
+<path class="current current-slow" d="M0,51.7 C66.3,45.3 128.7,60 195,51.3 C261.3,43.3 323.7,58 390,48.7" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"></path>
+<path class="current" d="M0,68.3 C70.2,64 132.6,76 195,68 C257.4,61.3 319.8,74 390,65.3" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"></path>
+</svg>
+<sc-for list="{{faces}}" as="f" hint-placeholder-count="24"><span role="img" aria-label="{{f.label}}" class="pface" style="{{f.style}}"><sc-if value="{{f.isSent}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" class="badge"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span></sc-if></span></sc-for>
+</section>
+
+<div class="scroll" style="position: absolute; left: 0; right: 0; top: 256px; bottom: 84px; overflow-y: auto; padding: 0 12px 24px; box-sizing: border-box">
+<sc-if value="{{hasPauseNote}}" hint-placeholder-val="{{false}}">
+<p class="fade-in" style="margin: 4px 8px 12px; padding: 12px 14px; border-radius: 18px; background: #F4F5F9; font-size: 14px; line-height: 1.45; color: #1D2140">{{pauseNote}}</p>
+</sc-if>
+<sc-for list="{{items}}" as="it" hint-placeholder-count="14">
+<sc-if value="{{it.isHead}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; {{it.gap}}">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; {{it.dot}}"></span>{{it.name}}</span>
+<span style="font-size: 13px; color: #646B85">{{it.count}}</span>
+</div>
+</sc-if>
+<sc-if value="{{it.isRow}}" hint-placeholder-val="{{false}}">
+<button type="button" class="row" onClick="{{it.open}}" style="width: 100%; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px; border: none; border-radius: 18px; background: transparent; text-align: left; cursor: pointer; color: #1D2140">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; {{it.look}}"></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600">{{it.name}}<sc-if value="{{it.hasTag}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; min-height: 20px; padding: 0 8px; border-radius: 10px; background: #F4F5F9; font-size: 11px; font-weight: 600; color: #646B85">{{it.tag}}</span></sc-if></span>
+<span style="font-size: 13px; color: #646B85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{it.sub}}</span>
+</span>
+<span style="flex: 0 0 auto; font-size: 12px; color: #646B85; align-self: flex-start; padding-top: 4px">{{it.when}}</span>
+</button>
+</sc-if>
+<sc-if value="{{it.isMore}}" hint-placeholder-val="{{false}}">
+<button type="button" onClick="{{it.open}}" aria-expanded="{{it.expanded}}" style="display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 2px 0 4px 8px; padding: 0 14px 0 8px; border: none; border-radius: 22px; background: #F4F5F9; color: #1D2140; font-size: 14px; font-weight: 600; cursor: pointer"><span aria-hidden="true" style="display: flex"><span style="width: 24px; height: 24px; margin-right: -6px; border-radius: 50%; border: 2px solid #F4F5F9; box-sizing: border-box; {{it.p1}}"></span><span style="width: 24px; height: 24px; margin-right: -6px; border-radius: 50%; border: 2px solid #F4F5F9; box-sizing: border-box; {{it.p2}}"></span><span style="width: 24px; height: 24px; margin-right: -6px; border-radius: 50%; border: 2px solid #F4F5F9; box-sizing: border-box; {{it.p3}}"></span></span><span style="padding-left: 6px">{{it.name}}</span></button>
+</sc-if>
+<sc-if value="{{it.isNote}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; padding: 0 8px 4px; font-size: 14px; line-height: 1.45; color: #646B85">{{it.sub}}</p>
+</sc-if>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isAsk}}" hint-placeholder-val="{{false}}">
+<div class="{{tabCls}}">
+<div class="scroll" style="position: absolute; left: 0; right: 0; top: 66px; bottom: 214px; overflow-y: auto; padding: 8px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px">
+<sc-if value="{{askEmpty}}" hint-placeholder-val="{{true}}">
+<div style="margin: auto 0; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; padding: 0 12px">
+<span aria-hidden="true" style="width: 60px; height: 60px; border-radius: 50%; background: #FFB020; box-shadow: 0 0 0 14px #FFF3D6, 0 0 0 28px #FFF9EC; margin-bottom: 26px"></span>
+<h2 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em">Ask Callum</h2>
+<p style="margin: 0; font-size: 15px; line-height: 1.45; color: #646B85">About your people, or who to meet next.</p>
+</div>
+</sc-if>
+<sc-if value="{{hasAnswer}}" hint-placeholder-val="{{false}}">
+<p class="fade-in" style="margin: 8px 0 0 auto; background: #1D2140; color: #FFFFFF; border-radius: 20px 20px 6px 20px; padding: 9px 15px; font-size: 15px; max-width: 78%">{{asked}}</p>
+<div class="{{panelCls}}" style="display: flex; gap: 12px; align-items: flex-start">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; background: #FFB020; margin-top: 2px"></span>
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+<sc-if value="{{isWarm}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; gap: 12px">
+<sc-for list="{{warm}}" as="w" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 5px">
+<span aria-hidden="true" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 2px #6E86F2; {{w.avatar}}"></span>
+<span style="font-size: 12px; color: #646B85">{{w.first}}</span>
+</div>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 16px; line-height: 1.45">{{warmText}}</p>
+<sc-if value="{{warmOpen}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" onClick="{{warmNow}}" style="min-height: 44px; padding: 0 18px; border-radius: 22px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Follow up today</button>
+<button type="button" onClick="{{closeAnswer}}" style="min-height: 44px; padding: 0 16px; border-radius: 22px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Not now</button>
+</div>
+</sc-if>
+</sc-if>
+<sc-if value="{{isFind}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 5px; align-items: center">
+<sc-for list="{{findDots}}" as="fd" hint-placeholder-count="10"><span aria-hidden="true" style="width: 24px; height: 24px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #D5D9E4; filter: grayscale(1) brightness(1.12); opacity: 0.75; {{fd.avatar}}"></span></sc-for>
+<span style="font-size: 14px; font-weight: 600; color: #646B85; padding-left: 4px">and 10 more</span>
+</div>
+<p style="margin: 0; font-size: 16px; line-height: 1.45">{{findText}}</p>
+<sc-if value="{{findOpen}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" onClick="{{addFound}}" style="min-height: 44px; padding: 0 18px; border-radius: 22px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Add all 20</button>
+<button type="button" onClick="{{closeAnswer}}" style="min-height: 44px; padding: 0 16px; border-radius: 22px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Not now</button>
+</div>
+</sc-if>
+</sc-if>
+<sc-if value="{{isPause}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 12px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700">in</span>
+<p style="margin: 0; font-size: 16px; line-height: 1.45">{{pauseText}}</p>
+</div>
+<sc-if value="{{liPaused}}" hint-placeholder-val="{{true}}">
+<button type="button" onClick="{{undoPause}}" style="align-self: flex-start; min-height: 44px; padding: 0 18px; border-radius: 22px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Undo</button>
+</sc-if>
+</sc-if>
+</div>
+</div>
+</sc-if>
+</div>
+<div style="position: absolute; left: 0; right: 0; bottom: 96px; padding: 0 16px; display: flex; flex-direction: column; gap: 10px">
+<div class="scroll" style="display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 4px 16px">
+<sc-for list="{{chips}}" as="ch" hint-placeholder-count="3"><button type="button" onClick="{{ch.pick}}" style="flex: 0 0 auto; min-height: 42px; padding: 0 16px; border-radius: 21px; border: none; background: #FFFFFF; box-shadow: 0 0 0 1.5px #E7E9F0; color: #1D2140; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap">{{ch.text}}</button></sc-for>
+</div>
+<div class="ask-pill" style="display: flex; align-items: center; gap: 10px; background: #FFFFFF; border-radius: 30px; padding: 6px 6px 6px 18px; box-shadow: 0 18px 40px -20px rgba(29,33,64,0.3), 0 0 0 1px rgba(29,33,64,0.07)">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; background: #FFB020"></span>
+<label for="pask" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Ask Callum</label>
+<input id="pask" type="text" value="{{q}}" onChange="{{onType}}" onKeyDown="{{onKey}}" placeholder="Ask Callum" style="flex: 1 1 auto; min-width: 0; height: 46px; border: none; background: transparent; font-size: 16px; color: #1D2140">
+<button type="button" onClick="{{send}}" aria-label="Send" style="flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%; border: none; background: #1D2140; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isYou}}" hint-placeholder-val="{{false}}">
+<div class="{{tabCls}} scroll" style="position: absolute; left: 0; right: 0; top: 66px; bottom: 84px; overflow-y: auto; padding: 6px 16px 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 14px; padding: 6px 4px 10px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 56px; height: 56px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #E7E9F0; background: radial-gradient(circle at 30% 30%, #8C6CFF 0 22%, transparent 58%), radial-gradient(circle at 72% 70%, #FFC145 0 18%, transparent 55%), #4CB5F5"></span>
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em">Gabriel</h1>
+<span style="font-size: 14px; color: #646B85">Sending as gabriel@yourcompany.com</span>
+</div>
+</div>
+<div style="background: #F4F5F9; border-radius: 22px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 13px; color: #646B85">What you offer</span>
+<span style="font-size: 16px; line-height: 1.4; font-weight: 500">You help fintech teams take reconciliation off their ops team's plate.</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px; padding-top: 6px">
+<span style="font-size: 14px; font-weight: 600; padding: 4px 4px 6px">Where Callum reaches people</span>
+<sc-for list="{{channels}}" as="cn" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 4px; border-bottom: 1px solid #E7E9F0">
+<span aria-hidden="true" style="position: relative; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700">{{cn.glyph}}<span style="position: absolute; right: -2px; bottom: -2px; width: 13px; height: 13px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; {{cn.dot}}"></span></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 15px; font-weight: 600">{{cn.name}}</span>
+<span style="font-size: 13px; line-height: 1.35; color: #646B85">{{cn.pace}}</span>
+</span>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding-top: 10px">
+<sc-if value="{{breakIdle}}" hint-placeholder-val="{{true}}">
+<button type="button" onClick="{{toggleBreak}}" aria-expanded="{{breakOpenAttr}}" style="display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 16px; border: none; border-radius: 22px; background: #F4F5F9; color: #1D2140; font-size: 16px; font-weight: 600; text-align: left; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg>Take a break</button>
+<sc-if value="{{breakOpen}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; flex-direction: column; gap: 8px; padding: 0 4px">
+<span style="font-size: 13px; line-height: 1.4; color: #646B85">Nothing automatic goes out. Replies still reach you.</span>
+<div role="group" aria-label="Pause until" style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{breaks}}" as="bk" hint-placeholder-count="3"><button type="button" onClick="{{bk.pick}}" style="min-height: 42px; padding: 0 15px; border-radius: 21px; border: none; background: #FFFFFF; box-shadow: 0 0 0 1.5px #E7E9F0; color: #1D2140; font-size: 14px; font-weight: 500; cursor: pointer">{{bk.label}}</button></sc-for>
+</div>
+</div>
+</sc-if>
+</sc-if>
+<sc-if value="{{onBreak}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 8px 8px 16px; border-radius: 22px; background: #F4F5F9">
+<span style="flex: 1 1 auto; font-size: 15px; line-height: 1.35; font-weight: 500">{{breakLine}}</span>
+<button type="button" onClick="{{resume}}" style="flex: 0 0 auto; min-height: 42px; padding: 0 16px; border-radius: 21px; border: none; background: #1D2140; color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">Resume</button>
+</div>
+</sc-if>
+<a href="V3Settings.dc.html" style="display: flex; align-items: center; justify-content: space-between; min-height: 52px; padding: 0 16px; border-radius: 22px; background: #FFFFFF; box-shadow: 0 0 0 1.5px #E7E9F0; font-size: 15px; font-weight: 600; text-decoration: none">Everything else in Your Callum<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a>
+<a href="V2Leave.dc.html" style="align-self: flex-start; min-height: 44px; display: inline-flex; align-items: center; padding: 0 6px; font-size: 14px; color: #646B85; text-decoration: none">Wrap up and leave</a>
+</div>
+</div>
+</sc-if>
+
+<nav aria-label="Places" style="position: absolute; left: 0; right: 0; bottom: 0; height: 84px; background: #FFFFFF; border-top: 1px solid #E7E9F0; display: flex; justify-content: space-around; align-items: flex-start; padding-top: 8px; box-sizing: border-box; z-index: 6">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+<button type="button" onClick="{{t.pick}}" aria-current="{{t.current}}" style="position: relative; width: 96px; min-height: 52px; border: none; background: transparent; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; {{t.color}}">
+<span aria-hidden="true" style="height: 26px; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{t.isRiver}}" hint-placeholder-val="{{true}}"><svg width="26" height="20" viewBox="0 0 26 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 6c3-2.5 5.5-2.5 8 0s5.5 2.5 8 0 4.5-2 6-1"></path><path d="M2 13c3-2.5 5.5-2.5 8 0s5.5 2.5 8 0 4.5-2 6-1"></path></svg></sc-if>
+<sc-if value="{{t.isAsk}}" hint-placeholder-val="{{false}}"><span style="width: 20px; height: 20px; border-radius: 50%; box-sizing: border-box; {{t.sun}}"></span></sc-if>
+<sc-if value="{{t.isYou}}" hint-placeholder-val="{{false}}"><span style="width: 22px; height: 22px; border-radius: 50%; box-sizing: border-box; border: 2px solid #FFFFFF; {{t.me}} background: radial-gradient(circle at 30% 30%, #8C6CFF 0 22%, transparent 58%), radial-gradient(circle at 72% 70%, #FFC145 0 18%, transparent 55%), #4CB5F5"></span></sc-if>
+</span>
+{{t.label}}
+<sc-if value="{{t.hasCount}}" hint-placeholder-val="{{false}}"><span style="position: absolute; top: -2px; left: 56px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; border: 2px solid #FFFFFF; box-sizing: border-box; background: #FFB020; color: #1D2140; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{t.count}}</span></sc-if>
+</button>
+</sc-for>
+</nav>
+
+<p aria-live="polite" style="position: absolute; left: 16px; right: 16px; bottom: 98px; margin: 0; display: flex; justify-content: center; pointer-events: none; z-index: 30">
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{false}}"><span class="{{toastCls}}" style="display: inline-flex; align-items: center; gap: 10px; background: #1D2140; color: #FFFFFF; border-radius: 24px; min-height: 46px; box-sizing: border-box; padding: 5px 16px 5px 12px; font-size: 14px; font-weight: 500; box-shadow: 0 18px 40px -18px rgba(29,33,64,0.55); pointer-events: auto; {{toastPad}}"><sc-if value="{{toastRing}}" hint-placeholder-val="{{false}}"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true" style="flex: 0 0 auto"><circle cx="11" cy="11" r="8.5" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2.5"></circle><circle class="{{ringCls}}" cx="11" cy="11" r="8.5" fill="none" stroke="#FFB020" stroke-width="2.5" stroke-linecap="round" transform="rotate(-90 11 11)" style="stroke-dasharray: 53.41; stroke-dashoffset: 0"></circle></svg></sc-if><sc-if value="{{toastDot}}" hint-placeholder-val="{{true}}"><span aria-hidden="true" style="flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; {{toastDotStyle}}"></span></sc-if>{{toast}}<sc-if value="{{canUndo}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{undo}}" style="min-height: 36px; padding: 0 14px; border-radius: 18px; border: none; background: rgba(255,255,255,0.14); color: #FFFFFF; font-size: 14px; font-weight: 600; cursor: pointer">Undo</button></sc-if></span></sc-if>
+</p>
+
+<sc-if value="{{hasSheet}}" hint-placeholder-val="{{false}}">
+<div class="veil-in" onClick="{{closeSheet}}" aria-hidden="true" style="position: absolute; inset: 0; background: rgba(29,33,64,0.28); z-index: 20"></div>
+<section class="{{sheetCls}}" role="dialog" aria-modal="true" aria-labelledby="sheet-name" style="position: absolute; left: 0; right: 0; bottom: 0; height: 700px; z-index: 21; background: #FFFFFF; border-radius: 32px 32px 0 0; box-shadow: 0 -20px 50px -30px rgba(29,33,64,0.45); display: flex; flex-direction: column">
+<span aria-hidden="true" style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: #E7E9F0; margin-top: 10px"></span>
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 18px 12px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-sizing: border-box; {{person.look}}"></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span id="sheet-name" style="font-size: 19px; font-weight: 600; letter-spacing: -0.01em">{{person.name}}</span>
+<span style="font-size: 13px; color: #646B85">{{person.role}}</span>
+</span>
+<button type="button" onClick="{{closeSheet}}" aria-label="Close" style="flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: none; background: #F4F5F9; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="#1D2140" stroke-width="2" stroke-linecap="round"></path></svg></button>
+</div>
+<div class="scroll" style="flex: 1 1 auto; overflow-y: auto; padding: 4px 18px 12px; display: flex; flex-direction: column; gap: 12px">
+<sc-for list="{{thread}}" as="b" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 4px; {{b.align}}">
+<sc-if value="{{b.isEvent}}" hint-placeholder-val="{{false}}"><span style="align-self: center; font-size: 12px; color: #646B85; padding: 2px 0">{{b.text}}</span></sc-if>
+<sc-if value="{{b.isMsg}}" hint-placeholder-val="{{true}}">
+<p style="margin: 0; padding: 11px 14px; font-size: 15px; line-height: 1.45; max-width: 86%; box-sizing: border-box; {{b.style}}">{{b.text}}</p>
+<span style="font-size: 11px; color: #646B85; padding: 0 6px">{{b.meta}}</span>
+</sc-if>
+</div>
+</sc-for>
+<sc-if value="{{person.hasNext}}" hint-placeholder-val="{{true}}">
+<p style="margin: 2px 0 0; font-size: 14px; line-height: 1.45; color: #646B85">{{person.next}}</p>
+</sc-if>
+</div>
+<div style="flex: 0 0 auto; padding: 12px 18px 26px; border-top: 1px solid #E7E9F0; display: flex; flex-direction: column; gap: 10px">
+<sc-if value="{{person.isWaiting}}" hint-placeholder-val="{{true}}">
+<label for="sdraft" style="display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #FFB020"></span>Callum's draft, in your voice</label>
+<textarea id="sdraft" class="draft" value="{{draft}}" onChange="{{onDraft}}" style="min-height: 92px; resize: none; border: none; border-radius: 18px; background: #F4F5F9; padding: 12px 14px; font-size: 15px; line-height: 1.45; color: #1D2140; box-sizing: border-box"></textarea>
+<div style="display: flex; align-items: center; gap: 8px">
+<button type="button" onClick="{{sendReply}}" aria-disabled="{{sendDisabled}}" style="flex: 1 1 auto; min-height: 50px; border-radius: 25px; border: none; font-size: 16px; font-weight: 600; {{sendStyle}}">Send</button>
+<button type="button" onClick="{{snooze}}" style="flex: 0 0 auto; min-height: 50px; padding: 0 18px; border-radius: 25px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">{{snoozeLabel}}</button>
+</div>
+<sc-if value="{{sendDisabledNote}}" hint-placeholder-val="{{false}}"><span style="font-size: 13px; color: #646B85">Write a line first. Send waits for words.</span></sc-if>
+</sc-if>
+<sc-if value="{{person.isRiver}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; gap: 8px">
+<button type="button" onClick="{{nudge}}" aria-disabled="{{nudgeDisabled}}" style="flex: 1 1 0; min-height: 50px; border-radius: 25px; border: none; font-size: 15px; font-weight: 600; {{nudgeStyle}}">Nudge now</button>
+<button type="button" onClick="{{hold}}" style="flex: 1 1 0; min-height: 50px; border-radius: 25px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">{{holdLabel}}</button>
+</div>
+<sc-if value="{{hasNudgeWhy}}" hint-placeholder-val="{{false}}"><span style="font-size: 13px; line-height: 1.4; color: #646B85">{{nudgeWhy}}</span></sc-if>
+</sc-if>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{isLock}}" hint-placeholder-val="{{true}}">
+<div class="lock-out" style="position: absolute; inset: 0; z-index: 40; background: linear-gradient(180deg, #EEF0F6 0%, #ECEFFB 52%, #FFF4DD 86%, #FFEBC2 100%); display: flex; flex-direction: column; align-items: center">
+<span style="margin-top: 96px; font-size: 17px; font-weight: 500; color: #646B85">Tuesday 3 November</span>
+<span style="font-size: 84px; font-weight: 600; letter-spacing: -0.05em; line-height: 1.05; color: #1D2140">8:30</span>
+<button type="button" class="note-in" onClick="{{unlock}}" aria-label="Open Callum. 3 people want to talk. Kemi asked about Thursday." style="margin-top: 44px; width: 358px; box-sizing: border-box; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border: none; border-radius: 26px; background: rgba(255,255,255,0.86); box-shadow: 0 24px 50px -28px rgba(29,33,64,0.45); text-align: left; cursor: pointer; color: #1D2140">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 38px; height: 38px; border-radius: 11px; background: #1D2140; display: flex; align-items: center; justify-content: center"><span style="width: 14px; height: 14px; border-radius: 50%; background: #FFB020"></span></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<span style="display: flex; justify-content: space-between; font-size: 13px; color: #646B85"><span style="font-weight: 600; color: #1D2140">Callum</span>now</span>
+<span style="font-size: 15px; font-weight: 600; line-height: 1.3">3 people want to talk</span>
+<span style="font-size: 15px; line-height: 1.35">Kemi asked about Thursday.</span>
+<span aria-hidden="true" style="display: flex; padding-top: 6px">
+<sc-for list="{{lockFaces}}" as="lf" hint-placeholder-count="3"><span style="width: 26px; height: 26px; margin-right: -6px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; box-shadow: 0 0 0 1.5px #FFB020; {{lf.avatar}}"></span></sc-for>
+</span>
+</span>
+</button>
+<span style="margin-top: auto; margin-bottom: 42px; font-size: 14px; color: #646B85">Tap the note to open Callum</span>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      lock: true, tab: 'river', tabKey: 0,
+      sheet: -1, sheetKey: 0,
+      handled: {}, drafts: {}, held: {}, nudged: {}, pending: null, more: false,
+      q: '', answer: '', asked: '', answerKey: 0, warmDone: false, added: false, liPaused: false,
+      breakOpen: false, breakUntil: '',
+      toast: '', toastKey: 0, toastKind: ''
+    };
+    this._to = [];
+    this._tk = 0;
+  }
+
+  componentWillUnmount() { this._to.forEach(function (h) { clearTimeout(h); }); }
+
+  later(fn, ms) { this._to.push(setTimeout(fn, ms)); }
+
+  d() {
+    if (this._d) return this._d;
+    function hash(n) { var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+    var PAL = ['#FF7A59', '#FFC145', '#4CB5F5', '#7BC67E', '#8C6CFF', '#F26CA7', '#2EC4B6', '#FF9F1C'];
+    function marble(n) {
+      var a = PAL[n % 8], b = PAL[(n * 3 + 2) % 8], c = PAL[(n * 5 + 5) % 8];
+      if (b === a) b = PAL[(n + 3) % 8];
+      if (c === a || c === b) c = PAL[(n + 6) % 8];
+      var ax = Math.round(18 + hash(n * 1.7) * 44), ay = Math.round(14 + hash(n * 2.3) * 44);
+      return 'background: radial-gradient(circle at ' + ax + '% ' + ay + '%, ' + b + ' 0 20%, transparent 58%), radial-gradient(circle at ' + (100 - ax) + '% ' + (100 - ay) + '%, ' + c + ' 0 16%, transparent 54%), ' + a + ';';
+    }
+    var Z = [
+      { ids: [33, 34, 35, 36, 37, 38], x0: 4, x1: 24, size: 14, ring: '#D5D9E4', filter: 'grayscale(1) brightness(1.12)', op: 0.62, name: 'stranger' },
+      { ids: [10, 11, 12, 13, 15, 16, 17, 18], x0: 27, x1: 50, size: 17, ring: '#A9B8F5', filter: 'grayscale(0.62)', op: 0.9, name: 'said hello' },
+      { ids: [2, 5, 8], x0: 53, x1: 65, size: 21, ring: '#6E86F2', filter: 'grayscale(0.28)', op: 1, name: 'following up' },
+      { ids: [1, 6], x0: 67, x1: 79, size: 24, ring: '#3F52D9', filter: 'none', op: 1, name: 'talking' }
+    ];
+    var people = {
+      0: { first: 'Kemi', name: 'Kemi Eze', role: 'Founder at Oko Pay', ch: 'Email', avatar: marble(300), stage: 'want', when: '7:40',
+        quote: "This is timely. We're rebuilding our month-end close in December. Could we talk on Thursday?",
+        draft: "Thanks Kemi, glad the timing works. Thursday at 14:00 suits me. I'll send an invite with a short agenda tonight.",
+        snooze: 'Monday', thread: [['callum', "Hi Kemi, congrats on Oko Pay's new merchant launch. Teams your size often find reconciliation lands on ops. I help fintech teams take it off their plate. Worth a short chat?", 'Email, Monday 26 October at 9:12'], ['them', "This is timely. We're rebuilding our month-end close in December. Could we talk on Thursday?", 'Email, today at 7:40']] },
+      3: { first: 'Femi', name: 'Femi Adeyemi', role: 'Founder at Eko Wallet', ch: 'Email', avatar: marble(303), stage: 'want', when: 'Yesterday',
+        quote: 'What does pricing look like for a team of six?',
+        draft: "Hi Femi, pricing depends on your volume, so I'd rather give you an exact number than a guess. Could we take 15 minutes on Friday?",
+        snooze: 'Monday', thread: [['callum', "Hi Femi, Eko Wallet's growth in Ibadan caught my eye. I help fintech teams take reconciliation off their ops team's plate. Open to a short call?", 'Email, Tuesday 27 October at 9:26'], ['callum', 'Hi Femi, one more thought: most teams we talk to win back two days at every month-end. Worth a look?', 'Email, Monday at 9:05'], ['them', 'What does pricing look like for a team of six?', 'Email, yesterday at 18:20']] },
+      4: { first: 'Zainab', name: 'Zainab Musa', role: 'CEO at Lagoon Pay', ch: 'Email', avatar: marble(304), stage: 'want', when: 'Yesterday',
+        quote: 'Not right now. Try me again in the new year.',
+        draft: "Totally fair, Zainab. I'll check back in early January. Good luck with the year-end rush.",
+        snooze: '6 January', thread: [['callum', "Hi Zainab, I saw Lagoon Pay is hiring in ops. I help fintech teams take reconciliation off their ops team's plate, which often saves a hire. Worth 15 minutes?", 'Email, Monday 26 October at 9:41'], ['them', 'Not right now. Try me again in the new year.', 'Email, yesterday at 16:05']] },
+      1: { first: 'Tunde', name: 'Tunde Bello', role: 'COO at Ireti Labs', ch: 'Email', avatar: marble(301), stage: 'talking', when: 'Friday', sub: 'Call on Friday at 11:00',
+        thread: [['callum', 'Hi Tunde, I help fintech teams take reconciliation off their ops team’s plate. Worth a short call?', 'Email, Monday 26 October at 9:20'], ['them', 'Sounds useful. Could we talk next Friday?', 'Email, Thursday 29 October at 13:02'], ['you', 'Great, Friday 6 November at 11:00 it is. The invite is on its way.', 'Email, Thursday 29 October at 13:30']],
+        next: 'Callum stays quiet with Tunde. You talk from here.' },
+      6: { first: 'Bisi', name: 'Bisi Alade', role: 'Head of finance at Ikoyi Pay', ch: 'Email', avatar: marble(306), stage: 'talking', when: 'Monday', sub: 'You answered on Monday',
+        thread: [['callum', 'Hi Bisi, I help fintech teams take reconciliation off their ops team’s plate. Is month-end on your mind yet?', 'Email, Tuesday 27 October at 9:15'], ['them', 'A little. What does setup look like?', 'Email, Monday at 8:50'], ['you', 'About a week, and we do the heavy lifting. Happy to show you.', 'Email, Monday at 10:02']],
+        next: 'Callum stays quiet with Bisi. You talk from here.' },
+      2: { first: 'Ada', name: 'Ada Nwosu', role: 'Founder at Kudi Rails', ch: 'LinkedIn', avatar: marble(302), stage: 'following', when: '7:10', sub: 'Accepted. Thank-you at 11:00', tag: 'LinkedIn',
+        thread: [['callum', 'Hi Ada, I help fintech teams take reconciliation off their ops team’s plate. Would be glad to connect.', 'LinkedIn invite, Wednesday 28 October at 10:04'], ['event', 'Ada accepted today at 7:10']],
+        next: 'A short thank-you goes out today at 11:00, then one follow-up on Monday at 11:00.' },
+      5: { first: 'Chidi', name: 'Chidi Okeke', role: 'CTO at Paystack Labs', ch: 'LinkedIn', avatar: marble(305), stage: 'following', when: '11:00', sub: 'Follow-up today at 11:00', tag: 'LinkedIn',
+        thread: [['callum', 'Hi Chidi, I help fintech teams take reconciliation off their ops team’s plate. Would be glad to connect.', 'LinkedIn invite, Monday 26 October at 9:41'], ['event', 'Chidi accepted on Thursday 29 October'], ['callum', 'Thanks for connecting, Chidi. If month-end ever eats your ops team’s week, I’d be glad to help.', 'LinkedIn, Thursday 29 October at 11:00']],
+        next: 'One follow-up goes out today at 11:00 on LinkedIn.' },
+      8: { first: 'Ngozi', name: 'Ngozi Ibe', role: 'Controller at Surulere Labs', ch: 'Email', avatar: marble(308), stage: 'following', when: 'Thursday', sub: 'Last follow-up on Thursday at 9:00',
+        thread: [['callum', 'Hi Ngozi, I help fintech teams take reconciliation off their ops team’s plate. Worth a short chat?', 'Email, Monday 26 October at 9:50'], ['callum', 'Hi Ngozi, a short follow-up in case this got buried. Happy to send a two-minute video instead.', 'Email, Friday 30 October at 9:22']],
+        next: 'The last follow-up goes out on Thursday at 9:00. If Ngozi stays quiet, Ngozi rests for 90 days.' }
+    };
+    var MORE = [[7, 'Emeka Obi'], [9, 'Seun Ojo'], [14, 'Dayo Ogunleye'], [19, 'Sade Afolabi'], [24, 'Musa Ajayi'], [21, 'Nneka Okafor'], [34, 'Temi Coker']];
+    MORE.forEach(function (m, i) {
+      var nm = m[1].split(' ');
+      people[m[0]] = { first: nm[0], name: m[1], role: 'Following up', ch: i % 3 === 2 ? 'X' : 'Email', avatar: marble(300 + m[0]), stage: 'following', when: i % 2 ? 'Friday' : 'Thursday', sub: i % 2 ? 'Follow-up on Friday at 9:00' : 'Last follow-up on Thursday at 9:00', more: true,
+        thread: [['callum', 'Hi ' + nm[0] + ', I help fintech teams take reconciliation off their ops team’s plate. Worth a short chat?', (i % 3 === 2 ? 'X' : 'Email') + ', Tuesday 27 October at 9:30']],
+        next: i % 2 ? 'One follow-up goes out on Friday at 9:00.' : 'The last follow-up goes out on Thursday at 9:00.' };
+    });
+    var river = [];
+    Z.forEach(function (z, zi) {
+      var cols = Math.max(1, Math.ceil(z.ids.length / 2)), cw = (z.x1 - z.x0) / cols;
+      z.ids.forEach(function (id, k) {
+        var col = Math.floor(k / 2), row = z.ids.length === 1 ? 0.5 : k % 2;
+        river.push({ id: id, zi: zi, x: z.x0 + (col + 0.5) * cw + (hash(id * 3.1 + 1) - 0.5) * cw * 0.3, y: 56 + row * 26 + (col % 2) * 6 + (hash(id * 5.7) - 0.5) * 6, z: z, avatar: marble(300 + id) });
+      });
+    });
+    this._d = {
+      Z: Z, river: river, people: people,
+      WANT: [0, 3, 4], TALKING: [1, 6], FOLLOW: [2, 5, 8], MORE: MORE.map(function (m) { return m[0]; }),
+      DOCK: { 0: { x: 85, y: 50 }, 3: { x: 93.5, y: 72 }, 4: { x: 87.5, y: 92 } },
+      TALK: [{ x: 74, y: 98 }, { x: 70, y: 52 }, { x: 78, y: 54 }],
+      WARM: [2, 5, 21, 34],
+      FIND: [10, 11, 12, 13, 15, 16, 17, 18, 20, 22]
+    };
+    return this._d;
+  }
+
+  showToast(text, kind, ms) {
+    var self = this;
+    this._tk += 1;
+    var key = this._tk;
+    this.setState({ toast: text, toastKey: key, toastKind: kind || 'info' });
+    if (ms) this.later(function () { if (self.state.toastKey === key) self.setState({ toast: '' }); }, ms);
+    return key;
+  }
+
+  goTab(t) {
+    this.setState(function (s) { return { tab: t, tabKey: s.tabKey + 1, sheet: -1, lock: false }; });
+  }
+
+  openSheet(id) { this.setState(function (s) { return { sheet: id, sheetKey: s.sheetKey + 1 }; }); }
+
+  draftFor(id) { var s = this.state, p = this.d().people[id]; return s.drafts[id] !== undefined ? s.drafts[id] : (p.draft || ''); }
+
+  commit() {
+    var pd = this.state.pending;
+    if (!pd) return;
+    var p = this.d().people[pd.id];
+    this.setState({ pending: null });
+    this.showToast(pd.kind === 'reply' ? 'Sent to ' + p.first : p.first + ' comes back on ' + p.snooze + ' at 9:00', 'good', 2800);
+  }
+
+  act(kind) {
+    var self = this, s = this.state, id = s.sheet;
+    if (id < 0) return;
+    if (kind === 'reply' && !this.draftFor(id).trim()) return;
+    this.commit();
+    var p = this.d().people[id];
+    this.setState(function (s2) { var h = Object.assign({}, s2.handled); h[id] = kind; return { handled: h, sheet: -1 }; });
+    var key = this.showToast(kind === 'reply' ? 'Sending your reply to ' + p.first : p.first + ' rests until ' + p.snooze, 'pending', 0);
+    this.setState({ pending: { id: id, kind: kind, key: key } });
+    this.later(function () { var cur = self.state.pending; if (cur && cur.key === key) self.commit(); }, 10000);
+  }
+
+  undo() {
+    var pd = this.state.pending;
+    if (!pd) return;
+    var p = this.d().people[pd.id];
+    this.setState(function (s) { var h = Object.assign({}, s.handled); delete h[pd.id]; return { handled: h, pending: null }; });
+    this.showToast(pd.kind === 'reply' ? 'Not sent. Your reply to ' + p.first + ' is back.' : p.first + ' is back with you.', 'info', 2600);
+  }
+
+  ask(text) {
+    var t = (text || '').trim();
+    if (!t) return;
+    var low = t.toLowerCase();
+    var type = /pause|stop|break/.test(low) ? 'pause' : (/find|more|meet|like/.test(low) ? 'find' : 'warm');
+    var u = { asked: t, answer: type, answerKey: this.state.answerKey + 1, q: '' };
+    if (type === 'pause') { u.liPaused = true; }
+    this.setState(u);
+  }
+
+  renderVals() {
+    var self = this, D = this.d(), s = this.state, P = D.people, pd = s.pending;
+    var onBreak = !!s.breakUntil;
+    var wantLeft = D.WANT.filter(function (id) { return !s.handled[id]; });
+
+    var faces = D.river.map(function (f) {
+      var hz = f.z.size / 2;
+      var filter = onBreak ? 'grayscale(1) brightness(1.05)' : f.z.filter;
+      var op = onBreak ? 0.5 : (s.held[f.id] ? 0.45 : f.z.op);
+      return { isSent: false, label: (P[f.id] ? P[f.id].name : 'Person') + ', ' + f.z.name + (s.held[f.id] ? ', on hold' : ''), style: 'left: ' + f.x.toFixed(2) + '%; top: ' + f.y.toFixed(1) + 'px; width: ' + f.z.size + 'px; height: ' + f.z.size + 'px; margin: -' + hz + 'px 0 0 -' + hz + 'px; ' + f.avatar + ' filter: ' + filter + '; opacity: ' + op + '; box-shadow: 0 0 0 1.5px ' + (onBreak ? '#D5D9E4' : f.z.ring) + ';' };
+    });
+    var talkIdx = 0;
+    D.WANT.forEach(function (id) {
+      var p = P[id], h = s.handled[id], x, y, size, look, op = 1;
+      if (!h) { var dp = D.DOCK[id]; x = dp.x; y = dp.y; size = 30; look = 'box-shadow: 0 0 0 3px #FFB020, 0 10px 22px -10px rgba(255,176,32,0.8);'; }
+      else if (h === 'reply') { var tp = D.TALK[talkIdx % D.TALK.length]; talkIdx += 1; x = tp.x; y = tp.y; size = 24; look = 'box-shadow: 0 0 0 2px #3F52D9;'; }
+      else { var dq = D.DOCK[id]; x = dq.x; y = dq.y; size = 30; look = 'box-shadow: none; transform: scale(0.4);'; op = 0; }
+      var hz = size / 2;
+      faces.push({ isSent: h === 'reply' && !(pd && pd.id === id), label: p.name + (h === 'reply' ? ', talking' : (h ? ', resting' : ', wants to talk')), style: 'left: ' + x + '%; top: ' + y + 'px; width: ' + size + 'px; height: ' + size + 'px; margin: -' + hz + 'px 0 0 -' + hz + 'px; ' + p.avatar + ' opacity: ' + op + '; ' + look });
+    });
+
+    var ringFor = { want: '0 0 0 3px #FFB020', talking: '0 0 0 2px #3F52D9', following: '0 0 0 2px #6E86F2' };
+    function row(id, overrides) {
+      var p = P[id], o = overrides || {};
+      var stage = o.stage || p.stage;
+      var held = !!s.held[id];
+      var tag = held ? 'On hold' : (s.nudged[id] ? 'Nudged' : '');
+      return {
+        name: p.first + ' ' + p.name.split(' ')[1], sub: o.sub || p.sub || p.quote || '', when: o.when || p.when || '',
+        look: p.avatar + ' box-shadow: ' + ringFor[stage] + ';' + (held || (onBreak && stage === 'following') ? ' filter: grayscale(1); opacity: 0.6;' : ''),
+        hasTag: !!tag, tag: tag,
+        open: function () { self.openSheet(id); }
+      };
+    }
+    var answered = D.WANT.filter(function (id) { return s.handled[id] === 'reply'; });
+    var groups = [];
+    if (wantLeft.length) groups.push({ name: 'Want to talk', count: String(wantLeft.length), dot: 'background: #FFB020;', rows: wantLeft.map(function (id) { return row(id, { sub: P[id].quote }); }), hasMore: false, more: function () {}, moreLabel: '', peek: [], hasNote: false, note: '' });
+    var talkRows = answered.map(function (id) { return row(id, { stage: 'talking', sub: pd && pd.id === id ? 'Sending your reply' : 'You answered just now', when: 'Now' }); }).concat(D.TALKING.map(function (id) { return row(id); }));
+    groups.push({ name: 'Talking', count: String(talkRows.length), dot: 'background: #FFFFFF; border: 2.5px solid #3F52D9;', rows: talkRows, hasMore: false, more: function () {}, moreLabel: '', peek: [], hasNote: false, note: '' });
+    var followIds = D.FOLLOW.concat(s.more ? D.MORE : []);
+    groups.push({
+      name: 'Following up', count: String(D.FOLLOW.length + D.MORE.length), dot: 'background: #FFFFFF; border: 2.5px solid #6E86F2;',
+      rows: followIds.map(function (id) { return row(id); }),
+      hasMore: true, more: function () { self.setState({ more: !self.state.more }); },
+      moreLabel: s.more ? 'Show fewer' : D.MORE.length + ' more',
+      peek: D.MORE.slice(0, 3).map(function (id) { return { avatar: P[id].avatar }; }), hasNote: false, note: ''
+    });
+    groups.push({ name: 'Said hello', count: '14', dot: 'background: #FFFFFF; border: 2.5px solid #A9B8F5;', rows: [], hasMore: false, more: function () {}, moreLabel: '', peek: [], hasNote: true, note: onBreak ? 'Their follow-ups wait while you are on a break.' : 'Their first follow-ups go out from Friday at 9:00.' });
+    groups.push({ name: 'Strangers', count: String(10 + (s.added ? 20 : 0)), dot: 'background: #FFFFFF; border: 2.5px solid #D5D9E4;', rows: [], hasMore: false, more: function () {}, moreLabel: '', peek: [], hasNote: true, note: onBreak ? 'Their first hellos wait until ' + s.breakUntil + '.' : (s.added ? '30 people wait for a first hello. The first 20 go out today from 9:00.' : '10 people get their first hello today from 9:00.') });
+
+    var items = [];
+    groups.forEach(function (g, gi) {
+      var base = { isHead: false, isRow: false, isMore: false, isNote: false, gap: '', dot: '', name: '', count: '', look: '', sub: '', when: '', hasTag: false, tag: '', expanded: 'false', p1: '', p2: '', p3: '', open: function () {} };
+      items.push(Object.assign({}, base, { isHead: true, gap: gi ? 'margin-top: 12px;' : '', dot: g.dot, name: g.name, count: g.count }));
+      g.rows.forEach(function (r) { items.push(Object.assign({}, base, r, { isRow: true })); });
+      if (g.hasMore) items.push(Object.assign({}, base, { isMore: true, name: g.moreLabel, open: g.more, expanded: s.more ? 'true' : 'false', p1: g.peek[0].avatar, p2: g.peek[1].avatar, p3: g.peek[2].avatar }));
+      if (g.hasNote) items.push(Object.assign({}, base, { isNote: true, sub: g.note }));
+    });
+
+    var pills = [
+      { dot: 'width: 8px; height: 8px; background: #FFB020;', text: wantLeft.length ? wantLeft.length + ' want to talk' : 'All caught up' },
+      { dot: 'width: 8px; height: 8px; border: 2.5px solid #A9B8F5;', text: '12 hellos sent' },
+      { dot: 'width: 18px; height: 18px; filter: grayscale(0.28); ' + P[2].avatar, text: 'Ada accepted' }
+    ];
+
+    var person = { name: '', role: '', look: '', isWaiting: false, isRiver: false, hasNext: false, next: '' };
+    var thread = [];
+    var sp = s.sheet >= 0 ? P[s.sheet] : null;
+    if (sp) {
+      var waiting = sp.stage === 'want' && !s.handled[s.sheet];
+      person = {
+        name: sp.name, role: sp.role + ', ' + sp.ch,
+        look: sp.avatar + ' box-shadow: ' + (waiting ? '0 0 0 3.5px #FFB020' : ringFor[sp.stage === 'want' ? 'talking' : sp.stage]) + ';',
+        isWaiting: waiting, isRiver: sp.stage === 'following',
+        hasNext: !!sp.next && sp.stage !== 'want', next: s.held[s.sheet] ? 'On hold. Nothing goes to ' + sp.first + ' until you resume.' : (sp.next || '')
+      };
+      var ST = {
+        callum: 'background: #FFFFFF; box-shadow: inset 0 0 0 1.5px #E7E9F0; border-radius: 20px 20px 20px 6px;',
+        them: 'background: #FFF3D6; border-radius: 20px 20px 20px 6px; font-weight: 500;',
+        you: 'background: #FFFFFF; box-shadow: inset 0 0 0 1.5px #1D2140; border-radius: 20px 20px 6px 20px;'
+      };
+      thread = sp.thread.map(function (m) {
+        var isEvent = m[0] === 'event';
+        return { isEvent: isEvent, isMsg: !isEvent, text: m[1], meta: m[0] === 'callum' ? 'Callum, ' + (m[2] || '') : (m[2] || ''), style: ST[m[0]] || '', align: m[0] === 'you' ? 'align-items: flex-end;' : 'align-items: flex-start;' };
+      });
+    }
+    var draft = s.sheet >= 0 ? this.draftFor(s.sheet) : '';
+    var canSend = !!draft.trim();
+    var nudgeOk = sp && !s.held[s.sheet] && !s.nudged[s.sheet] && !onBreak;
+    var nudgeWhy = '';
+    if (sp && sp.stage === 'following') {
+      if (onBreak) nudgeWhy = 'Callum is on a break until ' + s.breakUntil + '. Resume to nudge.';
+      else if (s.held[s.sheet]) nudgeWhy = 'Resume ' + sp.first + ' first to nudge.';
+      else if (s.nudged[s.sheet]) nudgeWhy = sp.first + "'s next message goes out at 9:00, when sending hours start.";
+    }
+
+    var warm = D.WARM.map(function (id) { return { first: P[id].first, avatar: P[id].avatar }; });
+    var findDots = D.FIND.map(function (id) { var r = D.river.filter(function (f) { return f.id === id; })[0]; return { avatar: r ? r.avatar : P[2].avatar }; });
+    var chipTexts = ["Who's warming up?", 'Find 20 more like Kemi', 'Pause LinkedIn until Monday'];
+    var chips = chipTexts.map(function (t) { return { text: t, pick: function () { self.ask(t); } }; });
+
+    var CH = [
+      { glyph: '@', name: 'Email', pace: '20 a day this week, 120 by week 3', on: !onBreak },
+      { glyph: 'in', name: 'LinkedIn', pace: s.liPaused ? 'Paused until Monday at 9:00' : '15 invites a day. Runs on your computer while Callum is open.', on: !onBreak && !s.liPaused },
+      { glyph: 'X', name: 'X', pace: '20 messages a day', on: !onBreak }
+    ];
+    var channels = CH.map(function (c) { return { glyph: c.glyph, name: c.name, pace: onBreak ? 'Waits until ' + s.breakUntil : c.pace, dot: c.on ? 'background: #22B07D;' : 'background: #C5CAD6;' }; });
+    var BR = [['Until Monday', 'Monday 9 November'], ['Two weeks', 'Tuesday 17 November'], ['Until 6 January', '6 January']];
+    var breaks = BR.map(function (b) { return { label: b[0], pick: function () { self.setState({ breakUntil: b[1], breakOpen: false }); self.showToast('Paused until ' + b[1], 'info', 2800); } }; });
+
+    var TABS = [['river', 'River'], ['ask', 'Ask'], ['you', 'You']];
+    var tabs = TABS.map(function (t) {
+      var on = s.tab === t[0];
+      return {
+        label: t[1], current: on ? 'page' : 'false', color: on ? 'color: #1D2140;' : 'color: #646B85;',
+        isRiver: t[0] === 'river', isAsk: t[0] === 'ask', isYou: t[0] === 'you',
+        sun: on ? 'background: #FFB020; box-shadow: 0 0 0 4px #FFF3D6;' : 'border: 2.2px solid #646B85;',
+        me: on ? 'box-shadow: 0 0 0 2px #1D2140;' : 'box-shadow: 0 0 0 1.5px #C5CAD6; filter: grayscale(0.4);',
+        hasCount: t[0] === 'river' && wantLeft.length > 0 && !on, count: String(wantLeft.length),
+        pick: function () { self.goTab(t[0]); }
+      };
+    });
+
+    var statusText = 'Running', statusDot = 'background: #22B07D;';
+    if (s.liPaused) statusText = 'Running, LinkedIn paused';
+    if (onBreak) { statusText = 'Paused'; statusDot = 'background: #C5CAD6;'; }
+
+    var tk = s.toastKind;
+    var findText = s.added ? '20 founders like Kemi joined the river. Their first hellos go out today from 9:00.' : 'I found 20 more founders like Kemi, at seed-stage fintechs in Lagos and Accra. They join the river as strangers and get a first hello from 9:00.';
+    var warmText = s.warmDone ? 'Done. Their follow-ups go out today from 9:00, one by one.' : 'These four accepted quickly or looked at your profile this week. Want their follow-ups to go out today?';
+    var pauseText = s.liPaused ? 'LinkedIn is paused until Monday at 9:00. Email and X keep going, and nobody gets a double message when it resumes.' : 'LinkedIn is back on. Invites go out from 9:00.';
+
+    return {
+      rootCls: onBreak ? 'is-paused' : '',
+      isLock: s.lock, unlock: function () { self.setState({ lock: false, tab: 'river', tabKey: s.tabKey + 1 }); },
+      lockFaces: D.WANT.map(function (id) { return { avatar: P[id].avatar }; }),
+      statusText: statusText, statusDot: statusDot,
+      goYou: function () { self.goTab('you'); },
+      tabCls: s.tabKey % 2 ? 'tab-a' : 'tab-b',
+      isRiver: s.tab === 'river', isAsk: s.tab === 'ask', isYou: s.tab === 'you',
+      hello: 'Good morning', pills: pills, faces: faces, groups: groups, items: items,
+      hasPauseNote: onBreak, pauseNote: 'Callum is paused until ' + s.breakUntil + '. Replies still reach you, and nothing automatic goes out.',
+
+      hasSheet: s.sheet >= 0, sheetCls: s.sheetKey % 2 ? 'sheet-a' : 'sheet-b',
+      closeSheet: function () { self.setState({ sheet: -1 }); },
+      person: person, thread: thread, draft: draft,
+      onDraft: function (e) { var id = self.state.sheet; self.setState(function (s2) { var dd = Object.assign({}, s2.drafts); dd[id] = e.target.value; return { drafts: dd }; }); },
+      sendReply: function () { self.act('reply'); },
+      sendDisabled: canSend ? 'false' : 'true', sendDisabledNote: !canSend,
+      sendStyle: canSend ? 'background: #1D2140; color: #FFFFFF; cursor: pointer;' : 'background: #E7E9F0; color: #646B85; cursor: not-allowed;',
+      snooze: function () { self.act('snooze'); }, snoozeLabel: sp && sp.snooze ? 'Snooze until ' + sp.snooze : 'Snooze',
+      nudge: function () {
+        var id = self.state.sheet; if (id < 0 || self.state.held[id] || self.state.nudged[id] || self.state.breakUntil) return;
+        self.setState(function (s2) { var n = Object.assign({}, s2.nudged); n[id] = true; return { nudged: n }; });
+        self.showToast(P[id].first + "'s next message goes out at 9:00", 'good', 2800);
+      },
+      nudgeDisabled: nudgeOk ? 'false' : 'true',
+      nudgeStyle: nudgeOk ? 'background: #1D2140; color: #FFFFFF; cursor: pointer;' : 'background: #E7E9F0; color: #646B85; cursor: not-allowed;',
+      hasNudgeWhy: !!nudgeWhy, nudgeWhy: nudgeWhy,
+      hold: function () {
+        var id = self.state.sheet; if (id < 0) return;
+        var on = !self.state.held[id];
+        self.setState(function (s2) { var hh = Object.assign({}, s2.held); if (on) hh[id] = true; else delete hh[id]; return { held: hh }; });
+        self.showToast(on ? 'Nothing goes to ' + P[id].first + ' until you resume' : P[id].first + ' is back in the river', 'info', 2800);
+      },
+      holdLabel: s.sheet >= 0 && s.held[s.sheet] ? 'Resume' : 'Hold',
+
+      askEmpty: !s.answer, hasAnswer: !!s.answer, asked: s.asked, panelCls: s.answerKey % 2 ? 'panel-a' : 'panel-b',
+      isWarm: s.answer === 'warm', isFind: s.answer === 'find', isPause: s.answer === 'pause',
+      warm: warm, warmText: warmText, warmOpen: !s.warmDone,
+      warmNow: function () { self.setState({ warmDone: true }); self.showToast('4 follow-ups go out today from 9:00', 'good', 2800); },
+      findDots: findDots, findText: findText, findOpen: !s.added,
+      addFound: function () { if (self.state.added) return; self.setState({ added: true }); self.showToast('20 people joined the river', 'good', 2800); },
+      pauseText: pauseText, liPaused: s.liPaused,
+      undoPause: function () { self.setState({ liPaused: false }); self.showToast('LinkedIn is back on', 'good', 2600); },
+      closeAnswer: function () { self.setState({ answer: '' }); },
+      chips: chips, q: s.q,
+      onType: function (e) { self.setState({ q: e.target.value }); },
+      onKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.ask(self.state.q); } },
+      send: function () { self.ask(self.state.q); },
+
+      channels: channels,
+      breakIdle: !onBreak, onBreak: onBreak, breakOpen: s.breakOpen, breakOpenAttr: s.breakOpen ? 'true' : 'false',
+      toggleBreak: function () { self.setState({ breakOpen: !self.state.breakOpen }); },
+      breaks: breaks, breakLine: 'Paused until ' + s.breakUntil,
+      resume: function () { self.setState({ breakUntil: '' }); self.showToast('Callum is running again', 'good', 2600); },
+
+      tabs: tabs,
+      hasToast: !!s.toast, toast: s.toast, toastCls: s.toastKey % 2 ? 'toast-a' : 'toast-b',
+      toastRing: tk === 'pending', ringCls: s.toastKey % 2 ? 'ring-a' : 'ring-b',
+      toastDot: tk !== 'pending', toastDotStyle: tk === 'good' ? 'background: #22B07D;' : 'background: #C5CAD6;',
+      canUndo: tk === 'pending' && !!pd, undo: function () { self.undo(); },
+      toastPad: tk === 'pending' ? 'padding-right: 6px;' : ''
+    };
+  }
+}
+</script>
+</body>
+</html>

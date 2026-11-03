@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Callum v3, connect a channel</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1D2140}a:hover{color:#3F52D9}
+button,input{font-family:inherit}
+button:focus-visible,a:focus-visible{outline:2px solid #3F52D9;outline-offset:3px}
+input:focus{outline:none}
+input::placeholder{color:#8A90A6}
+.field{transition:box-shadow .2s ease,background-color .2s ease}
+.field:focus{box-shadow:0 0 0 2px #3F52D9!important;background:#FFFFFF!important}
+.tab-disc{transition:background-color .35s ease,color .35s ease,transform .25s ease,box-shadow .35s ease}
+.tab:hover .tab-disc{transform:translateY(-3px)}
+.chip{transition:background-color .2s ease,color .2s ease,box-shadow .2s ease}
+.step-a{animation:step-a .45s cubic-bezier(.2,.8,.2,1) backwards}
+.step-b{animation:step-b .45s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes step-a{from{opacity:0;transform:translateY(12px)}}
+@keyframes step-b{from{opacity:0;transform:translateY(12px)}}
+.fade-in{animation:fade-in .45s ease backwards}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}}
+.pop-in{animation:pop-in .45s cubic-bezier(.2,.8,.2,1.4) backwards}
+@keyframes pop-in{from{opacity:0;transform:scale(.3)}}
+.shake{animation:shake .4s ease}
+@keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.spin{animation:spin .9s linear infinite;transform-origin:50% 50%}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ring-a,.ring-b{position:absolute;inset:-7px;border-radius:50%;border:2.5px solid #3F52D9;pointer-events:none;opacity:0}
+.ring-a{animation:ring-a .9s ease-out}
+.ring-b{animation:ring-b .9s ease-out}
+@keyframes ring-a{0%{transform:scale(.92);opacity:1}100%{transform:scale(1.3);opacity:0}}
+@keyframes ring-b{0%{transform:scale(.92);opacity:1}100%{transform:scale(1.3);opacity:0}}
+.current{stroke-dasharray:1 22;animation:flow 2.4s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-23}}
+@media (max-width: 760px){
+.con-root{padding:18px 16px 24px!important}
+.big-title{font-size:32px!important}
+.tabs{gap:14px!important}
+.bed{display:none!important}
+}
+@media (prefers-reduced-motion: reduce){
+.field,.tab-disc,.chip{transition:none!important}
+.step-a,.step-b,.fade-in,.pop-in,.shake{animation:none!important}
+.spin,.current{animation:none}
+.ring-a,.ring-b{display:none}
+}
+</style>
+</helmet>
+<div class="con-root" style="position: relative; min-height: 900px; background: #FFFFFF; color: #1D2140; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums; padding: 22px 32px 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden">
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px">
+<span style="display: inline-flex; align-items: center; gap: 9px; font-size: 22px; font-weight: 700; letter-spacing: -0.03em"><span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 50%; background: #FFB020"></span>callum</span>
+<a href="V3Settings.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px 0 14px; border-radius: 22px; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; text-decoration: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Your Callum</a>
+</header>
+
+<main style="flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; padding: 18px 0 16px">
+<div style="width: 100%; max-width: 700px; display: flex; flex-direction: column; align-items: center; gap: 22px">
+
+<h1 class="big-title" style="margin: 0; font-size: 42px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.08; text-align: center">Connect a channel</h1>
+
+<div class="tabs" role="tablist" aria-label="Channels" style="display: flex; justify-content: center; gap: 30px">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+<button type="button" class="tab" role="tab" aria-selected="{{t.sel}}" onClick="{{t.pick}}" style="border: none; background: transparent; padding: 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; color: #1D2140">
+<span style="position: relative; width: 68px; height: 68px">
+<span class="tab-disc" style="position: absolute; inset: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; {{t.disc}}">
+<sc-if value="{{t.isEmail}}" hint-placeholder-val="{{true}}"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M4 7.5l8 6 8-6"></path></svg></sc-if>
+<sc-if value="{{t.isLi}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="font-size: 24px; font-weight: 700; letter-spacing: -0.04em; line-height: 1">in</span></sc-if>
+<sc-if value="{{t.isX}}" hint-placeholder-val="{{false}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg></sc-if>
+</span>
+<sc-if value="{{t.done}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" class="pop-in" style="position: absolute; right: -3px; bottom: -3px; width: 24px; height: 24px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 0 0 1.5px #E7E9F0, 0 6px 12px -6px rgba(29,33,64,0.45); display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22B07D" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span></sc-if>
+</span>
+<span style="font-size: 15px; {{t.labelStyle}}">{{t.name}}</span>
+</button>
+</sc-for>
+</div>
+
+<section class="{{stepCls}}" role="tabpanel" aria-label="{{panelLabel}}" style="width: 100%; display: flex; flex-direction: column; gap: 16px">
+
+<sc-if value="{{isEmail}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 16px">
+
+<sc-if value="{{emailConnected}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 18px 0">
+<span style="position: relative; width: 84px; height: 84px; border-radius: 50%; background: #1D2140; display: flex; align-items: center; justify-content: center"><svg class="pop-in" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span aria-hidden="true" class="{{ringCls}}"></span></span>
+<p style="margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -0.015em">Sending from {{address}}</p>
+<p style="margin: 0; font-size: 16px; color: #646B85">20 a day this week, 120 by week 3. Replies land in your own inbox too.</p>
+<button type="button" onClick="{{redoEmail}}" style="margin-top: 4px; min-height: 44px; padding: 0 18px; border-radius: 22px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Use another address</button>
+</div>
+</sc-if>
+
+<sc-if value="{{emailForm}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div role="group" aria-label="Email provider" style="align-self: center; display: flex; gap: 4px; padding: 5px; background: #F4F5F9; border-radius: 26px">
+<sc-for list="{{providers}}" as="p" hint-placeholder-count="3"><button type="button" class="chip" onClick="{{p.pick}}" aria-pressed="{{p.on}}" style="min-height: 42px; padding: 0 18px; border-radius: 21px; border: none; font-size: 15px; font-weight: 600; cursor: pointer; {{p.style}}">{{p.name}}</button></sc-for>
+</div>
+
+<sc-if value="{{hasSteps}}" hint-placeholder-val="{{true}}">
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{steps}}" as="st" hint-placeholder-count="3">
+<li style="display: flex; align-items: center; gap: 12px; min-height: 30px"><span aria-hidden="true" style="flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; {{st.disc}}">{{st.n}}</span><span style="font-size: 16px; {{st.textStyle}}">{{st.text}}</span>
+<sc-if value="{{st.hasLink}}" hint-placeholder-val="{{false}}"><a href="{{st.href}}" target="_blank" rel="noopener" style="display: inline-flex; align-items: center; gap: 5px; font-size: 15px; font-weight: 600; text-decoration: none; color: #3F52D9">{{st.link}}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3F52D9" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 16L16 8M9 8h7v7"></path></svg></a></sc-if>
+</li>
+</sc-for>
+</ol>
+</sc-if>
+
+<sc-if value="{{isOther}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; gap: 10px">
+<label style="flex: 1 1 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: #646B85">Sending server<input class="field" type="text" value="{{smtp}}" onChange="{{onSmtp}}" style="height: 50px; border: none; border-radius: 16px; background: #F4F5F9; padding: 0 16px; font-size: 16px; color: #1D2140"></label>
+<label style="flex: 1 1 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: #646B85">Inbox server<input class="field" type="text" value="{{imap}}" onChange="{{onImap}}" style="height: 50px; border: none; border-radius: 16px; background: #F4F5F9; padding: 0 16px; font-size: 16px; color: #1D2140"></label>
+</div>
+<span style="font-size: 14px; color: #646B85; margin-top: -6px">Whoever runs your email can tell you these.</span>
+</sc-if>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<label for="addr" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Email address</label>
+<input id="addr" class="field" type="email" value="{{address}}" onChange="{{onAddress}}" style="height: 54px; border: none; border-radius: 18px; background: #F4F5F9; padding: 0 18px; font-size: 18px; font-weight: 500; color: #1D2140">
+<sc-if value="{{personalWarn}}" hint-placeholder-val="{{false}}"><span class="fade-in" style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #1D2140; padding-left: 4px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16.5v.01"></path></svg>This looks like a personal address. Cold email works best from your company address.</span></sc-if>
+<div class="{{pwCls}}" style="display: flex; gap: 10px">
+<label for="pw" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{pwLabel}}</label>
+<input id="pw" class="field" type="text" value="{{pw}}" onChange="{{onPw}}" onKeyDown="{{onPwKey}}" placeholder="{{pwPlaceholder}}" autocomplete="off" spellcheck="false" style="flex: 1 1 auto; min-width: 0; height: 54px; border: none; border-radius: 18px; background: #F4F5F9; padding: 0 18px; font-size: 18px; letter-spacing: 0.04em; color: #1D2140; {{pwStyle}}">
+<button type="button" onClick="{{connectEmail}}" disabled="{{emailBusy}}" style="flex: 0 0 auto; min-height: 54px; padding: 0 26px; border-radius: 27px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 10px">
+<sc-if value="{{emailBusy}}" hint-placeholder-val="{{false}}"><svg class="spin" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2.4"></circle><path d="M9 2a7 7 0 0 1 7 7" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round"></path></svg></sc-if>{{emailBtn}}</button>
+</div>
+<sc-if value="{{emailErr}}" hint-placeholder-val="{{false}}"><span class="fade-in" role="alert" style="display: flex; align-items: flex-start; gap: 10px; background: #FFF1EC; border-radius: 16px; padding: 12px 14px; font-size: 15px; line-height: 1.45"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D9480F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 auto; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16.5v.01"></path></svg>{{emailErrText}}</span></sc-if>
+</div>
+</div>
+</sc-if>
+
+</div>
+</sc-if>
+
+<sc-if value="{{isLi}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center">
+
+<sc-if value="{{liIdle}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 16px">
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; text-align: left">
+<li style="display: flex; align-items: center; gap: 12px; font-size: 17px"><span aria-hidden="true" style="flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg></span>Callum runs LinkedIn on this computer while Callum is open.</li>
+<li style="display: flex; align-items: center; gap: 12px; font-size: 17px"><span aria-hidden="true" style="flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></span>You sign in on LinkedIn's own page. Callum never sees your password.</li>
+<li style="display: flex; align-items: center; gap: 12px; font-size: 17px"><span aria-hidden="true" style="flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D2140" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"></path></svg></span>15 invites a day, working hours only. It pauses itself if LinkedIn asks anything.</li>
+</ul>
+<button type="button" onClick="{{openLi}}" style="min-height: 56px; padding: 0 28px; border-radius: 28px; border: none; background: #1D2140; color: #FFFFFF; font-size: 17px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 10px">Open LinkedIn<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 16L16 8M9 8h7v7"></path></svg></button>
+</div>
+</sc-if>
+
+<sc-if value="{{liWaiting}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 6px 0">
+<span aria-hidden="true" style="position: relative; width: 84px; height: 84px; border-radius: 50%; background: #F4F5F9; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; letter-spacing: -0.04em">in<svg class="spin" viewBox="0 0 100 100" style="position: absolute; left: -8px; top: -8px; width: 100px; height: 100px"><circle cx="50" cy="50" r="47" fill="none" stroke="#3F52D9" stroke-width="3" stroke-linecap="round" stroke-dasharray="70 300"></circle></svg></span>
+<p style="margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -0.015em">Finish signing in on the LinkedIn window</p>
+<p style="margin: 0; font-size: 16px; color: #646B85">Callum notices the moment you're in. Can't see the window?</p>
+<div style="display: flex; gap: 10px">
+<button type="button" onClick="{{reopenLi}}" style="min-height: 46px; padding: 0 20px; border-radius: 23px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Reopen the window</button>
+<button type="button" onClick="{{cancelLi}}" style="min-height: 46px; padding: 0 20px; border-radius: 23px; border: none; background: #F4F5F9; color: #1D2140; font-size: 15px; font-weight: 600; cursor: pointer">Cancel</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{liConnected}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 6px 0">
+<span style="position: relative; width: 84px; height: 84px; border-radius: 50%; background: #1D2140; display: flex; align-items: center; justify-content: center"><svg class="pop-in" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span aria-hidden="true" class="{{ringCls}}"></span></span>
+<p style="margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -0.015em">{{liTitle}}</p>
+<p style="margin: 0; font-size: 16px; color: #646B85; max-width: 46ch; line-height: 1.45">15 invites a day, working hours only. Callum pauses itself if LinkedIn asks anything.</p>
+</div>
+</sc-if>
+
+<sc-if value="{{showServer}}" hint-placeholder-val="{{true}}">
+<div style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; border-top: 1px solid #E7E9F0; padding-top: 14px">
+<button type="button" onClick="{{toggleServer}}" aria-expanded="{{serverOpen}}" style="min-height: 40px; padding: 0 12px; border: none; background: transparent; color: #646B85; font-size: 15px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px">Running Callum on a server?<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#646B85" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transition: transform .3s ease; {{serverChev}}"><path d="M6 9l6 6 6-6"></path></svg></button>
+<sc-if value="{{serverOpen}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="width: 100%; display: flex; flex-direction: column; gap: 10px; text-align: left">
+<span style="font-size: 15px; line-height: 1.5; color: #646B85">A server has no window to sign in on. Open linkedin.com in your own browser, then Developer tools, Application, Cookies, and copy the value called li_at.</span>
+<div class="{{cookieCls}}" style="display: flex; gap: 10px">
+<label for="cookie" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">LinkedIn session cookie</label>
+<input id="cookie" class="field" type="text" value="{{cookie}}" onChange="{{onCookie}}" placeholder="Paste li_at here" autocomplete="off" spellcheck="false" style="flex: 1 1 auto; min-width: 0; height: 52px; border: none; border-radius: 18px; background: #F4F5F9; padding: 0 18px; font-size: 16px; color: #1D2140; {{cookieStyle}}">
+<button type="button" onClick="{{useCookie}}" style="flex: 0 0 auto; min-height: 52px; padding: 0 22px; border-radius: 26px; border: none; background: #1D2140; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer">Connect</button>
+</div>
+<sc-if value="{{cookieErr}}" hint-placeholder-val="{{false}}"><span class="fade-in" role="alert" style="display: flex; align-items: center; gap: 10px; background: #FFF1EC; border-radius: 16px; padding: 10px 14px; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D9480F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16.5v.01"></path></svg>That cookie looks too short. Copy the whole li_at value.</span></sc-if>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+</div>
+</sc-if>
+
+<sc-if value="{{isX}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 16px">
+
+<sc-if value="{{xConnected}}" hint-placeholder-val="{{false}}">
+<div class="fade-in" style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 18px 0">
+<span style="position: relative; width: 84px; height: 84px; border-radius: 50%; background: #1D2140; display: flex; align-items: center; justify-content: center"><svg class="pop-in" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span aria-hidden="true" class="{{ringCls}}"></span></span>
+<p style="margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -0.015em">@gabriel. 20 messages a day.</p>
+<p style="margin: 0; font-size: 16px; color: #646B85">X only lets Callum message people who follow you or whose messages are open.</p>
+</div>
+</sc-if>
+
+<sc-if value="{{xForm}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<p style="margin: 0; font-size: 17px; line-height: 1.45; text-align: center">X messages go through X's official API, which needs a paid X plan.</p>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{xSteps}}" as="xs" hint-placeholder-count="3">
+<li style="display: flex; align-items: center; gap: 12px; min-height: 30px"><span aria-hidden="true" style="flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; {{xs.disc}}">{{xs.n}}</span><span style="font-size: 16px; {{xs.textStyle}}">{{xs.text}}</span>
+<sc-if value="{{xs.hasLink}}" hint-placeholder-val="{{false}}"><a href="{{xs.href}}" target="_blank" rel="noopener" style="display: inline-flex; align-items: center; gap: 5px; font-size: 15px; font-weight: 600; text-decoration: none; color: #3F52D9">{{xs.link}}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3F52D9" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 16L16 8M9 8h7v7"></path></svg></a></sc-if>
+</li>
+</sc-for>
+</ol>
+<div class="{{tokCls}}" style="display: flex; gap: 10px">
+<label for="tok" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">X access token</label>
+<input id="tok" class="field" type="text" value="{{token}}" onChange="{{onToken}}" onKeyDown="{{onTokKey}}" placeholder="Paste your access token" autocomplete="off" spellcheck="false" style="flex: 1 1 auto; min-width: 0; height: 54px; border: none; border-radius: 18px; background: #F4F5F9; padding: 0 18px; font-size: 16px; color: #1D2140; {{tokStyle}}">
+<button type="button" onClick="{{connectX}}" disabled="{{xBusy}}" style="flex: 0 0 auto; min-height: 54px; padding: 0 26px; border-radius: 27px; border: none; background: #1D2140; color: #FFFFFF; font-size: 16px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 10px">
+<sc-if value="{{xBusy}}" hint-placeholder-val="{{false}}"><svg class="spin" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2.4"></circle><path d="M9 2a7 7 0 0 1 7 7" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round"></path></svg></sc-if>{{xBtn}}</button>
+</div>
+<sc-if value="{{xErr}}" hint-placeholder-val="{{false}}"><span class="fade-in" role="alert" style="display: flex; align-items: flex-start; gap: 10px; background: #FFF1EC; border-radius: 16px; padding: 12px 14px; font-size: 15px; line-height: 1.45"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D9480F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 auto; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16.5v.01"></path></svg>{{xErrText}}</span></sc-if>
+</div>
+</sc-if>
+
+</div>
+</sc-if>
+
+</section>
+
+<p style="margin: 0; font-size: 14px; color: #646B85; text-align: center">These stay on the computer running Callum. Disconnect any time in Your Callum.</p>
+
+</div>
+</main>
+
+<div class="bed" aria-hidden="true" style="position: relative; height: 74px; margin: 0 -32px">
+<svg viewBox="0 0 1000 100" preserveAspectRatio="none" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%">
+<defs>
+<linearGradient id="v3-con-bed" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#EEF0F6" stop-opacity="0"></stop>
+<stop offset="0.08" stop-color="#EEF0F6"></stop>
+<stop offset="0.55" stop-color="#ECEFFB"></stop>
+<stop offset="0.86" stop-color="#FFF4DD"></stop>
+<stop offset="1" stop-color="#FFEBC2"></stop>
+</linearGradient>
+</defs>
+<path d="M0,34 C180,18 340,48 500,32 C660,16 820,44 1000,26 L1000,100 L0,100 Z" fill="url(#v3-con-bed)"></path>
+<path class="current" d="M0,66 C180,52 340,80 500,64 C660,50 820,76 1000,60" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"></path>
+</svg>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      tab: 'email', tabKey: 0, ringKey: 0,
+      done: { email: false, li: false, x: false },
+      provider: 'google', address: 'gabriel@yourcompany.com', pw: '', smtp: 'smtp.yourcompany.com', imap: 'imap.yourcompany.com',
+      emailBusy: false, emailErr: '', emailShake: 0,
+      li: 'idle', serverOpen: false, cookie: '', cookieErr: false, cookieShake: 0,
+      token: '', xBusy: false, xErr: '', xShake: 0
+    };
+    this._to = [];
+  }
+
+  componentWillUnmount() { this._to.forEach(function (h) { clearTimeout(h); }); clearTimeout(this._li); }
+
+  later(fn, ms) { this._to.push(setTimeout(fn, ms)); }
+
+  setDone(key) {
+    this.setState(function (s) { var d = Object.assign({}, s.done); d[key] = true; return { done: d, ringKey: s.ringKey + 1 }; });
+  }
+
+  connectEmail() {
+    var self = this, s = this.state;
+    if (s.emailBusy) return;
+    var pw = (s.pw || '').replace(/\s+/g, '');
+    var bad = s.provider === 'other' ? pw.length < 6 : !/^[a-z]{16}$/i.test(pw);
+    this.setState({ emailBusy: true, emailErr: '' });
+    this.later(function () {
+      if (bad) {
+        var who = s.provider === 'google' ? 'Google' : (s.provider === 'microsoft' ? 'Microsoft' : 'Your mail server');
+        var why = s.provider === 'other' ? 'Check the password and both server names.' : 'App passwords are 16 letters, like abcd efgh ijkl mnop.';
+        self.setState(function (s2) { return { emailBusy: false, emailErr: who + " didn't accept that password. " + why, emailShake: s2.emailShake + 1 }; });
+        return;
+      }
+      self.setState({ emailBusy: false });
+      self.setDone('email');
+    }, 1200);
+  }
+
+  openLi() {
+    var self = this;
+    clearTimeout(this._li);
+    this.setState({ li: 'waiting' });
+    this._li = setTimeout(function () { self.setState({ li: 'on', serverOpen: false }); self.setDone('li'); }, 3200);
+  }
+
+  useCookie() {
+    var self = this, v = (this.state.cookie || '').trim();
+    if (v.length < 24) { this.setState(function (s) { return { cookieErr: true, cookieShake: s.cookieShake + 1 }; }); return; }
+    clearTimeout(this._li);
+    this.setState({ li: 'waiting', cookieErr: false });
+    this._li = setTimeout(function () { self.setState({ li: 'on', serverOpen: false, liViaCookie: true }); self.setDone('li'); }, 1200);
+  }
+
+  connectX() {
+    var self = this, s = this.state;
+    if (s.xBusy) return;
+    var t = (s.token || '').trim();
+    this.setState({ xBusy: true, xErr: '' });
+    this.later(function () {
+      if (t.length < 40) { self.setState(function (s2) { return { xBusy: false, xErr: "That token looks incomplete. X access tokens are usually over 40 characters.", xShake: s2.xShake + 1 }; }); return; }
+      if (/free/i.test(t)) { self.setState(function (s2) { return { xBusy: false, xErr: "This X plan can't send messages. Basic or higher is needed.", xShake: s2.xShake + 1 }; }); return; }
+      self.setState({ xBusy: false });
+      self.setDone('x');
+    }, 1200);
+  }
+
+  renderVals() {
+    var self = this, s = this.state;
+    var TABS = [{ key: 'email', name: 'Email' }, { key: 'li', name: 'LinkedIn' }, { key: 'x', name: 'X' }];
+    var tabs = TABS.map(function (t) {
+      var sel = s.tab === t.key, done = !!s.done[t.key];
+      return {
+        name: t.name, sel: sel ? 'true' : 'false', done: done,
+        isEmail: t.key === 'email', isLi: t.key === 'li', isX: t.key === 'x',
+        disc: sel ? 'background: #1D2140; color: #FFFFFF; box-shadow: 0 18px 36px -18px rgba(29,33,64,0.6);' : (done ? 'background: #FFFFFF; color: #1D2140; box-shadow: inset 0 0 0 1.5px #E7E9F0;' : 'background: #F4F5F9; color: #1D2140;'),
+        labelStyle: sel ? 'font-weight: 600; color: #1D2140;' : 'font-weight: 500; color: #646B85;',
+        pick: function () { if (self.state.tab !== t.key) self.setState(function (s2) { return { tab: t.key, tabKey: s2.tabKey + 1 }; }); }
+      };
+    });
+
+    var PROV = [{ key: 'google', name: 'Google' }, { key: 'microsoft', name: 'Microsoft' }, { key: 'other', name: 'Another provider' }];
+    var providers = PROV.map(function (p) {
+      var on = s.provider === p.key;
+      return {
+        name: p.name, on: on ? 'true' : 'false',
+        style: on ? 'background: #FFFFFF; color: #1D2140; box-shadow: 0 6px 16px -8px rgba(29,33,64,0.35);' : 'background: transparent; color: #646B85;',
+        pick: function () { self.setState({ provider: p.key, emailErr: '', pw: '' }); }
+      };
+    });
+    var STEPS = {
+      google: [
+        { text: 'Turn on 2-step verification', link: '', href: '' },
+        { text: 'Create an app password called Callum', link: 'Open Google', href: 'https://myaccount.google.com/apppasswords' },
+        { text: 'Paste it here', link: '', href: '' }
+      ],
+      microsoft: [
+        { text: 'Turn on two-step verification', link: '', href: '' },
+        { text: 'Create an app password', link: 'Open Microsoft', href: 'https://account.microsoft.com/security' },
+        { text: 'Paste it here', link: '', href: '' }
+      ]
+    };
+    var pwFilled = (s.pw || '').replace(/\s+/g, '').length > 0;
+    function stepList(list, filledIdx) {
+      return list.map(function (st, i) {
+        var active = i === list.length - 1 && filledIdx;
+        return {
+          n: String(i + 1), text: st.text, hasLink: !!st.link, link: st.link || '', href: st.href || '#',
+          disc: active ? 'background: #1D2140; color: #FFFFFF;' : 'background: #F4F5F9; color: #1D2140;',
+          textStyle: i === list.length - 1 ? 'font-weight: 600;' : ''
+        };
+      });
+    }
+    var steps = s.provider === 'other' ? [] : stepList(STEPS[s.provider], pwFilled);
+    var personal = /@(gmail|googlemail|outlook|hotmail|yahoo|icloud)\./i.test(s.address || '');
+
+    var xSteps = stepList([
+      { text: 'Create an app at developer.x.com', link: 'Open X', href: 'https://developer.x.com' },
+      { text: 'Turn on messages, read and write', link: '', href: '' },
+      { text: 'Copy the access token here', link: '', href: '' }
+    ], (s.token || '').trim().length > 0);
+
+    var emailConnected = !!s.done.email && !s.emailBusy;
+    var liConnected = s.li === 'on';
+
+    return {
+      tabs: tabs, stepCls: s.tabKey % 2 ? 'step-a' : 'step-b', ringCls: s.ringKey % 2 ? 'ring-a' : 'ring-b',
+      panelLabel: s.tab === 'email' ? 'Email' : (s.tab === 'li' ? 'LinkedIn' : 'X'),
+      isEmail: s.tab === 'email', isLi: s.tab === 'li', isX: s.tab === 'x',
+      emailConnected: emailConnected, emailForm: !emailConnected,
+      providers: providers, hasSteps: s.provider !== 'other', steps: steps, isOther: s.provider === 'other',
+      smtp: s.smtp, imap: s.imap,
+      onSmtp: function (e) { self.setState({ smtp: e.target.value }); },
+      onImap: function (e) { self.setState({ imap: e.target.value }); },
+      address: s.address,
+      onAddress: function (e) { self.setState({ address: e.target.value }); },
+      personalWarn: personal,
+      pw: s.pw,
+      pwLabel: s.provider === 'other' ? 'Email password' : 'App password',
+      pwPlaceholder: s.provider === 'other' ? 'Your email password' : 'abcd efgh ijkl mnop',
+      onPw: function (e) { self.setState({ pw: e.target.value, emailErr: '' }); },
+      onPwKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.connectEmail(); } },
+      pwStyle: s.emailErr ? 'box-shadow: 0 0 0 2px #D9480F; background: #FFF1EC;' : '',
+      pwCls: s.emailErr ? (s.emailShake % 2 ? 'shake' : 'fade-in') : '',
+      connectEmail: function () { self.connectEmail(); },
+      emailBusy: s.emailBusy, emailBtn: s.emailBusy ? 'Connecting' : 'Connect',
+      emailErr: !!s.emailErr, emailErrText: s.emailErr,
+      redoEmail: function () { self.setState(function (s2) { var d = Object.assign({}, s2.done); d.email = false; return { done: d, pw: '' }; }); },
+
+      liIdle: s.li === 'idle', liWaiting: s.li === 'waiting', liConnected: liConnected,
+      liTitle: s.liViaCookie ? 'Connected from this server as Gabriel' : 'Connected as Gabriel',
+      openLi: function () { self.openLi(); },
+      reopenLi: function () { self.openLi(); },
+      cancelLi: function () { clearTimeout(self._li); self.setState({ li: 'idle' }); },
+      showServer: !liConnected && s.li !== 'waiting',
+      serverOpen: s.serverOpen,
+      serverChev: s.serverOpen ? 'transform: rotate(180deg);' : '',
+      toggleServer: function () { self.setState({ serverOpen: !self.state.serverOpen }); },
+      cookie: s.cookie,
+      onCookie: function (e) { self.setState({ cookie: e.target.value, cookieErr: false }); },
+      useCookie: function () { self.useCookie(); },
+      cookieErr: s.cookieErr,
+      cookieStyle: s.cookieErr ? 'box-shadow: 0 0 0 2px #D9480F; background: #FFF1EC;' : '',
+      cookieCls: s.cookieErr ? (s.cookieShake % 2 ? 'shake' : 'fade-in') : '',
+
+      xConnected: !!s.done.x && !s.xBusy, xForm: !(s.done.x && !s.xBusy),
+      xSteps: xSteps,
+      token: s.token,
+      onToken: function (e) { self.setState({ token: e.target.value, xErr: '' }); },
+      onTokKey: function (e) { if (e.key === 'Enter') { e.preventDefault(); self.connectX(); } },
+      connectX: function () { self.connectX(); },
+      xBusy: s.xBusy, xBtn: s.xBusy ? 'Connecting' : 'Connect',
+      xErr: !!s.xErr, xErrText: s.xErr,
+      tokStyle: s.xErr ? 'box-shadow: 0 0 0 2px #D9480F; background: #FFF1EC;' : '',
+      tokCls: s.xErr ? (s.xShake % 2 ? 'shake' : 'fade-in') : ''
+    };
+  }
+}
+</script>
+</body>
+</html>
