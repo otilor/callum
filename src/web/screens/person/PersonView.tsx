@@ -26,6 +26,8 @@ export interface PersonViewProps {
   onBack(): void;
   /** The time the page works from; the clock when left out. */
   now?: () => Date;
+  /** Shown in a sheet over Home: Home keeps the header, and the river under the sheet is how you pick someone else. */
+  embedded?: boolean;
 }
 
 // ---- how a person looks ---------------------------------------------------------------------------------
@@ -74,7 +76,7 @@ function channelChip(p: Person): string {
 
 // ---- the page --------------------------------------------------------------------------------------------
 
-export function PersonView({ state, personId, onOpen, onBack, now = () => new Date() }: PersonViewProps) {
+export function PersonView({ state, personId, onOpen, onBack, now = () => new Date(), embedded = false }: PersonViewProps) {
   const [q, setQ] = useState('');
   const tz = state.settings.timezone;
   const query = q.trim().toLowerCase();
@@ -99,7 +101,9 @@ export function PersonView({ state, personId, onOpen, onBack, now = () => new Da
       e.preventDefault();
       const first = shown[0];
       if (first) open(first.id);
-    } else if (e.key === 'Escape') {
+    } else if (e.key === 'Escape' && q) {
+      // Clearing the search is all Escape does here; with nothing typed it closes the sheet.
+      e.preventDefault();
       setQ('');
     }
   };
@@ -108,8 +112,8 @@ export function PersonView({ state, personId, onOpen, onBack, now = () => new Da
   const running = state.settings.pauseState;
 
   return (
-    <main className="pv" data-screen="person">
-      <header className="pv-bar">
+    <main className={`pv${embedded ? ' is-embedded' : ''}`} data-screen="person">
+      {embedded ? null : <header className="pv-bar">
         <Wordmark project={state.projects.find((p) => p.id === here?.projectId)?.name ?? null} />
         <div className="pv-bar-end">
           <span className="pv-chip pv-hide-narrow">
@@ -123,7 +127,7 @@ export function PersonView({ state, personId, onOpen, onBack, now = () => new Da
             River
           </button>
         </div>
-      </header>
+      </header>}
 
       <div className="pv-find-row">
         <div className="pv-find">
@@ -139,7 +143,7 @@ export function PersonView({ state, personId, onOpen, onBack, now = () => new Da
             </button>
           ) : null}
         </div>
-        <div className="pv-strip" role="list" aria-label={query ? `People matching ${q.trim()}` : 'Recently'}>
+        {embedded && !query ? null : <div className="pv-strip" role="list" aria-label={query ? `People matching ${q.trim()}` : 'Recently'}>
           {shown.map((p) => {
             const look = faceStyle(p, 42, p.id === personId);
             return (
@@ -152,7 +156,7 @@ export function PersonView({ state, personId, onOpen, onBack, now = () => new Da
             );
           })}
           {more > 0 ? <span className="pv-more">and {more} more</span> : null}
-        </div>
+        </div>}
         {query && matches.length === 0 ? <p className="pv-nomatch fade-in" role="status">Nobody called '{q.trim()}' in your river.</p> : null}
       </div>
 

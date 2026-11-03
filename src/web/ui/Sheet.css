@@ -1,0 +1,62 @@
+/* A sheet rises from the river into the space above it. No card: the content sits on the same white ground as Home,
+   and fades out where it meets the water so nothing ends on a hard edge. */
+.layer {
+  position: fixed;
+  z-index: 20;
+  top: 84px;
+  left: 32px;
+  right: 32px;
+  bottom: var(--layer-bottom, 240px);
+  display: flex;
+  flex-direction: column;
+  animation: layer-rise 0.42s var(--ease) both;
+}
+.layer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 4px 36px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+}
+.layer-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--mist);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s var(--ease);
+}
+.layer-close:hover {
+  background: var(--line);
+}
+.layer-close:active {
+  transform: scale(0.94);
+}
+@keyframes layer-rise {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+@media (max-width: 760px) {
+  .layer {
+    left: 16px;
+    right: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .layer {
+    animation: none;
+  }
+}

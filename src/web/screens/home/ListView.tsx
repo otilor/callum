@@ -116,7 +116,7 @@ export function ListView({ people, projects, currentProjectId, tz, now, notify, 
             return (
               <tbody key={key} className={key === 'talk' ? 'lv-group is-sun' : 'lv-group'}>
                 <tr>
-                  <th scope="rowgroup" colSpan={columns} className="lv-head">
+                  <th scope="rowgroup" colSpan={columns} className="lv-ghead">
                     {label}
                     <span className="lv-count">{rows.length}</span>
                   </th>

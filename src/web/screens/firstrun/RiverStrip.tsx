@@ -66,7 +66,8 @@ export function RiverStrip({ people, planning }: { people: Person[]; planning: b
             <strong>{i === 0 ? people.length : 0}</strong>
             <span>
               <i style={{ borderColor: RING[name] ?? '#D5D9E4' }} aria-hidden="true" />
-              {name}
+              {/* The same words, in the same case, as the river on Home. */}
+              {name.charAt(0).toUpperCase() + name.slice(1)}
             </span>
           </div>
         ))}

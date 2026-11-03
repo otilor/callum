@@ -39,10 +39,10 @@
   width: 100%;
   border-collapse: collapse;
 }
-.lv-group + .lv-group .lv-head {
+.lv-group + .lv-group .lv-ghead {
   padding-top: 26px;
 }
-.lv-head {
+.lv-ghead {
   padding: 4px 8px 8px;
   text-align: left;
   font-size: 14px;
@@ -50,7 +50,7 @@
   letter-spacing: 0.01em;
   color: var(--slate);
 }
-.is-sun .lv-head {
+.is-sun .lv-ghead {
   color: var(--ink);
 }
 .lv-count {
@@ -192,4 +192,9 @@
   .lv-detail .pop.is-inline {
     margin-left: 8px;
   }
+}
+
+/* The list starts at the same left edge as the bar and the dock above it. */
+.lv {
+  margin: 0;
 }

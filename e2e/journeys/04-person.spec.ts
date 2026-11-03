@@ -48,6 +48,8 @@ test('open someone from the river, nudge, switch channel, never contact', async 
   await page.getByRole('button', { name: 'Musa Ajayi, Strangers' }).click();
   await page.getByRole('button', { name: 'See everything' }).click();
   await expect(page.getByText(/^First hello goes out .+ at 9:00 by email$/)).toBeVisible();
+  // Moving is the rare choice, so the channels wait behind one button.
+  await page.getByRole('button', { name: 'Move Musa' }).click();
   await page.getByRole('button', { name: 'Move to LinkedIn' }).click();
   await expect(page.getByText(/^The invite goes out .+ at 9:00 on LinkedIn$/)).toBeVisible();
   s = await app.state();

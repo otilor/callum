@@ -26,6 +26,8 @@ export interface YourCallumProps {
   download?: (url: string) => void;
   now?: () => Date;
   pollMs?: number;
+  /** Shown in a sheet over Home, which keeps its own header and way back. */
+  embedded?: boolean;
 }
 
 function browserDownload(url: string): void {
@@ -82,7 +84,7 @@ function statusOf(a: ChannelAccount | undefined): 'off' | 'on' | 'paused' | 'err
   return a.status === 'connected' ? 'on' : a.status;
 }
 
-export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, download = browserDownload, now = () => new Date(), pollMs }: YourCallumProps) {
+export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, download = browserDownload, now = () => new Date(), pollMs, embedded = false }: YourCallumProps) {
   const toast = useToast();
   const headingRef = useHeadingFocus();
   const { settings } = state;
@@ -273,14 +275,14 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
   const nowDate = now();
 
   return (
-    <main className="yc-root" data-screen="your-callum">
-      <header className="yc-bar">
+    <main className={`yc-root${embedded ? ' is-embedded' : ''}`} data-screen="your-callum">
+      {embedded ? null : <header className="yc-bar">
         <Wordmark />
         <div className="yc-bar-right">
           <span className="yc-chip"><span className="yc-dot" data-state={settings.pauseState === 'running' ? 'on' : 'off'} aria-hidden="true" />{status}</span>
           {onBack ? <button type="button" className="yc-back" onClick={onBack}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D2140" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>Back to the river</button> : null}
         </div>
-      </header>
+      </header>}
 
       <div className="yc-wrap">
         <div className="yc-head">

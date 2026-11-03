@@ -114,3 +114,10 @@
   font-size: 14px;
   font-weight: 600;
 }
+
+/* The dot between the wordmark and a project switcher sits at the wordmark's own spacing, wherever the bar is. */
+.home-brand > .wm-sep,
+.d1-brand > .wm-sep {
+  margin: 0 0 0 0.3em;
+  font-size: 22px;
+}

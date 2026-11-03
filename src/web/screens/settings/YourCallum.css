@@ -727,3 +727,10 @@ textarea.yc-audience {
     transition: none;
   }
 }
+
+/* In a sheet over Home: Home keeps the header, so the page loses its own padding and height. */
+.yc-root.is-embedded {
+  min-height: 0;
+  padding: 0 56px 0 0;
+  background: transparent;
+}

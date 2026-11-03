@@ -167,6 +167,7 @@ describe('the left column', () => {
     const known = { ...CHIDI, linkedinUrl: 'https://www.linkedin.com/in/chidi' };
     mocks.switchChannel.mockResolvedValue({ ...known, channel: 'linkedin', nextTouchAt: '2026-11-06T08:12:00.000Z' });
     await show(full(known));
+    await userEvent.click(screen.getByRole('button', { name: 'Move Chidi' }));
     expect(screen.getByRole('button', { name: 'Move to LinkedIn' })).toHaveAccessibleDescription(
       'Callum can switch Chidi to LinkedIn from Friday, a week after the last email.',
     );
@@ -179,6 +180,7 @@ describe('the left column', () => {
     mocks.switchChannel.mockRejectedValueOnce(new ApiError(422, "That doesn't look like a LinkedIn profile link."));
     mocks.switchChannel.mockResolvedValueOnce({ ...CHIDI, channel: 'linkedin', nextTouchAt: '2026-11-06T08:12:00.000Z' });
     await show(full(CHIDI, { switchable: [{ channel: 'linkedin', at: null, available: true, reason: "Add Chidi's LinkedIn first" }] }));
+    await userEvent.click(screen.getByRole('button', { name: 'Move Chidi' }));
     expect(screen.getByText("Add Chidi's LinkedIn first")).toBeInTheDocument();
     expect(mocks.switchChannel).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Move to LinkedIn' }));
@@ -194,6 +196,7 @@ describe('the left column', () => {
 
   it('names the other project, with the reason beside it when Chidi cannot move', async () => {
     await show(full(CHIDI));
+    await userEvent.click(screen.getByRole('button', { name: 'Move Chidi' }));
     const move = screen.getByRole('button', { name: 'Move to Payroll' });
     expect(move).toHaveAttribute('aria-disabled', 'true');
     expect(move.parentElement).toHaveTextContent("Chidi has already heard from you about Reconciliation. Callum can move them once they're resting.");
@@ -204,6 +207,7 @@ describe('the left column', () => {
   it('moves a stranger to the other project', async () => {
     mocks.moveToProject.mockResolvedValue({ ...CHIDI, projectId: 2 });
     await show(full(CHIDI, { projectMoves: [{ projectId: 2, name: 'Payroll', reason: null }] }));
+    await userEvent.click(screen.getByRole('button', { name: 'Move Chidi' }));
     await userEvent.click(screen.getByRole('button', { name: 'Move to Payroll' }));
     expect(mocks.moveToProject).toHaveBeenCalledWith(1, 2);
     expect(await screen.findByText('Chidi moves to Payroll.')).toBeInTheDocument();
@@ -235,6 +239,7 @@ describe('the left column', () => {
   it('keeps the form open, and the address, when another action is still running', async () => {
     mocks.nudge.mockReturnValue(new Promise(() => {}));
     await show(full(CHIDI, { switchable: [{ channel: 'linkedin', at: null, available: true, reason: "Add Chidi's LinkedIn first" }] }));
+    await userEvent.click(screen.getByRole('button', { name: 'Move Chidi' }));
     await userEvent.click(screen.getByRole('button', { name: 'Move to LinkedIn' }));
     await userEvent.type(screen.getByLabelText('LinkedIn link for Chidi'), 'linkedin.com/in/chidi');
     await userEvent.click(screen.getByRole('button', { name: 'Nudge now' }));
@@ -295,6 +300,7 @@ describe('the four states', () => {
       switchable: [{ channel: 'linkedin', at: null, available: false, reason: 'Kemi is talking with you on email, so Callum keeps it there.' }],
       projectMoves: [],
     }));
+    await userEvent.click(screen.getByRole('button', { name: 'Move Kemi' }));
     expect(screen.getByText('Talking')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Nudge now' })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('button', { name: 'Move to LinkedIn' })).toHaveAttribute('aria-disabled', 'true');

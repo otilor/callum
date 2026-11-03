@@ -75,7 +75,6 @@ export function Dock({ people, projects, tz, now, idle, greeting, quiet, above, 
               <button type="button" className="dock-open-btn" onClick={() => onOpenDeck()}>
                 {n === 1 ? 'Open reply' : 'Go through them'}
               </button>
-              {many ? <span className="home-tag">{projectName(latest)}</span> : null}
               <span className="dock-meta">
                 {[latest.name, latest.company ? `at ${latest.company}` : null].filter(Boolean).join(' ')}, {channelPhrase(latest.channel)}
                 {latest.repliedAt ? `, ${formatWhen(latest.repliedAt, tz, now)}` : ''}
