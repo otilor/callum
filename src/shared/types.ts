@@ -163,7 +163,8 @@ export interface SkipGroup { reason: SkipReason; line: string; names: string[]; 
 export type PreviewPerson = NewPerson & { key: string };
 export interface AddPreview { batchId: string; added: PreviewPerson[]; groups: SkipGroup[] }
 export interface AddCommit { added: Person[]; line: string; groups: SkipGroup[] }
-export interface Described { batchId: string | null; total: number; people: PreviewPerson[]; narrow: string[] | null; line: string }
+/** `searching`: Claude is still looking, and more people may join `people`. */
+export interface Described { batchId: string | null; total: number; people: PreviewPerson[]; narrow: string[] | null; line: string; searching?: boolean }
 
 // Task 19: the weekly note and the quiet moments
 /** Settings keys the weekly note and the quiet moments keep. `morningBrief` is Task 16's switch; it counts as on until it is set to false. */

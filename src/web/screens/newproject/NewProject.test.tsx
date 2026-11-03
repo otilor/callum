@@ -295,7 +295,8 @@ describe('NewProject, the voice and Start', () => {
     });
     await toPeople(user);
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'heads of people in Accra{Enter}');
-    expect(mocks.describe).toHaveBeenCalledWith({ query: 'heads of people in Accra', filters: [], projectId: null });
+    // The offer typed on the first step goes with the search, so companies that sell the same thing are left out.
+    expect(mocks.describe).toHaveBeenCalledWith({ query: 'heads of people in Accra', filters: [], projectId: null, live: true, offer: OFFER });
     await screen.findByText('2 people join Payroll');
     expect(screen.queryByText(/credit/i)).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Efua Boateng, Head of People at Kumasi Foods' }));

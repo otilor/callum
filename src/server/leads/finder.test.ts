@@ -135,10 +135,10 @@ describe('ModelFinder', () => {
     expect(asked[1]?.user).toContain('Start from profiles');
     for (const a of asked) {
       expect(a.user).toContain('Who the sender wants to meet: Founders in Accra');
-      expect(a.user).toContain('How many to find: 3');
+      expect(a.user).toContain('How many to find: 4');
       expect(a.user).toContain('Today: 2026-11-03');
       expect(a.user).toContain('Ada Obi (Ledgerly)');
-      expect(a.opts?.maxSearches).toBe(11);
+      expect(a.opts?.maxSearches).toBe(10);
     }
   });
 
@@ -168,9 +168,9 @@ describe('ModelFinder', () => {
     const people = await new ModelFinder(model, pages({}).fetch, today, dns()).find({ description: 'CFOs', count: 3 });
     expect(people.map((p) => p.name)).toEqual(['Kemi Eze', 'Femi Ade', 'Tunde Bello']);
     expect(asked).toHaveLength(3);
-    expect(asked[2]?.user).toContain('How many to find: 2');
+    expect(asked[2]?.user).toContain('How many to find: 3');
     expect(asked[2]?.user).toContain('Kemi Eze (Oko Pay)');
-    expect(asked[2]?.user).toContain('Look in places they did not');
+    expect(asked[2]?.user).toContain('Start from lists of companies');
   });
 
   it('does not look again when nobody was found at all, or when the extra search fails', async () => {
@@ -193,18 +193,67 @@ describe('ModelFinder', () => {
     expect((err as FindError).message).toBe("Claude Code isn't signed in on this computer.");
   });
 
+  it("shows each search's people as soon as it is back, before the others are found", async () => {
+    const shown: string[][] = [];
+    let release: () => void = () => {};
+    const slow = new Promise<void>((r) => { release = r; });
+    let calls = 0;
+    const model: Model = {
+      engine: 'claude_code', lastError: null, ask: async () => null,
+      research: async <S extends z.ZodType>() => {
+        calls++;
+        if (calls === 2) await slow;
+        const who = calls === 1 ? [raw({ name: 'Kemi Eze', linkedinUrl: 'https://www.linkedin.com/in/kemi' })] : [raw({ name: 'Femi Ade', linkedinUrl: 'https://www.linkedin.com/in/femi' })];
+        return { people: who } as z.infer<S>;
+      },
+    };
+    const done = new ModelFinder(model, pages({}).fetch, today, dns()).find({ description: 'CFOs', count: 2, onFound: (p) => shown.push(p.map((x) => x.name)) });
+    await expect.poll(() => shown).toEqual([['Kemi Eze']]);
+    release();
+    expect((await done).map((p) => p.name)).toEqual(['Kemi Eze', 'Femi Ade']);
+    expect(shown).toEqual([['Kemi Eze'], ['Femi Ade']]);
+  });
+
+  it('finds more than ten in rounds of five, each told who the others found, and stops at six rounds', async () => {
+    let n = 0;
+    const asked: string[] = [];
+    const model: Model = {
+      engine: 'claude_code', lastError: null, ask: async () => null,
+      research: async <S extends z.ZodType>(_s: S, _sys: string, user: string) => {
+        asked.push(user);
+        const want = Number(user.match(/How many to find: (\d+)/)?.[1]);
+        const people = Array.from({ length: Math.min(want, 4) }, () => { n++; return raw({ name: `Person ${String.fromCharCode(64 + n)}`, linkedinUrl: `https://www.linkedin.com/in/p${n}` }); });
+        return { people } as z.infer<S>;
+      },
+    };
+    const people = await new ModelFinder(model, pages({}).fetch, today, dns()).find({ description: 'CFOs', count: 25 });
+    expect(asked).toHaveLength(6);
+    expect(people).toHaveLength(24);
+    expect(asked.every((u) => u.includes('How many to find: 5'))).toBe(true);
+    expect(asked[5]).toContain('Person A');
+    expect(asked[5]).toContain('Look in places they did not');
+  });
+
+  it('tells the search what the sender offers and where they work, so competitors and colleagues are left out', async () => {
+    const { model, asked } = fakeModel([], []);
+    await new ModelFinder(model, pages({}).fetch, today, dns()).find({ description: 'YC founders', count: 3, offer: 'Tethers builds  mobile apps for startups', ownSite: 'tethers.com' });
+    expect(asked[0]?.user).toContain('What the sender offers (leave out their competitors): Tethers builds mobile apps for startups');
+    expect(asked[0]?.user).toContain("The sender's own company: tethers.com (leave out people who work there)");
+  });
+
   it('needs a description, and keeps the count between 1 and 50', async () => {
     const { model, asked } = fakeModel([], []);
     const finder = new ModelFinder(model, pages({}).fetch, today, dns());
     await expect(finder.find({ description: '  ', count: 5 })).rejects.toBeInstanceOf(FindError);
     expect(asked).toHaveLength(0);
     await finder.find({ description: 'CFOs', count: 500 });
-    expect(asked[0]?.user).toContain('How many to find: 26');
-    expect(asked[0]?.opts?.maxSearches).toBe(25);
+    // Fifty wanted: each search looks for five, so each answers within a minute or so.
+    expect(asked[0]?.user).toContain('How many to find: 5');
+    expect(asked[0]?.opts?.maxSearches).toBe(11);
     for (const count of [0, -3, Number.NaN]) {
       asked.length = 0;
       await finder.find({ description: 'CFOs', count });
-      // One person wanted: each of the two searches looks for two, to have one to spare.
+      // One person wanted: each of the two searches looks for two, to have one to spare, and nothing more when nobody turned up.
       expect(asked.map((a) => a.user.match(/How many to find: (\d+)/)?.[1])).toEqual(['2', '2']);
     }
   });

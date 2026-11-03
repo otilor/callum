@@ -5,12 +5,14 @@ import type { AddCommit, AddPreview, Described, Person, PreviewPerson, Project }
 import { ApiError } from '../../api.js';
 import { ToastProvider } from '../../ui/Toast.js';
 import { AddPeople, UNDO_MS } from './AddPeople.js';
+import { POLL_MS } from './useWhoFinder.js';
 
 const mocks = vi.hoisted(() => ({
   preview: vi.fn(),
   commit: vi.fn(),
   undo: vi.fn(),
   describe: vi.fn(),
+  describeStatus: vi.fn(),
   sample: vi.fn(),
 }));
 vi.mock('../../api.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../api.js')>()), peopleApi: mocks }));
@@ -228,7 +230,7 @@ describe('AddPeople, describing who', () => {
     show();
     await user.click(screen.getByRole('tab', { name: 'Describe who' }));
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'cfo{Enter}');
-    expect(await screen.findByText('Callum is looking on the web. This takes a few minutes.')).toBeInTheDocument();
+    expect(await screen.findByText(/The first people show up in about a minute/)).toBeInTheDocument();
   });
 
   it('shows 3 people by full name and company, drops one, and names them after adding', async () => {
@@ -255,42 +257,83 @@ describe('AddPeople, describing who', () => {
     expect(await screen.findByText('First hellos go out from tomorrow at 9:00, within your daily limits.')).toBeInTheDocument();
   });
 
-  it('asks to narrow a search of thousands, and looks again with the chips chosen', async () => {
-    const user = userEvent.setup();
-    mocks.describe.mockResolvedValueOnce(found({ total: 2300, narrow: ['20 to 200 people', 'Accra only'], line: "That's about 2,300 people. Narrow it down?" }));
-    show();
-    await user.click(screen.getByRole('tab', { name: 'Describe who' }));
-    await user.type(screen.getByLabelText('Describe who you want to meet'), 'heads of finance in Accra{Enter}');
-    expect(await screen.findByText("That's about 2,300 people.")).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Accra only' }));
-    expect(screen.getByRole('button', { name: 'Accra only' })).toHaveAttribute('aria-pressed', 'true');
-    mocks.describe.mockResolvedValueOnce(found({ total: 400, batchId: 'narrow-batch' }));
-    await user.click(screen.getByRole('button', { name: 'Find the 3 closest fits' }));
-    expect(mocks.describe).toHaveBeenLastCalledWith({ query: 'heads of finance in Accra', filters: ['Accra only'], projectId: 1 });
-    expect(await screen.findByText('Callum found 3')).toBeInTheDocument();
+  it('shows the first people while Claude keeps looking, then adds the ones who join later', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      mocks.describe.mockResolvedValueOnce(found({ total: 1, people: rows(1), line: 'Callum found 1', searching: true }));
+      mocks.describeStatus.mockResolvedValueOnce(found({ total: 2, people: rows(2), line: 'Callum found 2', searching: true }));
+      mocks.describeStatus.mockResolvedValueOnce(found({ searching: false }));
+      show();
+      await user.click(screen.getByRole('tab', { name: 'Describe who' }));
+      await user.type(screen.getByLabelText('Describe who you want to meet'), 'heads of finance in Accra{Enter}');
+      expect(mocks.describe).toHaveBeenCalledWith({ query: 'heads of finance in Accra', filters: [], projectId: 1, live: true });
+      expect(await screen.findByText('Callum found 1 so far')).toBeInTheDocument();
+      expect(screen.getByText('Still looking. Add these now, or wait for more.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Kemi Eze, Head of Finance at Oko Pay' })).toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      expect(await screen.findByText('Callum found 2 so far')).toBeInTheDocument();
+      expect(mocks.describeStatus).toHaveBeenLastCalledWith('web-batch');
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      expect(await screen.findByText('Callum found 3')).toBeInTheDocument();
+      expect(screen.queryByText('Still looking. Add these now, or wait for more.')).toBeNull();
+      await vi.advanceTimersByTimeAsync(POLL_MS * 3);
+      expect(mocks.describeStatus).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('goes on with the first rows when nothing was chosen to narrow', async () => {
-    const user = userEvent.setup();
-    mocks.describe.mockResolvedValueOnce(found({ total: 2300, narrow: ['20 to 200 people'], line: "That's about 2,300 people. Narrow it down?" }));
-    show();
-    await user.click(screen.getByRole('tab', { name: 'Describe who' }));
-    await user.type(screen.getByLabelText('Describe who you want to meet'), 'cfo{Enter}');
-    await user.click(await screen.findByRole('button', { name: 'Find the 3 closest fits' }));
-    expect(mocks.describe).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText('Callum found 3')).toBeInTheDocument();
+  it('stops asking for more once Add is pressed, and keeps the finished screen', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      mocks.describe.mockResolvedValueOnce(found({ total: 2, people: rows(2), line: 'Callum found 2', searching: true }));
+      mocks.describeStatus.mockResolvedValue(found({ searching: true }));
+      mocks.commit.mockResolvedValue({ added: [person(10, 'Kemi Eze'), person(11, 'Femi Ade')], groups: [], line: '2 people join the river. First hellos from tomorrow at 9:00.' });
+      show();
+      await user.click(screen.getByRole('tab', { name: 'Describe who' }));
+      await user.type(screen.getByLabelText('Describe who you want to meet'), 'cfo{Enter}');
+      await user.click(await screen.findByRole('button', { name: 'Add 2 people' }));
+      expect(mocks.commit).toHaveBeenCalledWith({ batchId: 'web-batch', projectId: 1, drop: [] });
+      expect(await screen.findByText('First hellos go out from tomorrow at 9:00, within your daily limits.')).toBeInTheDocument();
+      const asked = mocks.describeStatus.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(POLL_MS * 3);
+      expect(mocks.describeStatus).toHaveBeenCalledTimes(asked);
+      expect(screen.getByText('First hellos go out from tomorrow at 9:00, within your daily limits.')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says so when a live search finds nobody in the end', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      mocks.describe.mockResolvedValueOnce(found({ total: 0, people: [], line: 'Callum found 0', searching: true }));
+      mocks.describeStatus.mockResolvedValueOnce({ batchId: null, total: 0, people: [], narrow: null, line: "Callum found nobody for 'cfo' it could reach. Try a wider role or a nearby city.", searching: false });
+      show();
+      await user.click(screen.getByRole('tab', { name: 'Describe who' }));
+      await user.type(screen.getByLabelText('Describe who you want to meet'), 'cfo{Enter}');
+      expect(await screen.findByText(/The first people show up in about a minute/)).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      expect(await screen.findByText("Callum found nobody for 'cfo' it could reach. Try a wider role or a nearby city.")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('says so when nobody matched, and offers a wider search', async () => {
     const user = userEvent.setup();
-    mocks.describe.mockResolvedValueOnce({ batchId: null, total: 0, people: [], narrow: null, line: "Nobody matched 'heads of ops in Accra'. Try a wider role or a nearby city." });
+    mocks.describe.mockResolvedValueOnce({ batchId: null, total: 0, people: [], narrow: null, line: "Nobody matched 'heads of ops in Accra'. Try a wider role or a nearby city.", searching: false });
     show();
     await user.click(screen.getByRole('tab', { name: 'Describe who' }));
     await user.type(screen.getByLabelText('Describe who you want to meet'), 'heads of ops in Accra{Enter}');
     expect(await screen.findByText("Nobody matched 'heads of ops in Accra'. Try a wider role or a nearby city.")).toBeInTheDocument();
     mocks.describe.mockResolvedValueOnce(found());
     await user.click(screen.getByRole('button', { name: 'heads of ops' }));
-    expect(mocks.describe).toHaveBeenLastCalledWith({ query: 'heads of ops', filters: [], projectId: 1 });
+    expect(mocks.describe).toHaveBeenLastCalledWith({ query: 'heads of ops', filters: [], projectId: 1, live: true });
   });
 });
 

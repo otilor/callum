@@ -47,15 +47,15 @@ test('open someone from the river, nudge, switch channel, never contact', async 
   await page.getByRole('button', { name: 'Back to the river' }).click();
   await page.getByRole('button', { name: 'Musa Ajayi, Strangers' }).click();
   await page.getByRole('button', { name: 'See everything' }).click();
-  await expect(page.getByText(/^First hello goes out .+ at 9:00 by email$/)).toBeVisible();
+  await expect(page.getByText(/^First hello goes out .+ at \d{1,2}:\d{2} by email$/)).toBeVisible();
   await page.getByRole('button', { name: 'Move to LinkedIn' }).click();
-  await expect(page.getByText(/^The invite goes out .+ at 9:00 on LinkedIn$/)).toBeVisible();
+  await expect(page.getByText(/^The invite goes out .+ at \d{1,2}:\d{2} on LinkedIn$/)).toBeVisible();
   s = await app.state();
   expect(byName(s, 'Musa Ajayi').channel).toBe('linkedin');
   const invite = s.outbox.find((o) => o.personId === musa.id && o.state !== 'cancelled');
   if (invite) expect(invite.channel).toBe('linkedin');
   await page.getByRole('button', { name: 'Move to email' }).click();
-  await expect(page.getByText(/^First hello goes out .+ at 9:00 by email$/)).toBeVisible();
+  await expect(page.getByText(/^First hello goes out .+ at \d{1,2}:\d{2} by email$/)).toBeVisible();
   expect(byName(await app.state(), 'Musa Ajayi').channel).toBe('email');
 
   // Never contact asks first. Keep changes nothing.

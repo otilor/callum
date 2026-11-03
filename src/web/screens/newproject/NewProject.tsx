@@ -41,12 +41,12 @@ function fromWords(firstSendAt: string, tz: string, now: Date): string {
 /** Starting a second (or third) project: what you offer, who to meet, how to sound, then Start. */
 export function NewProject({ state, refresh, onClose, onOpen, now = () => new Date() }: NewProjectProps) {
   const toast = useToast();
-  const finder = useWhoFinder(null, { initialWay: 'describe' });
   const [step, setStep] = useState<Step>(0);
   const [phase, setPhase] = useState<Phase>('flow');
   // Each question (and the two screens after them) announces itself: the cursor goes to its heading.
   const headingRef = useHeadingFocus(`${phase}-${step}`);
   const [offer, setOffer] = useState('');
+  const finder = useWhoFinder(null, { initialWay: 'describe', offer });
   const [nameOverride, setNameOverride] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -150,6 +150,7 @@ export function NewProject({ state, refresh, onClose, onOpen, now = () => new Da
       if (words !== undefined && words !== made.sample) made = await api.updateProject(made.id, { sample: words });
       let added = imported;
       if (!added && found) {
+        finder.settle();
         const drop = finder.dropped;
         try {
           added = await peopleApi.commit({ batchId: found.batchId, projectId: made.id, drop });

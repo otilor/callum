@@ -189,7 +189,9 @@ export const peopleApi = {
   preview: (body: PreviewBody) => post<AddPreview>('/people/preview', body),
   commit: (body: { batchId: string; projectId?: number; drop?: string[] }) => post<AddCommit>('/people/commit', body),
   undo: (batchId: string) => post<{ removed: number }>('/people/undo', { batchId }),
-  describe: (body: { query: string; filters?: string[]; projectId?: number | null }) => post<Described>('/people/describe', body),
+  describe: (body: { query: string; filters?: string[]; projectId?: number | null; live?: boolean; offer?: string }) => post<Described>('/people/describe', body),
+  /** Who a live description search has found so far. */
+  describeStatus: (batchId: string) => post<Described>('/people/describe/status', { batchId }),
   sample: (body: { offer: string; tone: Tone; batchId?: string; key?: string }) => post<HelloSample>('/people/sample', body),
   discardProject: (projectId: number) => post<{ discarded: boolean }>('/people/discard-project', { projectId }),
 };

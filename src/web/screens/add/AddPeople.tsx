@@ -60,6 +60,7 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
     if (!found || busy || finder.kept.length === 0) return;
     setBusy(true);
     setError('');
+    finder.settle();
     try {
       const result = await peopleApi.commit({ batchId: found.batchId, projectId: project.id, drop: finder.dropped });
       const brought = result.added;

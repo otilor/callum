@@ -17,6 +17,12 @@ export interface FindQuery {
   count: number;
   /** People already in Callum, as "Name (Company)", so they are not found again. */
   known?: string[];
+  /** What the sender offers, so nobody is found at a company that sells the same thing. */
+  offer?: string | null;
+  /** The sender's own company website, so nobody is found who works there. */
+  ownSite?: string | null;
+  /** Called with the new people each time a search brings some, so they can be shown before the others are found. */
+  onFound?: (people: PersonLead[]) => void;
 }
 
 /** Finds real people from a description. Each one has a way to reach them: an email, a LinkedIn profile or an X handle. */
@@ -53,6 +59,17 @@ const found = z.object({
 });
 type Found = z.infer<typeof found>['people'][number];
 
+/** How many people each search is asked for: small, so each answers within a minute. */
+const PER_ROUND = 5;
+const MAX_ROUNDS = 6;
+/** Where each search starts. Later ones reuse the last, told who was already found. */
+const ANGLES = [
+  'Start from pages about people: news of appointments, team and about pages, conference speakers.',
+  'Start from profiles: LinkedIn profiles (site:linkedin.com/in) and X profiles in search results.',
+  'Start from lists of companies: startup lists, accelerator batches, funding news. Then look up who leads them.',
+  'Other searches already found the people listed as known. Look in places they did not: other companies, other titles for the same job, nearby cities when the description allows it.',
+];
+
 const SYSTEM = [
   'You find real people for Callum, an app that helps one person (the sender) say hello to people they would like to meet.',
   'You get a description of who the sender wants to meet. Use web search, and read pages when you can, to find real people who match it today.',
@@ -60,7 +77,7 @@ const SYSTEM = [
   'How to work:',
   '1. Find candidates: news of appointments, team and about pages, conference speaker lists, podcasts, company announcements, and LinkedIn profiles in search results.',
   '2. For each candidate, find a way to reach them. Search site:linkedin.com/in with their name and company: a linkedin.com/in/... address in a search result is their profile when the result names that person. Also look for their own X handle.',
-  '3. Keep going until you have the number asked. Expect to make 10 to 25 searches: try other companies, other titles that mean the same job, other cities nearby when the description allows it, and lists such as "top fintech startups in <city>" to find more companies whose leaders you can look up.',
+  '3. Keep going until you have the number asked. Try other companies, other titles that mean the same job, other cities nearby when the description allows it, and lists such as "top fintech startups in <city>" to find more companies whose leaders you can look up. Do not read a page when a search result already shows what you need.',
   '4. Report everyone you can reach, up to the number asked.',
   '',
   'Rules, without exception:',
@@ -71,6 +88,7 @@ const SYSTEM = [
   '- email: only an address printed on a page you read, with emailSourceUrl set to that page. Never guess one from a pattern such as first@company.com. Most people have none: use null.',
   '- Callum reaches people by email, LinkedIn or X. Someone with none of the three is no use to the sender: keep looking for others instead.',
   '- Leave out anyone on the list of people the sender already knows.',
+  '- When you are told what the sender offers, find people who could buy or use it. Leave out anyone at a company that sells the same thing or competes with the sender, and anyone at the sender\'s own company: the sender never wants to write to a competitor.',
   '- Prefer people who hold the role now. When a page is old, check that they still do.',
   '- role: their job title only, as written on the page (for example "Head of Finance"). company: the company name only.',
   '- why: one short sentence about the person, from what you read: what they do and why they fit (for example "Leads finance at Kora, a payments company in Lagos."). It is shown to the sender and used when writing to them, so keep notes about your search out of it.',
@@ -230,8 +248,10 @@ export class ModelFinder implements PeopleFinder {
   ) {}
 
   /**
-   * Two searches start at once from different ends (pages about people, and profiles in search results), and one more
-   * looks elsewhere when they found too few, told who the first two found. Anyone found twice is kept once.
+   * Small searches from different ends, two at a time: pages about people, profiles in search results, lists of
+   * companies, then elsewhere. Each one's people go to `onFound` as soon as it answers, so the first faces show in under
+   * a minute while the rest are still being looked for. Later searches are told who the earlier ones found. It stops
+   * once it has `count`, or when the first two found nobody. Anyone found twice is kept once.
    */
   async find(q: FindQuery): Promise<PersonLead[]> {
     const description = q.description.trim();
@@ -240,40 +260,56 @@ export class ModelFinder implements PeopleFinder {
     const known = (q.known ?? []).slice(0, MAX_KNOWN);
     const people: PersonLead[] = [];
     const seen = new Set<string>();
-    const keep = (leads: PersonLead[]) => {
+    const keep = (leads: PersonLead[]): PersonLead[] => {
+      const fresh: PersonLead[] = [];
       for (const lead of leads) {
-        if (people.length >= count) return;
+        if (people.length >= count) break;
         const keys = [lead.email, lead.linkedinUrl, lead.xHandle && `x:${lead.xHandle}`, `${lead.name}|${lead.company ?? ''}`.toLowerCase()].filter(Boolean) as string[];
         if (keys.some((k) => seen.has(k))) continue;
         for (const k of keys) seen.add(k);
         people.push(lead);
+        fresh.push(lead);
       }
+      return fresh;
     };
 
-    const half = Math.ceil(count / 2) + 1;
-    const first = await Promise.allSettled([
-      this.round(description, half, known, 'Start from pages about people: news of appointments, team and about pages, startup lists, conference speakers.'),
-      this.round(description, half, known, 'Start from profiles: LinkedIn profiles (site:linkedin.com/in) and X profiles in search results.'),
-    ]);
-    const failed = first.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-    if (failed && first.every((r) => r.status === 'rejected')) throw failed.reason;
-    for (const r of first) if (r.status === 'fulfilled') keep(r.value);
-
-    if (people.length < count && people.length > 0) {
+    // Two searches start at once; at least one more looks elsewhere when they come back short.
+    const rounds = Math.min(MAX_ROUNDS, Math.max(3, Math.ceil(count / PER_ROUND) + 1));
+    const errors: unknown[] = [];
+    let settled = 0;
+    const run = async (i: number): Promise<void> => {
       const found = people.map((p) => (p.company ? `${p.name} (${p.company})` : p.name));
       try {
-        keep(await this.round(description, count - people.length, [...known, ...found],
-          'Other searches already found the people listed as known. Look in places they did not: other companies, other titles for the same job, nearby cities when the description allows it.'));
-      } catch {
-        // The people already found are still worth showing.
+        // One to spare, since a found person can still be dropped for a bad link or a repeat.
+        const want = Math.min(PER_ROUND, count - people.length + 1);
+        const fresh = keep(await this.round(q, description, want, [...known, ...found], ANGLES[Math.min(i, ANGLES.length - 1)] as string));
+        if (fresh.length > 0) q.onFound?.(fresh);
+      } catch (err) {
+        errors.push(err);
+      } finally {
+        settled++;
       }
-    }
+    };
+    // The first two start at once from different ends, and each shows its people as soon as it is back.
+    await Promise.all([run(0), run(1)]);
+    // When neither found anybody, more of the same will not either. Otherwise two at a time until there are enough.
+    let next = 2;
+    const worker = async (): Promise<void> => {
+      while (people.length > 0 && people.length < count && next < rounds) await run(next++);
+    };
+    await Promise.all([worker(), worker()]);
+    // Every search failed: say why. Some found people: those are worth showing.
+    if (people.length === 0 && errors.length > 0 && errors.length === settled) throw errors[0];
     return people;
   }
 
-  private async round(description: string, count: number, known: string[], angle: string): Promise<PersonLead[]> {
+  private async round(q: FindQuery, description: string, count: number, known: string[], angle: string): Promise<PersonLead[]> {
+    const offer = q.offer?.replace(/\s+/g, ' ').trim().slice(0, 400);
+    const own = q.ownSite?.trim();
     const user = [
       `Who the sender wants to meet: ${description}`,
+      offer ? `What the sender offers (leave out their competitors): ${offer}` : '',
+      own ? `The sender's own company: ${own} (leave out people who work there)` : '',
       `How many to find: ${count}`,
       `Where to start: ${angle}`,
       `Today: ${this.today().toISOString().slice(0, 10)}`,
@@ -281,7 +317,7 @@ export class ModelFinder implements PeopleFinder {
     ].filter(Boolean).join('\n\n');
     let out: z.infer<typeof found>;
     try {
-      out = await this.model.research(found, SYSTEM, user, { maxSearches: Math.min(25, 8 + count) });
+      out = await this.model.research(found, SYSTEM, user, { maxSearches: Math.min(16, 6 + count) });
     } catch (err) {
       if (err instanceof ModelError) throw new FindError(err.message);
       throw err;
