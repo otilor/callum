@@ -1,5 +1,9 @@
+import { lookup as lookupCallback, type LookupAddress } from 'node:dns';
 import { lookup } from 'node:dns/promises';
-import { BlockList, isIP } from 'node:net';
+import { request as httpRequest, type IncomingMessage } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { BlockList, isIP, type LookupFunction } from 'node:net';
+import { Readable } from 'node:stream';
 import { z } from 'zod';
 import type { PersonLead } from '../../shared/types.js';
 import { ModelError, type Model } from '../ai/model.js';
@@ -107,6 +111,42 @@ export function privateAddress(address: string): boolean {
 export type Resolve = (host: string) => Promise<string[]>;
 const resolveHost: Resolve = async (host) => (await lookup(host, { all: true, verbatim: true })).map((a) => a.address);
 
+/**
+ * The address lookup for page reads. It runs when the connection is made, so the address checked is the address
+ * used: a name that answers with a public address first and a private one later cannot slip through.
+ */
+const publicLookup: LookupFunction = (host, options, callback) => {
+  lookupCallback(host, { all: true, verbatim: true }, (err, found) => {
+    const list = (found ?? []) as LookupAddress[];
+    if (err || list.length === 0) return callback(err ?? new Error('no address'), '', 4);
+    if (list.some((a) => privateAddress(a.address))) return callback(new Error('That page is not on the public internet.'), '', 4);
+    if (options.all) return (callback as unknown as (e: null, all: LookupAddress[]) => void)(null, list);
+    const first = list[0] as LookupAddress;
+    callback(null, first.address, first.family);
+  });
+};
+
+/** A fetch for page reads that never follows a redirect and connects only to public addresses. */
+export const publicFetch = ((input: string | URL | Request, init?: RequestInit) => new Promise<Response>((resolve, reject) => {
+  const url = new URL(input instanceof Request ? input.url : String(input));
+  const send = url.protocol === 'https:' ? httpsRequest : httpRequest;
+  const headers = Object.fromEntries(new Headers(init?.headers).entries());
+  const req = send(url, { method: 'GET', headers, lookup: publicLookup, ...(init?.signal ? { signal: init.signal } : {}) }, (res: IncomingMessage) => {
+    const status = res.statusCode ?? 502;
+    const out = new Headers();
+    for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) out.set(k, Array.isArray(v) ? v.join(', ') : v);
+    const empty = status < 200 || status === 204 || status === 304 || (status >= 300 && status < 400);
+    if (empty) res.resume();
+    try {
+      resolve(new Response(empty ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>), { status: status < 200 || status > 599 ? 502 : status, headers: out }));
+    } catch (e) {
+      reject(e);
+    }
+  });
+  req.on('error', reject);
+  req.end();
+})) as typeof fetch;
+
 const MAX_PAGE = 2_000_000;
 const MAX_HOPS = 5;
 
@@ -114,12 +154,14 @@ const MAX_HOPS = 5;
  * The text of a public page, and the address it ended at, or null. Every hop of a redirect is checked again, and a
  * name whose address is on this computer or its network is never fetched.
  */
-export async function readPage(start: URL, fetchImpl: typeof fetch = fetch, resolve: Resolve = resolveHost): Promise<{ text: string; url: URL } | null> {
+export async function readPage(start: URL, fetchImpl: typeof fetch = publicFetch, resolve: Resolve = resolveHost): Promise<{ text: string; url: URL; hops: URL[] } | null> {
   try {
     let url: URL | null = start;
+    const hops: URL[] = [];
     for (let hop = 0; hop <= MAX_HOPS && url; hop++) {
       const page = publicPage(url.href);
       if (!page) return null;
+      hops.push(page);
       const addresses = await resolve(hostOf(page));
       if (addresses.length === 0 || addresses.some(privateAddress)) return null;
       const res = await fetchImpl(page, { redirect: 'manual', signal: AbortSignal.timeout(10_000), headers: { 'user-agent': 'Callum (people finder)' } });
@@ -142,7 +184,7 @@ export async function readPage(start: URL, fetchImpl: typeof fetch = fetch, reso
           break;
         }
       }
-      return { text, url: page };
+      return { text, url: page, hops };
     }
     return null;
   } catch {
@@ -182,7 +224,7 @@ const clean = (v: string | null | undefined): string | null => {
 export class ModelFinder implements PeopleFinder {
   constructor(
     private readonly model: Model,
-    private readonly fetchImpl: typeof fetch = fetch,
+    private readonly fetchImpl: typeof fetch = publicFetch,
     private readonly today: () => Date = () => new Date(),
     private readonly resolve: Resolve = resolveHost,
   ) {}
@@ -261,7 +303,7 @@ export class ModelFinder implements PeopleFinder {
     if (email) {
       const page = publicPage(raw.emailSourceUrl) ?? source;
       const read = urlCarries(page, email) ? null : await readPage(page, this.fetchImpl, this.resolve);
-      if (!read || urlCarries(read.url, email) || !pageShows(read.text, email)) email = null;
+      if (!read || read.hops.some((u) => urlCarries(u, email as string)) || !pageShows(read.text, email)) email = null;
     }
     if (!email && !linkedinUrl && !xHandle) return null;
     const role = clean(raw.role);

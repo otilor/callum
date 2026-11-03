@@ -43,7 +43,7 @@ describe('findClaudeCode', () => {
     expect(findClaudeCode({ PATH: [join(home, 'a'), join(home, 'b'), join(home, 'c')].join(delimiter), HOME: home }, 'linux')).toBe(good);
   });
 
-  it('runs the cli.js behind an npm link, so a Dock-launched app needs no node on its PATH', () => {
+  it.skipIf(process.platform === 'win32')('runs the cli.js behind an npm link, so a Dock-launched app needs no node on its PATH', () => {
     const root = mkdtempSync(join(tmpdir(), 'callum-cc-'));
     const pkg = join(root, 'lib', 'node_modules', '@anthropic-ai', 'claude-code');
     mkdirSync(pkg, { recursive: true });
@@ -70,6 +70,17 @@ describe('findClaudeCode', () => {
     const home = mkdtempSync(join(tmpdir(), 'callum-cc-'));
     const exe = program(join(home, 'Programs', 'Claude'), 'claude.exe');
     expect(findClaudeCode({ Path: [join(home, 'nothing'), join(home, 'Programs', 'Claude')].join(';'), USERPROFILE: home }, 'win32')).toBe(exe);
+  });
+
+  it('finds a project-local npm install on Windows, in node_modules/.bin', () => {
+    const root = mkdtempSync(join(tmpdir(), 'callum-cc-'));
+    const bin = join(root, 'node_modules', '.bin');
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(join(bin, 'claude.cmd'), '@node ..\\@anthropic-ai\\claude-code\\cli.js %*');
+    mkdirSync(join(root, 'node_modules', '@anthropic-ai', 'claude-code'), { recursive: true });
+    const cli = join(root, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
+    writeFileSync(cli, '');
+    expect(findClaudeCode({ CALLUM_CLAUDE_PATH: join(bin, 'claude.cmd') }, 'win32')).toBe(join(bin, '..', '@anthropic-ai', 'claude-code', 'cli.js'));
   });
 
   it('looks for claude.exe on Windows, and nowhere else when it is not there', () => {

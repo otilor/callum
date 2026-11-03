@@ -226,7 +226,8 @@ function slots(max: number): <T>(work: () => Promise<T>) => Promise<T> {
   let running = 0;
   const waiting: (() => void)[] = [];
   return async (work) => {
-    if (running >= max) await new Promise<void>((r) => waiting.push(r));
+    // A run woken from the queue looks again: another may have taken the free slot in between.
+    while (running >= max) await new Promise<void>((r) => waiting.push(r));
     running++;
     try {
       return await work();

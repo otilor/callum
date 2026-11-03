@@ -20,8 +20,10 @@ export interface ClaudeCodeStatus {
  */
 function program(file: string, platform: NodeJS.Platform): string | null {
   if (/\.(cmd|bat|ps1)$/i.test(file)) {
-    const cli = join(dirname(file), 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
-    return existsSync(cli) ? cli : null;
+    // A global install puts the launcher beside node_modules; a local one puts it in node_modules/.bin.
+    const pkg = ['@anthropic-ai', 'claude-code', 'cli.js'];
+    const cli = [join(dirname(file), 'node_modules', ...pkg), join(dirname(file), '..', ...pkg)].find((f) => existsSync(f));
+    return cli ?? null;
   }
   if (!runnable(file, platform)) return null;
   try {

@@ -257,6 +257,9 @@ describe('commit and undo', () => {
     expect(s.ctx.repo.listPeople()).toHaveLength(0);
     const again = await commit(s.ctx, p.batchId);
     expect(again.added.map((a) => a.name)).toEqual(['Kemi Eze', 'Femi Ade']);
+    // Really added again, not the first answer replayed.
+    expect(s.ctx.repo.listPeople().map((p) => p.name).sort()).toEqual(['Femi Ade', 'Kemi Eze']);
+    expect(again.added.map((a) => a.id)).toEqual(s.ctx.repo.listPeople().map((p) => p.id).sort((a, b) => a - b));
   });
 
   it('undo has nothing to take back before the people were added', async () => {

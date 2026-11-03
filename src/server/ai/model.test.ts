@@ -60,7 +60,7 @@ describe('ClaudeCodeModel', () => {
     expect(args).not.toContain('--system-prompt');
     expect(call?.system).toBe('Be brief.');
     const promptFile = flag(args, '--system-prompt-file') ?? '';
-    expect(promptFile.startsWith('/tmp/callum-test/claude-code/')).toBe(true);
+    expect(promptFile.startsWith(join('/tmp/callum-test/claude-code', 'system-'))).toBe(true);
     expect(existsSync(promptFile)).toBe(false);
     expect(flag(args, '--max-turns')).toBe('5');
     expect(flag(args, '--tools')).toBe('');

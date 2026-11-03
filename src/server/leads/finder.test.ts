@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { ModelError, type Model, type ResearchOptions } from '../ai/model.js';
 import { DemoFinder } from '../demo/finder.js';
-import { FindError, ModelFinder, pageShows, privateAddress, readPage, type Resolve } from './finder.js';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { FindError, ModelFinder, pageShows, privateAddress, publicFetch, readPage, type Resolve } from './finder.js';
 
 interface Raw {
   name: string; role?: string | null; company?: string | null; location?: string | null; linkedinUrl?: string | null; xHandle?: string | null;
@@ -219,6 +221,19 @@ describe('reading a page for an email', () => {
     expect(site.read).toEqual([]);
   });
 
+  it('refuses, at the moment it connects, a name that leads to this computer', async () => {
+    const server = createServer((_req, res) => res.end('private page'));
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const { port } = server.address() as AddressInfo;
+    try {
+      // The same server answers a direct request, so only the address check stops the one by name.
+      expect(await (await fetch(`http://127.0.0.1:${port}/`)).text()).toBe('private page');
+      await expect(publicFetch(`http://localhost:${port}/`)).rejects.toThrow();
+    } finally {
+      server.close();
+    }
+  });
+
   it('knows which addresses are private', () => {
     for (const a of ['127.0.0.1', '10.1.2.3', '172.20.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', 'fe80::1', 'fd00::1', '::ffff:127.0.0.1', 'nonsense']) {
       expect(privateAddress(a)).toBe(true);
@@ -231,13 +246,18 @@ describe('reading a page for an email', () => {
       'https://acme.com/team?e=jane@acme.com': '<link rel="canonical" href="https://acme.com/team?e=jane%40acme.com">',
       'https://acme.com/go': { to: 'https://acme.com/echo?who=jane%40acme.com' },
       'https://acme.com/echo?who=jane%40acme.com': 'jane@acme.com',
+      'https://acme.com/hop': { to: 'https://acme.com/r?e=jane@acme.com' },
+      'https://acme.com/r?e=jane@acme.com': { to: 'https://acme.com/clean' },
+      'https://acme.com/clean': 'jane@acme.com',
     });
     const { model } = fakeModel([
       { name: 'Jane Doe', email: 'jane@acme.com', emailSourceUrl: 'https://acme.com/team?e=jane@acme.com', linkedinUrl: 'https://www.linkedin.com/in/jane' },
       { name: 'Jo Doe', email: 'jane@acme.com', emailSourceUrl: 'https://acme.com/go', linkedinUrl: 'https://www.linkedin.com/in/jo' },
+      { name: 'Jan Doe', email: 'jane@acme.com', emailSourceUrl: 'https://acme.com/hop', linkedinUrl: 'https://www.linkedin.com/in/jan' },
     ], []);
-    const people = await new ModelFinder(model, site.fetch, today, dns()).find({ description: 'anyone', count: 2 });
-    expect(people.map((p) => [p.name, p.email ?? null])).toEqual([['Jane Doe', null], ['Jo Doe', null]]);
+    const people = await new ModelFinder(model, site.fetch, today, dns()).find({ description: 'anyone', count: 3 });
+    // The middle hop carried the address; the page at the end only showed it back.
+    expect(people.map((p) => [p.name, p.email ?? null])).toEqual([['Jane Doe', null], ['Jo Doe', null], ['Jan Doe', null]]);
     expect(site.read).not.toContain('https://acme.com/team?e=jane@acme.com');
   });
 });
