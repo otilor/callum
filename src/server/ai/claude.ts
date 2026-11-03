@@ -6,12 +6,15 @@ import { type Clock, systemClock } from '../engine/clock.js';
 import { findPlaceholders } from '../engine/guard.js';
 import { OFFER_PLACEHOLDER, classifyOptions, isExplicitOptOut, messageDate, stripQuoted } from './templates.js';
 import { ApiModel, type Model } from './model.js';
-import type { AskIntent, Classification, Writer, WriteContext } from './writer.js';
+import type { AskIntent, Classification, Writer, WriteContext, Written } from './writer.js';
 
 const CHANNELS = ['email', 'linkedin', 'x'] as const;
 
 /** The prompt asks for under 90 words; this is the limit the code enforces, with room to spare. */
 const MAX_WORDS: Record<OutKind, number> = { hello: 120, invite: 60, thanks: 120, follow_up: 120, reply: 160, booking: 120, close: 120 };
+
+/** The messages that say what the sender offers, and so cannot be written without knowing it. */
+const OFFERS_KIND = new Set<OutKind>(['hello', 'invite', 'thanks']);
 
 const COPY_RULES = [
   'You write for Callum, a calm outreach assistant, on behalf of one person (the sender).',
@@ -22,7 +25,8 @@ const COPY_RULES = [
   '- Under 90 words.',
   '- Give exact times ("Thursday at 9:00"), never "soon" or "sometime".',
   '- Never invent facts: no prices, links, customers, numbers, dates or claims you were not given.',
-  '- When a fact you need is missing (a price, a link, a date), write it as an ALL-CAPS bracket placeholder such as [YOUR PRICE] or [YOUR CALENDAR LINK]. Never guess.',
+  '- Never write a placeholder or a blank for someone to fill in: nothing in square brackets, no [YOUR PRICE], no {first_name}.',
+  '- When a fact you were not given would help (a price, a link, a date), write around it without it. Never guess.',
   '- Never use the words: lead, prospect, contact (as a noun for a person), touch, step, cadence, engaged, churned, disable.',
   '- Never mention AI, automation or that this was generated.',
 ].join('\n');
@@ -38,12 +42,12 @@ const KIND_BRIEF: Record<OutKind, string> = {
   invite: 'A LinkedIn connection note. At most 280 characters including spaces. No pitch beyond one line.',
   thanks: 'A short thank-you for accepting the LinkedIn connection, with one line on what the sender offers and an easy next step.',
   follow_up: 'A follow-up to an earlier note that got no reply. Add something useful or a lighter ask. If this is the last one, say so kindly and leave the door open.',
-  reply: 'A reply to what they last wrote. Answer what they asked. If they asked about something you were not given, use an ALL-CAPS bracket placeholder.',
+  reply: 'A reply to what they last wrote. Answer what they asked. If they asked about something you were not given, say you will come back to them on it.',
   booking: 'Offer to book a time. Include the calendar link exactly as given.',
   close: 'A gracious close: thank them, say you will not follow up again, wish them well.',
 };
 
-const writeSchema = z.object({ body: z.string() });
+const writeSchema = z.object({ body: z.string(), missing: z.string().nullable() });
 const classifySchema = z.object({
   kind: z.enum(['interested', 'question', 'not_now', 'not_interested', 'stop', 'hostile', 'out_of_office', 'referral']),
   suggested: z.enum(['reply', 'book', 'snooze', 'close']),
@@ -119,7 +123,7 @@ export class ClaudeWriter implements Writer {
     return this.model.ask(schema, system, user);
   }
 
-  async write(kind: OutKind, ctx: WriteContext): Promise<{ subject: string | null; body: string }> {
+  async write(kind: OutKind, ctx: WriteContext): Promise<Written> {
     const template = await this.fallback.write(kind, ctx);
     const { person, project, settings, channel } = ctx;
     const system = [
@@ -130,11 +134,16 @@ export class ClaudeWriter implements Writer {
       `The sender: ${settings.senderName ?? 'the sender'}. Write in the first person as the sender.`,
       project.offer
         ? `What the sender offers (their own words; write it in first person, "I help ..."): ${project.offer}`
-        : `The sender has not said what they offer. Where you must say it, write ${OFFER_PLACEHOLDER}.`,
+        : 'The sender has not said what they offer.',
+      OFFERS_KIND.has(kind)
+        ? 'If you cannot say in plain words what the sender does and for whom from what you were given (it is missing, only a link or a name, or too vague to say anything true), do not write the message: leave "body" empty and set "missing" to one short question for the sender that would let you write it, such as "What does Tethers do, and for whom, in one line?".'
+        : '',
       project.audience ? `Who the sender usually writes to: ${project.audience}` : '',
       `Tone: ${TONES[project.tone]}.`,
       project.sample ? `A message the sender wrote themselves, for voice only (never copy its facts):\n${project.sample}` : '',
-      kind === 'booking' ? `Calendar link: ${project.calendarUrl?.trim() || '[YOUR CALENDAR LINK]'}` : '',
+      kind === 'booking'
+        ? project.calendarUrl?.trim() ? `Calendar link: ${project.calendarUrl.trim()}` : 'There is no calendar link: ask which of two or three times next week suits them.'
+        : '',
       'If they wrote in a language other than English, answer in the language of their message.',
     ].filter(Boolean).join('\n\n');
     const user = [
@@ -147,11 +156,14 @@ export class ClaudeWriter implements Writer {
 
     const out = await this.ask(writeSchema, system, user);
     if (!out) return template;
+    const missing = out.missing?.replace(/\s+/g, ' ').trim();
+    if (missing && OFFERS_KIND.has(kind)) return { subject: template.subject, body: '', missing: missing.slice(0, 200) };
     let body = out.body.trim().replace(/!/g, '.').replace(/\u00A1/g, '');
     if (kind === 'invite') body = clampNote(body);
-    const badMergeField = findPlaceholders(body).some((p) => !p.startsWith('['));
+    // A blank left to fill in is never sent: the templates take over, and the runner asks for what they lack.
+    const blank = findPlaceholders(body).length > 0;
     const words = body.split(/\s+/).filter(Boolean).length;
-    if (!body || words > MAX_WORDS[kind] || body.length > 1500 || badMergeField) return template;
+    if (!body || words > MAX_WORDS[kind] || body.length > 1500 || blank) return template;
     return { subject: template.subject, body };
   }
 

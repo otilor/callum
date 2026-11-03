@@ -12,6 +12,8 @@ import { handleInbound, heldBackPeople, retryFailedInbound } from './inbound.js'
 import { INCIDENT_COPY, channelSignedOut, openIncident, refreshSignedOutCount, releaseMailboxLimit, resolveChannelIncidents, syncAutoIncidents } from './incidents.js';
 import { isHeldReferral, trackPause } from '../services/quiet.js';
 import { maybeSendWeekly } from '../services/weekly.js';
+import { SAYS_OFFER, askForOffer, offerSaysEnough, takeBackBlankDrafts } from './offer.js';
+import { findPlaceholders } from '../engine/guard.js';
 
 export const POLL_EVERY_MS: Record<Channel, number> = { email: 120_000, x: 300_000, linkedin: 900_000 };
 export const DEFAULT_TICK_MS = 5_000;
@@ -89,6 +91,8 @@ export async function planDue(ctx: Ctx, opts: PlanOptions = {}): Promise<number>
   const now = ctx.clock.now();
   const accounts = repo.listChannels();
   const reachable = accounts.filter((c) => c.status === 'connected').map((c) => c.channel);
+  // Never anything with a blank in it: such a message waiting from before is taken back, and written again later.
+  takeBackBlankDrafts(ctx);
   const open = repo.listOutbox({ state: ['awaiting_ok', 'scheduled', 'sending', 'blocked', 'failed'] });
   const itemsOf = new Map<number, OutboxItem[]>();
   for (const i of open) itemsOf.set(i.personId, [...(itemsOf.get(i.personId) ?? []), i]);
@@ -176,9 +180,18 @@ export async function planDue(ctx: Ctx, opts: PlanOptions = {}): Promise<number>
         if (!early && r.left <= 0) continue;
         spend = r.key;
       }
+      // A hello says what the sender does. Until Callum can, it asks the user rather than write a blank.
+      if (SAYS_OFFER.has(c.kind) && !offerSaysEnough(c.project.offer)) {
+        askForOffer(ctx, c.project);
+        continue;
+      }
       const written = await ctx.writer.write(c.kind, {
         person: c.person, project: c.project, settings, channel: c.channel, history: repo.listMessages(c.person.id),
       });
+      if (written.missing || findPlaceholders(written.body).length > 0 || (written.subject && findPlaceholders(written.subject).length > 0)) {
+        askForOffer(ctx, c.project, written.missing);
+        continue;
+      }
       // Writing takes a while: look again before putting it in the outbox.
       const fresh = repo.getPerson(c.person.id);
       if (!fresh || fresh.status !== 'active' || holdsUp(fresh, repo.listOutbox({ personId: fresh.id })) || heldBackPeople(ctx).has(fresh.id)) continue;

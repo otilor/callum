@@ -12,7 +12,9 @@ export type SuggestedAction = 'reply' | 'book' | 'snooze' | 'close';
 export type Tone = 'warm' | 'direct' | 'playful';
 export type IncidentKind =
   | 'linkedin_check' | 'linkedin_weekly_limit' | 'mailbox_signed_out' | 'x_signed_out' | 'linkedin_signed_out'
-  | 'bounces' | 'x_limit' | 'mailbox_limit' | 'send_failed' | 'reply_unread' | 'not_answering' | 'channel_paused';
+  | 'bounces' | 'x_limit' | 'mailbox_limit' | 'send_failed' | 'reply_unread' | 'not_answering' | 'channel_paused'
+  /** Callum needs the user to say what they offer before it writes to anyone in a project. Not about a channel. */
+  | 'needs_offer';
 export type Correction = 'auto_reply' | 'wrong_person' | 'never_contact';
 export type ProjectState = 'running' | 'paused' | 'wrapped';
 

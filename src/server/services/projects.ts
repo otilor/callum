@@ -4,6 +4,7 @@ import { DuplicateProjectName } from '../db/repo.js';
 import { canMoveProject, moveProject } from '../engine/lifecycle.js';
 import { cancelPendingRefunding, parseWhen, plural, requirePerson, requireProject } from './common.js';
 import { UserError } from './errors.js';
+import { offerSaysEnough, offerSettled } from '../runner/offer.js';
 
 const TONES: readonly Tone[] = ['warm', 'direct', 'playful'];
 const MAX_NAME = 60;
@@ -113,6 +114,7 @@ export function updateProject(ctx: Ctx, id: number, patch: ProjectPatch): Projec
   if (patch.calendarUrl !== undefined) next.calendarUrl = cleanCalendar(patch.calendarUrl);
   const project = ctx.repo.updateProject(id, next);
   ctx.bus.emit('projects');
+  if (offerSaysEnough(project.offer)) offerSettled(ctx, id);
   return project;
 }
 
@@ -163,6 +165,7 @@ export function wrapProject(ctx: Ctx, id: number): { cancelledFollowUps: number;
       ctx.repo.updateSettings({ currentProjectId: next?.id ?? null });
     }
   });
+  offerSettled(ctx, id);
   ctx.bus.emit('outbox');
   ctx.bus.emit('projects');
   ctx.bus.emit('settings');

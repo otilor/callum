@@ -334,7 +334,8 @@ export function incidentVariant(incident: Incident, state: AppState, now: Date):
     case 'send_failed': return sendFailed(incident, state, base);
     case 'linkedin_weekly_limit': return weeklyLimit(incident, state, base);
     case 'linkedin_check':
-    case 'channel_paused': return null;
+    case 'channel_paused':
+    case 'needs_offer': return null;
   }
 }
 
