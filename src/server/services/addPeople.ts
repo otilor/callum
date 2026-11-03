@@ -321,7 +321,6 @@ function scheduleFirst(ctx: Ctx, person: Person, userTz: string, now: Date): Per
 
 /** Takes back what `commit` added, for everyone Callum has not written to and has not heard from. */
 export function undoBatch(ctx: Ctx, batchId: string): { removed: number } {
-  const store = storeOf(ctx);
   const batch = batchOf(ctx, batchId);
   if (!batch.added) throw new UserError('Nobody was added from that list.');
   let removed = 0;
@@ -330,7 +329,10 @@ export function undoBatch(ctx: Ctx, batchId: string): { removed: number } {
       if (ctx.repo.deletePerson(id)) removed++;
     }
   });
-  store.delete(batchId);
+  // The batch stays, so the same people can be added again: for people Claude found, without searching again.
+  batch.added = null;
+  batch.addedTo = null;
+  batch.result = null;
   if (removed > 0) {
     ctx.bus.emit('people');
     ctx.bus.emit('outbox');

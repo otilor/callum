@@ -1,4 +1,5 @@
-import { isIP } from 'node:net';
+import { lookup } from 'node:dns/promises';
+import { BlockList, isIP } from 'node:net';
 import { z } from 'zod';
 import type { PersonLead } from '../../shared/types.js';
 import { ModelError, type Model } from '../ai/model.js';
@@ -35,15 +36,15 @@ const MAX_KNOWN = 300;
 const found = z.object({
   people: z.array(z.object({
     name: z.string(),
-    role: z.string().nullable(),
-    company: z.string().nullable(),
-    location: z.string().nullable(),
-    linkedinUrl: z.string().nullable(),
-    xHandle: z.string().nullable(),
-    email: z.string().nullable(),
-    emailSourceUrl: z.string().nullable(),
+    role: z.string().nullish(),
+    company: z.string().nullish(),
+    location: z.string().nullish(),
+    linkedinUrl: z.string().nullish(),
+    xHandle: z.string().nullish(),
+    email: z.string().nullish(),
+    emailSourceUrl: z.string().nullish(),
     sourceUrl: z.string(),
-    why: z.string(),
+    why: z.string().nullish(),
   })),
 });
 type Found = z.infer<typeof found>['people'][number];
@@ -76,44 +77,100 @@ function publicPage(raw: string | null | undefined): URL | null {
   try {
     const url = new URL((raw ?? '').trim());
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-    const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    if (url.username || url.password) return null;
+    const host = hostOf(url);
     // Only pages on the public web are read: no addresses, no names that point back into this computer or network.
-    if (isIP(host) !== 0 || host === 'localhost' || !host.includes('.') || /\.(local|localhost|internal|home|lan)$/.test(host)) return null;
+    if (isIP(host) !== 0 || host === 'localhost' || !host.includes('.') || /\.(local|localhost|internal|home|lan|arpa)$/.test(host)) return null;
     return url;
   } catch {
     return null;
   }
 }
 
-const MAX_PAGE = 2_000_000;
+const hostOf = (url: URL): string => url.hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase();
 
-/** The text of a public page, or null. */
-export async function readPage(url: URL, fetchImpl: typeof fetch = fetch): Promise<string | null> {
+/** Addresses that are not on the public internet: this computer, the local network, and the ranges kept for special use. */
+const PRIVATE = new BlockList();
+for (const [net, bits] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12],
+  ['192.0.0.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['224.0.0.0', 4], ['240.0.0.0', 4]] as const) PRIVATE.addSubnet(net, bits, 'ipv4');
+for (const [net, bits] of [['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8]] as const) PRIVATE.addSubnet(net, bits, 'ipv6');
+
+export function privateAddress(address: string): boolean {
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
+  if (mapped?.[1]) return PRIVATE.check(mapped[1], 'ipv4');
+  const family = isIP(address);
+  if (family === 0) return true;
+  return PRIVATE.check(address, family === 4 ? 'ipv4' : 'ipv6');
+}
+
+/** Looks a host name up. Tests replace it. */
+export type Resolve = (host: string) => Promise<string[]>;
+const resolveHost: Resolve = async (host) => (await lookup(host, { all: true, verbatim: true })).map((a) => a.address);
+
+const MAX_PAGE = 2_000_000;
+const MAX_HOPS = 5;
+
+/**
+ * The text of a public page, and the address it ended at, or null. Every hop of a redirect is checked again, and a
+ * name whose address is on this computer or its network is never fetched.
+ */
+export async function readPage(start: URL, fetchImpl: typeof fetch = fetch, resolve: Resolve = resolveHost): Promise<{ text: string; url: URL } | null> {
   try {
-    const res = await fetchImpl(url, { redirect: 'follow', signal: AbortSignal.timeout(10_000), headers: { 'user-agent': 'Callum (people finder)' } });
-    if (!res.ok || !res.body) return null;
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let text = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      text += decoder.decode(value, { stream: true });
-      if (text.length > MAX_PAGE) {
-        await reader.cancel();
-        break;
+    let url: URL | null = start;
+    for (let hop = 0; hop <= MAX_HOPS && url; hop++) {
+      const page = publicPage(url.href);
+      if (!page) return null;
+      const addresses = await resolve(hostOf(page));
+      if (addresses.length === 0 || addresses.some(privateAddress)) return null;
+      const res = await fetchImpl(page, { redirect: 'manual', signal: AbortSignal.timeout(10_000), headers: { 'user-agent': 'Callum (people finder)' } });
+      if (res.status >= 300 && res.status < 400) {
+        const next = res.headers.get('location');
+        await res.body?.cancel();
+        url = next ? new URL(next, page) : null;
+        continue;
       }
+      if (!res.ok || !res.body) return null;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let text = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        text += decoder.decode(value, { stream: true });
+        if (text.length > MAX_PAGE) {
+          await reader.cancel();
+          break;
+        }
+      }
+      return { text, url: page };
     }
-    return text;
+    return null;
   } catch {
     return null;
   }
 }
 
-/** Whether a page shows this address, written out plainly or with the @ as an HTML entity. */
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Whether a page shows this address as a whole address (not inside a longer one), written out plainly or with the @
+ * as an HTML entity or escaped in a mailto link.
+ */
 export function pageShows(page: string, email: string): boolean {
   const text = page.replace(/&#0*64;|&#x0*40;|&commat;/gi, '@').replace(/%40/g, '@').toLowerCase();
-  return text.includes(email.toLowerCase());
+  const re = new RegExp(`(^|[^a-z0-9._%+-])${escapeRe(email.toLowerCase())}(?![a-z0-9_-]|\\.[a-z0-9])`);
+  return re.test(text);
+}
+
+/** Whether an address of a page carries this email, in any spelling: such a page could show it only because it was asked to. */
+function urlCarries(url: URL, email: string): boolean {
+  let text = url.href.toLowerCase();
+  try {
+    text = decodeURIComponent(text);
+  } catch {
+    // Left as it is.
+  }
+  return text.replace(/%40/g, '@').includes(email.toLowerCase()) || text.includes(email.toLowerCase().replace('@', '%40'));
 }
 
 const clean = (v: string | null | undefined): string | null => {
@@ -123,7 +180,12 @@ const clean = (v: string | null | undefined): string | null => {
 
 /** Claude's search on the web: through Claude Code on this computer, or the API with a key. */
 export class ModelFinder implements PeopleFinder {
-  constructor(private readonly model: Model, private readonly fetchImpl: typeof fetch = fetch, private readonly today: () => Date = () => new Date()) {}
+  constructor(
+    private readonly model: Model,
+    private readonly fetchImpl: typeof fetch = fetch,
+    private readonly today: () => Date = () => new Date(),
+    private readonly resolve: Resolve = resolveHost,
+  ) {}
 
   /**
    * Two searches start at once from different ends (pages about people, and profiles in search results), and one more
@@ -201,8 +263,8 @@ export class ModelFinder implements PeopleFinder {
     let email = cleanEmail(raw.email);
     if (email) {
       const page = publicPage(raw.emailSourceUrl) ?? source;
-      const text = await readPage(page, this.fetchImpl);
-      if (!text || !pageShows(text, email)) email = null;
+      const read = urlCarries(page, email) ? null : await readPage(page, this.fetchImpl, this.resolve);
+      if (!read || urlCarries(read.url, email) || !pageShows(read.text, email)) email = null;
     }
     if (!email && !linkedinUrl && !xHandle) return null;
     const role = clean(raw.role);

@@ -214,7 +214,7 @@ export const noteApi = {
 export interface ClaudeInfo {
   engine: 'claude_code' | 'api' | null;
   keySource: 'env' | 'saved' | null;
-  claudeCode: { found: boolean; signedIn: boolean; account: string | null };
+  claudeCode: { found: boolean; runs?: boolean; signedIn: boolean; account: string | null };
   lastError: string | null;
 }
 /** The key Callum writes hellos with. The server keeps it and never sends it back. */

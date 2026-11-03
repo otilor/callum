@@ -322,6 +322,9 @@ describe('AddPeople, after a search on the web', () => {
     await describeAndAdd(user);
     await user.click(within(await screen.findByRole('status')).getByRole('button', { name: 'Undo' }));
     expect(await screen.findByText('Undone. Nobody was added.')).toBeInTheDocument();
+    // The same people come back to choose from again: no second search, which would take minutes and find others.
+    expect(mocks.describe).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('button', { name: 'Add 3 people' })).toBeInTheDocument();
   });
 
   it('shows the finished screen with no credit line and no add-the-rest button', async () => {

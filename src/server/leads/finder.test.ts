@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { ModelError, type Model, type ResearchOptions } from '../ai/model.js';
 import { DemoFinder } from '../demo/finder.js';
-import { FindError, ModelFinder, pageShows } from './finder.js';
+import { FindError, ModelFinder, pageShows, privateAddress, readPage, type Resolve } from './finder.js';
 
 interface Raw {
   name: string; role?: string | null; company?: string | null; location?: string | null; linkedinUrl?: string | null; xHandle?: string | null;
@@ -33,16 +33,23 @@ function fakeModel(...runs: (Raw[] | Error)[]): { model: Model; asked: Asked[] }
   return { model, asked };
 }
 
-const pages = (map: Record<string, string>): { fetch: typeof fetch; read: string[] } => {
+/** Pages by address; a value of `{ to }` is a redirect. */
+const pages = (map: Record<string, string | { to: string }>): { fetch: typeof fetch; read: string[] } => {
   const read: string[] = [];
-  const f = (async (input: string | URL | Request) => {
+  const f = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     read.push(url);
+    expect(init?.redirect).toBe('manual');
     const body = map[url];
-    return body === undefined ? new Response('not here', { status: 404 }) : new Response(body);
+    if (body === undefined) return new Response('not here', { status: 404 });
+    if (typeof body !== 'string') return new Response(null, { status: 302, headers: { location: body.to } });
+    return new Response(body);
   }) as typeof fetch;
   return { fetch: f, read };
 };
+
+/** Every name is on the public internet, except the ones given. */
+const dns = (names: Record<string, string[]> = {}): Resolve => async (host) => names[host] ?? ['93.184.216.34'];
 
 const today = () => new Date('2026-11-03T09:00:00.000Z');
 
@@ -53,7 +60,7 @@ describe('ModelFinder', () => {
       { name: 'Tunde Bello', role: 'CFO', company: 'Ledgerly', xHandle: '@tundeb', sourceUrl: 'https://www.ledgerly.com/team' },
       { name: 'Nobody Reachable', role: 'CFO', company: 'Sent' },
     ], []);
-    const people = await new ModelFinder(model, pages({}).fetch, today).find({ description: 'Heads of finance in Lagos', count: 3 });
+    const people = await new ModelFinder(model, pages({}).fetch, today, dns()).find({ description: 'Heads of finance in Lagos', count: 3 });
     expect(people).toEqual([
       { name: 'Kemi Eze', role: 'Head of Finance', company: 'Oko Pay', linkedinUrl: 'https://www.linkedin.com/in/kemi-eze', source: 'web', note: 'Leads finance at Oko Pay. Found on techcabal.com.' },
       { name: 'Tunde Bello', role: 'CFO', company: 'Ledgerly', xHandle: 'tundeb', source: 'web', note: 'Leads finance at a payments company in Lagos. Found on ledgerly.com.' },
@@ -70,7 +77,7 @@ describe('ModelFinder', () => {
       { name: 'Tunde Bello', email: 'tunde@ledgerly.com', emailSourceUrl: 'https://ledgerly.com/about', linkedinUrl: 'https://www.linkedin.com/in/tunde' },
       { name: 'Guessed Only', email: 'guessed@sent.co', emailSourceUrl: 'https://sent.co/nothing' },
     ], []);
-    const people = await new ModelFinder(model, site.fetch, today).find({ description: 'finance leads', count: 3 });
+    const people = await new ModelFinder(model, site.fetch, today, dns()).find({ description: 'finance leads', count: 3 });
     expect(people.map((p) => [p.name, p.email ?? null, p.linkedinUrl ?? null])).toEqual([
       ['Kemi Eze', 'kemi@okopay.com', null],
       ['Tunde Bello', null, 'https://www.linkedin.com/in/tunde'],
@@ -85,7 +92,7 @@ describe('ModelFinder', () => {
       { name: 'Metadata', email: 'x@y.com', emailSourceUrl: 'http://169.254.169.254/latest', sourceUrl: 'https://example.org/team', linkedinUrl: 'https://www.linkedin.com/in/meta' },
       { name: 'File', linkedinUrl: 'https://www.linkedin.com/in/file', sourceUrl: 'file:///etc/passwd' },
     ], []);
-    const people = await new ModelFinder(model, site.fetch, today).find({ description: 'anyone', count: 4 });
+    const people = await new ModelFinder(model, site.fetch, today, dns()).find({ description: 'anyone', count: 4 });
     expect(people.map((p) => p.name)).toEqual(['Metadata']);
     // The address on the private network was swapped for the public source page, which does not show it.
     expect(site.read).toEqual(['https://example.org/team']);
@@ -100,7 +107,7 @@ describe('ModelFinder', () => {
       { name: 'N/A', linkedinUrl: 'https://www.linkedin.com/in/na' },
       { name: 'Ngozi Okafor', role: 'n/a', company: '', linkedinUrl: 'https://evil.com/in/ngozi' , xHandle: 'ngozi_o' },
     ], []);
-    const people = await new ModelFinder(model, pages({}).fetch, today).find({ description: 'anyone', count: 5 });
+    const people = await new ModelFinder(model, pages({}).fetch, today, dns()).find({ description: 'anyone', count: 5 });
     expect(people).toEqual([{ name: 'Ngozi Okafor', xHandle: 'ngozi_o', source: 'web', note: 'Leads finance at a payments company in Lagos. Found on techcabal.com.' }]);
   });
 
@@ -109,7 +116,7 @@ describe('ModelFinder', () => {
       [{ name: 'Kemi Eze', company: 'Oko Pay', linkedinUrl: 'https://www.linkedin.com/in/kemi' }, { name: 'Femi Ade', company: 'Pay Co', linkedinUrl: 'https://www.linkedin.com/in/femi' }],
       [{ name: 'Kemi Eze', company: 'Oko Pay', linkedinUrl: 'https://uk.linkedin.com/in/kemi/' }, { name: 'Tunde Bello', company: 'Ledgerly', xHandle: 'tunde' }],
     );
-    const people = await new ModelFinder(model, pages({}).fetch, today).find({ description: 'Founders in Accra', count: 3, known: ['Ada Obi (Ledgerly)'] });
+    const people = await new ModelFinder(model, pages({}).fetch, today, dns()).find({ description: 'Founders in Accra', count: 3, known: ['Ada Obi (Ledgerly)'] });
     expect(people.map((p) => p.name)).toEqual(['Kemi Eze', 'Femi Ade', 'Tunde Bello']);
     expect(asked).toHaveLength(2);
     expect(asked[0]?.user).toContain('Start from pages about people');
@@ -129,7 +136,7 @@ describe('ModelFinder', () => {
       [],
       [{ name: 'Femi Ade', company: 'Pay Co', linkedinUrl: 'https://www.linkedin.com/in/femi' }, { name: 'Tunde Bello', linkedinUrl: 'https://www.linkedin.com/in/tunde' }, { name: 'Extra One', linkedinUrl: 'https://www.linkedin.com/in/extra' }],
     );
-    const people = await new ModelFinder(model, pages({}).fetch, today).find({ description: 'CFOs', count: 3 });
+    const people = await new ModelFinder(model, pages({}).fetch, today, dns()).find({ description: 'CFOs', count: 3 });
     expect(people.map((p) => p.name)).toEqual(['Kemi Eze', 'Femi Ade', 'Tunde Bello']);
     expect(asked).toHaveLength(3);
     expect(asked[2]?.user).toContain('How many to find: 2');
@@ -139,32 +146,76 @@ describe('ModelFinder', () => {
 
   it('does not look again when nobody was found at all, or when the extra search fails', async () => {
     const none = fakeModel([], []);
-    expect(await new ModelFinder(none.model, pages({}).fetch, today).find({ description: 'CFOs on Mars', count: 5 })).toEqual([]);
+    expect(await new ModelFinder(none.model, pages({}).fetch, today, dns()).find({ description: 'CFOs on Mars', count: 5 })).toEqual([]);
     expect(none.asked).toHaveLength(2);
 
     const shaky = fakeModel([{ name: 'Kemi Eze', linkedinUrl: 'https://www.linkedin.com/in/kemi' }], [], new ModelError('limit', 'Your Claude plan’s usage limit is reached.'));
-    expect((await new ModelFinder(shaky.model, pages({}).fetch, today).find({ description: 'CFOs', count: 5 })).map((p) => p.name)).toEqual(['Kemi Eze']);
+    expect((await new ModelFinder(shaky.model, pages({}).fetch, today, dns()).find({ description: 'CFOs', count: 5 })).map((p) => p.name)).toEqual(['Kemi Eze']);
   });
 
   it("keeps one search's people when the other fails, and says why when both fail", async () => {
     const half = fakeModel(new ModelError('failed', 'Claude took too long.'), [{ name: 'Kemi Eze', linkedinUrl: 'https://www.linkedin.com/in/kemi' }]);
-    expect((await new ModelFinder(half.model, pages({}).fetch, today).find({ description: 'CFOs', count: 1 })).map((p) => p.name)).toEqual(['Kemi Eze']);
+    expect((await new ModelFinder(half.model, pages({}).fetch, today, dns()).find({ description: 'CFOs', count: 1 })).map((p) => p.name)).toEqual(['Kemi Eze']);
 
     const signedOut = new ModelError('not_signed_in', "Claude Code isn't signed in on this computer.");
     const both = fakeModel(signedOut, signedOut);
-    const err = await new ModelFinder(both.model, pages({}).fetch, today).find({ description: 'CFOs', count: 1 }).catch((e: unknown) => e);
+    const err = await new ModelFinder(both.model, pages({}).fetch, today, dns()).find({ description: 'CFOs', count: 1 }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(FindError);
     expect((err as FindError).message).toBe("Claude Code isn't signed in on this computer.");
   });
 
   it('needs a description, and keeps the count between 1 and 50', async () => {
     const { model, asked } = fakeModel([], []);
-    const finder = new ModelFinder(model, pages({}).fetch, today);
+    const finder = new ModelFinder(model, pages({}).fetch, today, dns());
     await expect(finder.find({ description: '  ', count: 5 })).rejects.toBeInstanceOf(FindError);
     expect(asked).toHaveLength(0);
     await finder.find({ description: 'CFOs', count: 500 });
     expect(asked[0]?.user).toContain('How many to find: 26');
     expect(asked[0]?.opts?.maxSearches).toBe(25);
+  });
+});
+
+describe('reading a page for an email', () => {
+  it('never follows a redirect into this computer or its network, and checks each hop', async () => {
+    const site = pages({
+      'https://okopay.com/team': { to: 'http://127.0.0.1:4600/api/state' },
+      'https://ledgerly.com/team': { to: 'https://ledgerly.com/people' },
+      'https://ledgerly.com/people': 'tunde@ledgerly.com',
+    });
+    expect(await readPage(new URL('https://okopay.com/team'), site.fetch, dns())).toBeNull();
+    expect(site.read).toEqual(['https://okopay.com/team']);
+    expect((await readPage(new URL('https://ledgerly.com/team'), site.fetch, dns()))?.text).toBe('tunde@ledgerly.com');
+  });
+
+  it('never reads a public name that points at a private address', async () => {
+    const site = pages({ 'https://intranet.okopay.com/': 'secret' });
+    expect(await readPage(new URL('https://intranet.okopay.com/'), site.fetch, dns({ 'intranet.okopay.com': ['10.0.0.5'] }))).toBeNull();
+    expect(await readPage(new URL('https://intranet.okopay.com/'), site.fetch, dns({ 'intranet.okopay.com': ['93.184.216.34', '::1'] }))).toBeNull();
+    expect(await readPage(new URL('http://localhost./x'), site.fetch, dns())).toBeNull();
+    expect(await readPage(new URL('http://user:pass@okopay.com/'), site.fetch, dns())).toBeNull();
+    expect(site.read).toEqual([]);
+  });
+
+  it('knows which addresses are private', () => {
+    for (const a of ['127.0.0.1', '10.1.2.3', '172.20.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', 'fe80::1', 'fd00::1', '::ffff:127.0.0.1', 'nonsense']) {
+      expect(privateAddress(a)).toBe(true);
+    }
+    for (const a of ['93.184.216.34', '8.8.8.8', '2606:4700::1111']) expect(privateAddress(a)).toBe(false);
+  });
+
+  it('does not take an email from a page whose address carries it', async () => {
+    const site = pages({
+      'https://acme.com/team?e=jane@acme.com': '<link rel="canonical" href="https://acme.com/team?e=jane%40acme.com">',
+      'https://acme.com/go': { to: 'https://acme.com/echo?who=jane%40acme.com' },
+      'https://acme.com/echo?who=jane%40acme.com': 'jane@acme.com',
+    });
+    const { model } = fakeModel([
+      { name: 'Jane Doe', email: 'jane@acme.com', emailSourceUrl: 'https://acme.com/team?e=jane@acme.com', linkedinUrl: 'https://www.linkedin.com/in/jane' },
+      { name: 'Jo Doe', email: 'jane@acme.com', emailSourceUrl: 'https://acme.com/go', linkedinUrl: 'https://www.linkedin.com/in/jo' },
+    ], []);
+    const people = await new ModelFinder(model, site.fetch, today, dns()).find({ description: 'anyone', count: 2 });
+    expect(people.map((p) => [p.name, p.email ?? null])).toEqual([['Jane Doe', null], ['Jo Doe', null]]);
+    expect(site.read).not.toContain('https://acme.com/team?e=jane@acme.com');
   });
 });
 
@@ -177,6 +228,11 @@ describe('pageShows', () => {
     expect(pageShows('<a href="mailto:kemi%40okopay.com">', 'kemi@okopay.com')).toBe(true);
     expect(pageShows('kemi at okopay dot com', 'kemi@okopay.com')).toBe(false);
     expect(pageShows('femi@okopay.com', 'kemi@okopay.com')).toBe(false);
+    // Only the whole address counts, not one inside a longer one.
+    expect(pageShows('bojane@acme.com', 'jane@acme.com')).toBe(false);
+    expect(pageShows('jane@acme.com.ng', 'jane@acme.com')).toBe(false);
+    expect(pageShows('Write to jane@acme.com.', 'jane@acme.com')).toBe(true);
+    expect(pageShows('<a href="mailto:jane@acme.com">', 'jane@acme.com')).toBe(true);
   });
 });
 

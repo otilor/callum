@@ -250,6 +250,15 @@ describe('commit and undo', () => {
     expect(again.groups).toEqual([]);
   });
 
+  it('undo keeps the batch, so the same people can be added again without looking again', async () => {
+    const p = await preview(s.ctx, { paste: 'Kemi Eze, kemi@okopay.com\nFemi Ade, femi@ledgerly.io' });
+    await commit(s.ctx, p.batchId);
+    undoBatch(s.ctx, p.batchId);
+    expect(s.ctx.repo.listPeople()).toHaveLength(0);
+    const again = await commit(s.ctx, p.batchId);
+    expect(again.added.map((a) => a.name)).toEqual(['Kemi Eze', 'Femi Ade']);
+  });
+
   it('undo has nothing to take back before the people were added', async () => {
     const p = await preview(s.ctx, { paste: 'Kemi Eze, kemi@okopay.com' });
     expect(() => undoBatch(s.ctx, p.batchId)).toThrow('Nobody was added from that list.');

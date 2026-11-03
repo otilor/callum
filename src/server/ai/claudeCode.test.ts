@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -44,6 +44,29 @@ describe('findClaudeCode', () => {
     expect(found === null || !found.startsWith(home)).toBe(true);
   });
 
+  it('runs the cli.js behind an npm link, so a Dock-launched app needs no node on its PATH', () => {
+    const root = mkdtempSync(join(tmpdir(), 'callum-cc-'));
+    const pkg = join(root, 'lib', 'node_modules', '@anthropic-ai', 'claude-code');
+    mkdirSync(pkg, { recursive: true });
+    const cli = join(pkg, 'cli.js');
+    writeFileSync(cli, '#!/usr/bin/env node\n');
+    chmodSync(cli, 0o755);
+    mkdirSync(join(root, 'bin'));
+    symlinkSync(cli, join(root, 'bin', 'claude'));
+    expect(findClaudeCode({ PATH: join(root, 'bin'), HOME: root }, 'linux')).toBe(realpathSync(cli));
+  });
+
+  it("finds an npm install on Windows by its claude.cmd, and runs the cli.js behind it", () => {
+    const home = mkdtempSync(join(tmpdir(), 'callum-cc-'));
+    const npm = join(home, 'AppData', 'Roaming', 'npm');
+    mkdirSync(join(npm, 'node_modules', '@anthropic-ai', 'claude-code'), { recursive: true });
+    writeFileSync(join(npm, 'claude.cmd'), '@node cli.js %*');
+    const cli = join(npm, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
+    writeFileSync(cli, '');
+    expect(findClaudeCode({ PATH: '', USERPROFILE: home, APPDATA: join(home, 'AppData', 'Roaming') }, 'win32')).toBe(cli);
+    expect(findClaudeCode({ CALLUM_CLAUDE_PATH: join(npm, 'claude.cmd') }, 'win32')).toBe(cli);
+  });
+
   it('looks for claude.exe on Windows, and nowhere else when it is not there', () => {
     const home = mkdtempSync(join(tmpdir(), 'callum-cc-'));
     program(join(home, '.local', 'bin'));
@@ -69,21 +92,23 @@ describe('claudeCodeStatus', () => {
 
   it('says signed in, and how, from claude auth status', async () => {
     const { run, args } = answering({ stdout: JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty' }) });
-    expect(await claudeCodeStatus('/usr/local/bin/claude', cwd, run)).toEqual({ found: true, signedIn: true, account: 'claude.ai' });
+    expect(await claudeCodeStatus('/usr/local/bin/claude', cwd, run)).toEqual({ found: true, runs: true, signedIn: true, account: 'claude.ai' });
     expect(args).toEqual([['auth', 'status']]);
   });
 
   it('says found but not signed in', async () => {
     const { run } = answering({ code: 1, stdout: JSON.stringify({ loggedIn: false }) });
-    expect(await claudeCodeStatus('claude', cwd, run)).toEqual({ found: true, signedIn: false, account: null });
+    expect(await claudeCodeStatus('claude', cwd, run)).toEqual({ found: true, runs: true, signedIn: false, account: null });
   });
 
-  it('says not found when there is no program, or it does not start', async () => {
+  it('says not found when there is no program', async () => {
     expect(await claudeCodeStatus(null, cwd, answering({}).run)).toEqual({ found: false, signedIn: false, account: null });
-    expect(await claudeCodeStatus('/nowhere/claude', cwd, answering({ code: null, stderr: 'ENOENT' }).run)).toEqual({ found: false, signedIn: false, account: null });
+    // Found but would not start: not a reason to tell the user to sign in.
+    expect(await claudeCodeStatus('/nowhere/claude', cwd, answering({ code: null, stderr: 'ENOENT' }).run)).toEqual({ found: true, runs: false, signedIn: false, account: null });
+    expect(await claudeCodeStatus('claude', cwd, answering({ code: 127, stderr: 'env: node: No such file or directory' }).run)).toEqual({ found: true, runs: false, signedIn: false, account: null });
   });
 
   it('falls back to the exit code on an older Claude Code that prints text', async () => {
-    expect(await claudeCodeStatus('claude', cwd, answering({ code: 0, stdout: 'Logged in' }).run)).toEqual({ found: true, signedIn: true, account: null });
+    expect(await claudeCodeStatus('claude', cwd, answering({ code: 0, stdout: 'Logged in' }).run)).toEqual({ found: true, runs: true, signedIn: true, account: null });
   });
 });

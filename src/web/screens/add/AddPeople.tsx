@@ -54,7 +54,8 @@ export function AddPeople({ project, people, timezone, onClose, now = () => new 
     setFromBatch([]);
     setDone(null);
     toast('Undone. Nobody was added.');
-    await finder.rerun();
+    // People Claude found are shown again as they were; searching again would take minutes and find others.
+    if (!finder.found?.web) await finder.rerun();
   };
 
   const add = async () => {

@@ -1,7 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { delimiter, dirname, join } from 'node:path';
 import { z } from 'zod';
 
 /**
@@ -153,15 +155,26 @@ export type Runner = (
   opts: { input: string; cwd: string; timeoutMs: number; env: NodeJS.ProcessEnv },
 ) => Promise<RunResult>;
 
-/** Runs a program with the prompt on stdin. Never through a shell, so nothing in the prompt is interpreted. */
+/**
+ * Runs a program with the prompt on stdin. Never through a shell, so nothing in the prompt is interpreted. A `.js`
+ * program (Claude Code installed with npm) runs on this process's own Node, so it works without `node` on the PATH,
+ * which a desktop app opened from the Dock or Start menu often lacks.
+ */
 export const spawnRunner: Runner = (file, args, opts) =>
   new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
     let timedOut = false;
     let child;
+    const script = /\.(c|m)?js$/i.test(file);
     try {
-      child = spawn(file, args, { cwd: opts.cwd, env: opts.env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+      child = spawn(script ? process.execPath : file, script ? [file, ...args] : args, {
+        cwd: opts.cwd,
+        // Inside Electron, its binary acts as plain Node with this set; Node itself ignores it.
+        env: script ? { ...opts.env, ELECTRON_RUN_AS_NODE: '1' } : opts.env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
     } catch (err) {
       resolve({ code: null, stdout: '', stderr: err instanceof Error ? err.message : String(err), timedOut: false });
       return;
@@ -185,25 +198,49 @@ export const spawnRunner: Runner = (file, args, opts) =>
     child.stdin.end(opts.input);
   });
 
-/** Claude Code runs at most this many at a time, so a busy morning doesn't start a crowd of processes. */
-const MAX_RUNNING = 2;
-let running = 0;
-const waiting: (() => void)[] = [];
-async function slot<T>(work: () => Promise<T>): Promise<T> {
-  if (running >= MAX_RUNNING) await new Promise<void>((r) => waiting.push(r));
-  running++;
-  try {
-    return await work();
-  } finally {
-    running--;
-    waiting.shift()?.();
-  }
+/**
+ * The environment Claude Code runs in. It signs in with its owner's own Claude account, so a key in Callum's
+ * environment is taken out (it would be used instead). The folder Claude Code is in, and the usual places Node and
+ * its helpers live, go first on the PATH: a desktop app opened from the Dock or Start menu has a short one.
+ */
+export function claudeCodeEnv(path: string, base: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...base };
+  delete env.ANTHROPIC_API_KEY;
+  delete env.ANTHROPIC_AUTH_TOKEN;
+  const key = platform === 'win32' ? (Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'Path') : 'PATH';
+  const sep = platform === 'win32' ? ';' : delimiter;
+  const extra = [dirname(path), ...(platform === 'win32' ? [] : ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'])];
+  const current = (env[key] ?? '').split(sep).filter(Boolean);
+  env[key] = [...extra.filter((d) => !current.includes(d)), ...current].join(sep);
+  return env;
 }
 
-/** What a failed Claude Code run said, as one of Callum's own errors. */
+/** At most this many runs of a kind at a time, so a busy morning doesn't start a crowd of processes. */
+function slots(max: number): <T>(work: () => Promise<T>) => Promise<T> {
+  let running = 0;
+  const waiting: (() => void)[] = [];
+  return async (work) => {
+    if (running >= max) await new Promise<void>((r) => waiting.push(r));
+    running++;
+    try {
+      return await work();
+    } finally {
+      running--;
+      waiting.shift()?.();
+    }
+  };
+}
+// Writing and reading replies have slots of their own, so a search that takes minutes never holds up a send.
+const askSlot = slots(2);
+const researchSlot = slots(2);
+
+const UPDATE = 'Callum needs a newer Claude Code. Open a terminal and run claude update.';
+
+/** What a failed Claude Code run said, as one of Callum's own errors. Only Claude Code's own error words count. */
 export function claudeCodeError(text: string): ModelError {
-  if (/not logged in|please run \/login|log ?in|sign ?in|authenticat|oauth|credentials|401/i.test(text)) return new ModelError('not_signed_in', NOT_SIGNED_IN);
-  if (/usage limit|limit reached|rate limit|429|too many requests|quota/i.test(text)) return new ModelError('limit', LIMIT);
+  if (/not logged in|please run \/login|invalid api key|oauth token (has )?expired|authentication_error|api error: 401/i.test(text)) return new ModelError('not_signed_in', NOT_SIGNED_IN);
+  if (/usage limit|limit reached|rate_limit_error|api error: 429/i.test(text)) return new ModelError('limit', LIMIT);
+  if (/unknown option|unknown argument/i.test(text)) return new ModelError('failed', UPDATE);
   return new ModelError('failed', FAILED);
 }
 
@@ -239,7 +276,7 @@ export class ClaudeCodeModel implements Model {
   async ask<S extends z.ZodType>(schema: S, system: string, user: string): Promise<z.infer<S> | null> {
     if (this.now() < this.signedOutUntil) return null;
     try {
-      return await this.call(schema, system, user, { tools: '', timeoutMs: 120_000, effort: 'low' });
+      return await this.call(schema, system, user, { tools: '', timeoutMs: 120_000, effort: 'low', maxTurns: 5 });
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err);
       return null;
@@ -250,7 +287,11 @@ export class ClaudeCodeModel implements Model {
     if (this.now() < this.signedOutUntil) throw new ModelError('not_signed_in', NOT_SIGNED_IN);
     try {
       // Sonnet searches well and quickly, and is light on the plan's limits; a model the user chose wins.
-      return await this.call(schema, system, user, { tools: 'WebSearch,WebFetch', timeoutMs: opts.timeoutMs ?? 300_000, model: this.opts.model || 'sonnet' });
+      const searches = opts.maxSearches ?? DEFAULT_SEARCHES;
+      const budget = `\n\nMake at most ${searches} web searches in this run, then answer with what you found.`;
+      return await this.call(schema, system + budget, user, {
+        tools: 'WebSearch,WebFetch', timeoutMs: opts.timeoutMs ?? 300_000, model: this.opts.model || 'sonnet', maxTurns: searches * 3 + 10,
+      });
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err);
       throw err;
@@ -258,22 +299,38 @@ export class ClaudeCodeModel implements Model {
   }
 
   private async call<S extends z.ZodType>(
-    schema: S, system: string, user: string, how: { tools: string; timeoutMs: number; effort?: 'low'; model?: string },
+    schema: S, system: string, user: string, how: { tools: string; timeoutMs: number; effort?: 'low'; model?: string; maxTurns: number },
   ): Promise<z.infer<S>> {
     try {
       mkdirSync(this.opts.cwd, { recursive: true });
     } catch {
       // The folder is only somewhere quiet to run in; Claude Code still works without it being new.
     }
-    const env: NodeJS.ProcessEnv = { ...process.env };
-    // Claude Code signs in with its owner's own Claude account. A key in Callum's environment would be used instead.
-    delete env.ANTHROPIC_API_KEY;
-    delete env.ANTHROPIC_AUTH_TOKEN;
+    const env = claudeCodeEnv(this.path);
+    // The system prompt holds the user's own words (their offer, their sample hello), so it goes in a file only this
+    // user can read rather than on the command line, where other programs could see it and its length is limited.
+    const promptFile = join(this.opts.cwd, `system-${randomUUID()}.txt`);
+    try {
+      writeFileSync(promptFile, system, { mode: 0o600 });
+    } catch {
+      throw new ModelError('failed', FAILED);
+    }
+    try {
+      return await this.runOnce(schema, user, how, env, promptFile);
+    } finally {
+      rmSync(promptFile, { force: true });
+    }
+  }
+
+  private async runOnce<S extends z.ZodType>(
+    schema: S, user: string, how: { tools: string; timeoutMs: number; effort?: 'low'; model?: string; maxTurns: number }, env: NodeJS.ProcessEnv, promptFile: string,
+  ): Promise<z.infer<S>> {
     const args = (safe: boolean): string[] => [
       '-p',
       '--output-format', 'json',
       '--json-schema', JSON.stringify(jsonSchemaOf(schema)),
-      '--system-prompt', system,
+      '--system-prompt-file', promptFile,
+      '--max-turns', String(how.maxTurns),
       '--tools', how.tools,
       ...(how.tools ? ['--allowedTools', how.tools] : []),
       '--permission-mode', 'dontAsk',
@@ -282,6 +339,7 @@ export class ClaudeCodeModel implements Model {
       ...(how.effort ? ['--effort', how.effort] : []),
       ...((how.model ?? this.opts.model) ? ['--model', (how.model ?? this.opts.model) as string] : []),
     ];
+    const slot = how.tools ? researchSlot : askSlot;
     const once = () => slot(() => this.run(this.path, args(this.safeMode), { input: user, cwd: this.opts.cwd, timeoutMs: how.timeoutMs, env }));
     let res = await once();
     // Older Claude Code versions don't know --safe-mode; they still run correctly without it.

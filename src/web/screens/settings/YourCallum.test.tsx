@@ -586,6 +586,14 @@ describe('Claude', () => {
     expect(await screen.findByText("Claude Code is on this computer but isn't signed in. Open a terminal, run claude, and sign in with your Claude account.")).toBeInTheDocument();
   });
 
+  it('does not ask to sign in when Claude Code was found but would not run', async () => {
+    mocks.claudeInfo.mockResolvedValue(info({ claudeCode: { found: true, runs: false, signedIn: false, account: null } }));
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: /^Claude / }));
+    expect(await screen.findByText("Callum found Claude Code but couldn't run it. Open a terminal and run claude to check it works, then come back here.")).toBeInTheDocument();
+    expect(screen.queryByText(/isn't signed in/)).not.toBeInTheDocument();
+  });
+
   it('links to how to install Claude Code when it is not found', async () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: /^Claude / }));

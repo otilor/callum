@@ -81,7 +81,7 @@ describe('startServer', () => {
   });
 
   it('starts a real (not demo) Callum empty', async () => {
-    const { server } = await start({ env: {} });
+    const { server } = await start({ env: { CALLUM_CLAUDE_CODE: 'off' } });
     expect(server.ctx.repo.listProjects()).toEqual([]);
     expect(server.ctx.demo).toBe(false);
   });
@@ -132,7 +132,7 @@ describe('startServer', () => {
   it('will not open to other computers without a password', async () => {
     const dataDir = join(mkdtempSync(join(tmpdir(), 'callum-boot-')), 'data');
     for (const host of ['0.0.0.0', '::', '192.168.1.20']) {
-      await expect(startServer({ dataDir, host, port: 0, password: null, webDir: null, env: {}, log: () => undefined })).rejects.toThrow(
+      await expect(startServer({ dataDir, host, port: 0, password: null, webDir: null, env: { CALLUM_CLAUDE_CODE: 'off' }, log: () => undefined })).rejects.toThrow(
         'Callum needs CALLUM_PASSWORD to be reached from other computers.',
       );
     }
@@ -155,7 +155,7 @@ describe('startServer', () => {
     const first = await start();
     const port = Number(new URL(first.server.url).port);
     await expect(
-      startServer({ dataDir: join(mkdtempSync(join(tmpdir(), 'callum-boot-')), 'data'), host: '127.0.0.1', port, password: null, webDir: null, env: {}, log: () => undefined }),
+      startServer({ dataDir: join(mkdtempSync(join(tmpdir(), 'callum-boot-')), 'data'), host: '127.0.0.1', port, password: null, webDir: null, env: { CALLUM_CLAUDE_CODE: 'off' }, log: () => undefined }),
     ).rejects.toThrow(/EADDRINUSE/);
   });
 });

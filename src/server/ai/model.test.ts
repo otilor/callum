@@ -1,17 +1,21 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { ApiModel, ClaudeCodeModel, claudeCodeError, jsonSchemaOf, ModelError, spawnRunner, type RunResult, type Runner } from './model.js';
+import { ApiModel, ClaudeCodeModel, claudeCodeEnv, claudeCodeError, jsonSchemaOf, ModelError, spawnRunner, type RunResult, type Runner } from './model.js';
 
 const schema = z.object({ answer: z.string() });
 
-interface Call { file: string; args: string[]; input: string; cwd: string; timeoutMs: number; env: NodeJS.ProcessEnv }
+interface Call { file: string; args: string[]; input: string; cwd: string; timeoutMs: number; env: NodeJS.ProcessEnv; system: string | null }
 
 /** A Claude Code that answers from a script and records how it was run. */
 function fakeClaude(...answers: Partial<RunResult>[]): { run: Runner; calls: Call[] } {
   const calls: Call[] = [];
   const run: Runner = async (file, args, opts) => {
-    calls.push({ file, args, ...opts });
+    const promptFile = args[args.indexOf('--system-prompt-file') + 1];
+    calls.push({ file, args, ...opts, system: promptFile && existsSync(promptFile) ? readFileSync(promptFile, 'utf8') : null });
     const a = answers[Math.min(calls.length - 1, answers.length - 1)] ?? {};
     return { code: 0, stdout: '', stderr: '', timedOut: false, ...a };
   };
@@ -50,7 +54,13 @@ describe('ClaudeCodeModel', () => {
     expect(args[0]).toBe('-p');
     expect(flag(args, '--output-format')).toBe('json');
     expect(JSON.parse(flag(args, '--json-schema') ?? '{}')).toEqual(jsonSchemaOf(schema));
-    expect(flag(args, '--system-prompt')).toBe('Be brief.');
+    // The system prompt carries the user's own words, so it goes in a file only they can read, gone after the run.
+    expect(args).not.toContain('--system-prompt');
+    expect(call?.system).toBe('Be brief.');
+    const promptFile = flag(args, '--system-prompt-file') ?? '';
+    expect(promptFile.startsWith('/tmp/callum-test/claude-code/')).toBe(true);
+    expect(existsSync(promptFile)).toBe(false);
+    expect(flag(args, '--max-turns')).toBe('5');
     expect(flag(args, '--tools')).toBe('');
     expect(args).not.toContain('--allowedTools');
     expect(flag(args, '--permission-mode')).toBe('dontAsk');
@@ -61,8 +71,9 @@ describe('ClaudeCodeModel', () => {
     expect(args).not.toContain('--bare');
     expect(call?.env.ANTHROPIC_API_KEY).toBeUndefined();
     expect(call?.env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
-    // The prompt is never put on the command line.
+    // Neither prompt is ever put on the command line.
     expect(args.join(' ')).not.toContain('Is it Monday?');
+    expect(args.join(' ')).not.toContain('Be brief.');
   });
 
   it('researches with only web search and web fetch, on Sonnet unless a model was chosen', async () => {
@@ -73,11 +84,14 @@ describe('ClaudeCodeModel', () => {
     expect(flag(args, '--tools')).toBe('WebSearch,WebFetch');
     expect(flag(args, '--allowedTools')).toBe('WebSearch,WebFetch');
     expect(flag(args, '--model')).toBe('sonnet');
+    expect(flag(args, '--max-turns')).toBe('40');
+    expect(first.calls[0]?.system).toBe('Find.\n\nMake at most 10 web searches in this run, then answer with what you found.');
     expect(first.calls[0]?.timeoutMs).toBe(300_000);
 
     const chosen = fakeClaude(success({ answer: 'found' }));
-    await new ClaudeCodeModel('claude', { cwd: '/tmp/callum-test/cc', run: chosen.run, model: 'opus' }).research(schema, 'Find.', 'Who?', { timeoutMs: 1000 });
+    await new ClaudeCodeModel('claude', { cwd: '/tmp/callum-test/cc', run: chosen.run, model: 'opus' }).research(schema, 'Find.', 'Who?', { timeoutMs: 1000, maxSearches: 20 });
     expect(flag(chosen.calls[0]?.args ?? [], '--model')).toBe('opus');
+    expect(flag(chosen.calls[0]?.args ?? [], '--max-turns')).toBe('70');
     expect(chosen.calls[0]?.timeoutMs).toBe(1000);
   });
 
@@ -123,11 +137,28 @@ describe('ClaudeCodeModel', () => {
 
     const garbage = new ClaudeCodeModel('claude', { cwd: '/tmp/callum-test/cc', run: fakeClaude({ code: 1, stdout: 'Segmentation fault' }).run });
     await expect(garbage.research(schema, 's', 'u')).rejects.toMatchObject({ code: 'failed' });
+
+    const old = new ClaudeCodeModel('claude', { cwd: '/tmp/callum-test/cc', run: fakeClaude({ code: 1, stderr: "error: unknown option '--json-schema'" }).run });
+    await expect(old.research(schema, 's', 'u')).rejects.toMatchObject({ code: 'failed', message: expect.stringContaining('claude update') });
   });
 
   it('reads the answer after any warning printed before it', async () => {
     const { run } = fakeClaude({ stdout: `warning: update available\n${JSON.stringify({ subtype: 'success', is_error: false, structured_output: { answer: 'x' } })}` });
     expect(await new ClaudeCodeModel('claude', { cwd: '/tmp/callum-test/cc', run }).ask(schema, 's', 'u')).toEqual({ answer: 'x' });
+  });
+
+  it('never makes writing wait behind a long search', async () => {
+    let release = () => undefined as void;
+    const searching = new Promise<void>((r) => { release = r; });
+    const run: Runner = async (_file, args) => {
+      if (args.includes('WebSearch,WebFetch')) await searching;
+      return { code: 0, stdout: JSON.stringify({ subtype: 'success', is_error: false, structured_output: { answer: 'a' } }), stderr: '', timedOut: false };
+    };
+    const m = new ClaudeCodeModel('claude', { cwd: '/tmp/callum-test/cc', run });
+    const searches = [m.research(schema, 's', 'u'), m.research(schema, 's', 'u'), m.research(schema, 's', 'u')];
+    expect(await m.ask(schema, 's', 'u')).toEqual({ answer: 'a' });
+    release();
+    await Promise.all(searches);
   });
 
   it('runs at most two at a time', async () => {
@@ -154,10 +185,38 @@ describe('claudeCodeError', () => {
     expect(claudeCodeError('API Error: 429 Too Many Requests').code).toBe('limit');
     expect(claudeCodeError('Claude AI usage limit reached').code).toBe('limit');
     expect(claudeCodeError('API Error: 529 overloaded').code).toBe('failed');
+    // Words about other sign-ins, such as LinkedIn's, are not Claude Code's.
+    expect(claudeCodeError('Could not open the LinkedIn login page to sign in').code).toBe('failed');
+    expect(claudeCodeError("error: unknown option '--max-turns'").message).toContain('claude update');
+  });
+});
+
+describe('claudeCodeEnv', () => {
+  it('takes out Callum\'s own keys and puts the folders Claude Code needs first on the PATH', () => {
+    const env = claudeCodeEnv('/Users/ada/.local/bin/claude', { PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'k', ANTHROPIC_AUTH_TOKEN: 't', HOME: '/Users/ada' }, 'darwin');
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+    expect(env.HOME).toBe('/Users/ada');
+    expect(env.PATH).toBe('/Users/ada/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin');
+  });
+
+  it('keeps the Windows Path spelling', () => {
+    const env = claudeCodeEnv('C:\\Users\\ada\\.local\\bin\\claude.exe', { Path: 'C:\\Windows' }, 'win32');
+    expect(env.Path?.endsWith(';C:\\Windows')).toBe(true);
+    expect(env.PATH).toBeUndefined();
   });
 });
 
 describe('spawnRunner', () => {
+  it('runs a .js program (an npm install of Claude Code) on this Node, even with no node on the PATH', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'callum-js-'));
+    const cli = join(dir, 'cli.js');
+    writeFileSync(cli, 'process.stdin.on("data", (d) => process.stdout.write(process.argv[2] + ":" + d));');
+    expect(statSync(cli).isFile()).toBe(true);
+    const res = await spawnRunner(cli, ['-p'], { input: 'hi', cwd: dir, timeoutMs: 10_000, env: { PATH: '' } });
+    expect(res).toMatchObject({ code: 0, stdout: '-p:hi' });
+  });
+
   it('passes the prompt on stdin, with no shell in between', async () => {
     const res = await spawnRunner(process.execPath, ['-e', 'process.stdin.pipe(process.stdout)'], {
       input: 'hello $(whoami) `id` ; rm -rf /', cwd: process.cwd(), timeoutMs: 10_000, env: process.env,

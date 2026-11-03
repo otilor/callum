@@ -473,6 +473,8 @@ export function YourCallum({ state, refresh, onBack, onLeave, onAddPeople, downl
                           <p className="yc-aside">Callum uses your Claude key. Remove it to use your Claude plan through Claude Code instead.</p>
                         ) : claudeInfo.engine === 'claude_code' && claudeInfo.claudeCode.signedIn ? (
                           <p className="yc-aside">Callum writes and finds people with Claude Code on this computer, signed in with your Claude plan. Nothing else to pay for.</p>
+                        ) : claudeInfo.claudeCode.found && claudeInfo.claudeCode.runs === false ? (
+                          <p className="yc-aside">Callum found Claude Code but couldn't run it. Open a terminal and run claude to check it works, then come back here.</p>
                         ) : claudeInfo.claudeCode.found ? (
                           <p className="yc-aside">Claude Code is on this computer but isn't signed in. Open a terminal, run claude, and sign in with your Claude account.</p>
                         ) : (
